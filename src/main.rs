@@ -16,7 +16,7 @@ struct Cli {
     log_level: String,
 
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber)
         .context("Failed to set tracing subscriber")?;
 
-    match cli.command {
+    match cli.command.unwrap_or(Commands::Daemon) {
         Commands::Daemon => run_daemon().await,
         Commands::Status => run_status().await,
         Commands::Action { action } => run_action(action).await,
