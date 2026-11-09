@@ -1,0 +1,29 @@
+// Conchy OS Desktop Shell Configuration (~/.config/conchy/shell.kdl)
+// Managed reactively by conchy-config daemon (org.conchy.Config)
+
+bar {
+    position "top"
+    height 32
+    background "#1a1b26"
+    foreground "#c0caf5"
+    accent "#7aa2f7"
+    urgent "#f7768e"
+}
+
+font {
+    family "JetBrains Mono"
+    size 11.0
+}
+
+clock {
+    format "%Y-%m-%d %H:%M"
+}
+
+widgets {
+    workspaces true
+    window-title true
+    cpu true
+    memory true
+    battery true
+    tray true
+}
