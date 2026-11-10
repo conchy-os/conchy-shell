@@ -81,19 +81,13 @@ impl Config {
     /// parse, and both watchers keep the last good value until the next save
     /// fixes the file. `gpuishell --validate` reports where the parse gave up.
     pub fn init(cx: &mut App) {
-        let mut config = match persistence::load_or_create() {
+        let config = match persistence::load_or_create() {
             Ok(config) => config,
             Err(err) => {
                 tracing::warn!("Failed to load config, using defaults: {err:#}");
                 Config::default()
             }
         };
-
-        // If launcher window has old small default (600x450), upgrade to comfortable 800x540
-        if config.launcher.width <= 600.0 && config.launcher.height <= 450.0 {
-            config.launcher.width = 800.0;
-            config.launcher.height = 540.0;
-        }
 
         let theme = match theme::persistence::load_theme() {
             Ok(theme) => theme,
@@ -323,6 +317,36 @@ impl Config {
                 if let Ok(h) = value.parse::<f32>() {
                     config.launcher.height = h;
                 }
+            }
+            "launcher.modules.config.width" => {
+                config.launcher.modules.config.width = value.parse::<f32>().ok();
+            }
+            "launcher.modules.config.height" => {
+                config.launcher.modules.config.height = value.parse::<f32>().ok();
+            }
+            "launcher.modules.clipboard.width" => {
+                config.launcher.modules.clipboard.width = value.parse::<f32>().ok();
+            }
+            "launcher.modules.clipboard.height" => {
+                config.launcher.modules.clipboard.height = value.parse::<f32>().ok();
+            }
+            "launcher.modules.wallpaper.width" => {
+                config.launcher.modules.wallpaper.width = value.parse::<f32>().ok();
+            }
+            "launcher.modules.wallpaper.height" => {
+                config.launcher.modules.wallpaper.height = value.parse::<f32>().ok();
+            }
+            "launcher.modules.themes.width" => {
+                config.launcher.modules.themes.width = value.parse::<f32>().ok();
+            }
+            "launcher.modules.themes.height" => {
+                config.launcher.modules.themes.height = value.parse::<f32>().ok();
+            }
+            "launcher.modules.apps.width" => {
+                config.launcher.modules.apps.width = value.parse::<f32>().ok();
+            }
+            "launcher.modules.apps.height" => {
+                config.launcher.modules.apps.height = value.parse::<f32>().ok();
             }
             other => {
                 tracing::debug!("Unhandled conchy-config property: {}", other);

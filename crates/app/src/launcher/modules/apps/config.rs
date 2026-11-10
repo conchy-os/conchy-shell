@@ -7,10 +7,16 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct AppsConfig {
     pub prefix: String,
+    pub width: Option<f32>,
+    pub height: Option<f32>,
 }
 
 impl Default for AppsConfig {
     fn default() -> Self {
-        Self { prefix: "@".into() }
+        Self {
+            prefix: "@".into(),
+            width: None,
+            height: None,
+        }
     }
 }

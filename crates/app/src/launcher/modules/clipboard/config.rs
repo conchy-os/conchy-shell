@@ -7,12 +7,16 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct ClipboardConfig {
     pub prefix: String,
+    pub width: Option<f32>,
+    pub height: Option<f32>,
 }
 
 impl Default for ClipboardConfig {
     fn default() -> Self {
         Self {
             prefix: ";c".into(),
+            width: None,
+            height: None,
         }
     }
 }

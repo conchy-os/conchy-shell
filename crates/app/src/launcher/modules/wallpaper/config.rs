@@ -15,6 +15,8 @@ pub struct WallpaperConfig {
     pub matugen: bool,
     /// matugen `--type`, e.g. `scheme-tonal-spot`, `scheme-content`.
     pub matugen_scheme: String,
+    pub width: Option<f32>,
+    pub height: Option<f32>,
 }
 
 impl Default for WallpaperConfig {
@@ -25,6 +27,8 @@ impl Default for WallpaperConfig {
             columns: 3,
             matugen: true,
             matugen_scheme: "scheme-tonal-spot".into(),
+            width: None,
+            height: None,
         }
     }
 }

@@ -19,6 +19,7 @@ pub struct LauncherFrame {
     hints: Option<SharedString>,
     actions: Option<AnyElement>,
     background: Option<Hsla>,
+    breadcrumbs: Option<AnyElement>,
     body: Vec<AnyElement>,
 }
 
@@ -34,6 +35,7 @@ impl LauncherFrame {
             hints: None,
             actions: None,
             background: None,
+            breadcrumbs: None,
             body: Vec::new(),
         }
     }
@@ -71,6 +73,12 @@ impl LauncherFrame {
     /// Right side of the footer: what the current view does with a key.
     pub fn actions(mut self, actions: impl IntoElement) -> Self {
         self.actions = Some(actions.into_any_element());
+        self
+    }
+
+    /// Breadcrumbs row placed right below the query row.
+    pub fn breadcrumbs(mut self, breadcrumbs: Option<AnyElement>) -> Self {
+        self.breadcrumbs = breadcrumbs;
         self
     }
 }
@@ -140,6 +148,7 @@ impl RenderOnce for LauncherFrame {
                     }),
             )
             .child(hairline())
+            .children(self.breadcrumbs.map(|b| div().w_full().child(b).child(hairline())))
             // Body. Owns no scroll of its own - which element scrolls is the
             // app's call.
             .child(

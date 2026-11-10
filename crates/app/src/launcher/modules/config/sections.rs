@@ -739,17 +739,93 @@ macro_rules! prefix_only {
 }
 
 prefix_only! {
-    AppsConfig => "Apps",
     WorkspacesConfig => "Workspaces",
-    ThemesConfig => "Themes",
     ServicesConfig => "Services",
     SysInfoConfig => "System info",
     MprisConfig => "Media",
     CalculatorConfig => "Calculator",
-    ClipboardConfig => "Clipboard",
     HelpConfig => "Help",
-    ConfigEditorConfig => "Config",
     WebConfig => "Web",
+}
+
+impl Editable for ConfigEditorConfig {
+    fn title() -> &'static str {
+        "Config"
+    }
+
+    fn fields() -> Vec<Field<Self>> {
+        vec![
+            prefix_field(lens!(prefix)),
+            Field::number("width", "Window width", lens!(width or 800.0))
+                .range(400.0, 2000.0)
+                .unit("px")
+                .describe("Width of the config menu window. Unset to follow launcher width"),
+            Field::number("height", "Window height", lens!(height or 540.0))
+                .range(300.0, 1600.0)
+                .unit("px")
+                .describe("Height of the config menu window. Unset to follow launcher height"),
+        ]
+    }
+}
+
+impl Editable for AppsConfig {
+    fn title() -> &'static str {
+        "Apps"
+    }
+
+    fn fields() -> Vec<Field<Self>> {
+        vec![
+            prefix_field(lens!(prefix)),
+            Field::number("width", "Window width", lens!(width or 600.0))
+                .range(400.0, 2000.0)
+                .unit("px")
+                .describe("Custom width for apps menu. Unset to follow launcher width"),
+            Field::number("height", "Window height", lens!(height or 450.0))
+                .range(300.0, 1600.0)
+                .unit("px")
+                .describe("Custom height for apps menu. Unset to follow launcher height"),
+        ]
+    }
+}
+
+impl Editable for ClipboardConfig {
+    fn title() -> &'static str {
+        "Clipboard"
+    }
+
+    fn fields() -> Vec<Field<Self>> {
+        vec![
+            prefix_field(lens!(prefix)),
+            Field::number("width", "Window width", lens!(width or 600.0))
+                .range(400.0, 2000.0)
+                .unit("px")
+                .describe("Custom width for clipboard menu. Unset to follow launcher width"),
+            Field::number("height", "Window height", lens!(height or 450.0))
+                .range(300.0, 1600.0)
+                .unit("px")
+                .describe("Custom height for clipboard menu. Unset to follow launcher height"),
+        ]
+    }
+}
+
+impl Editable for ThemesConfig {
+    fn title() -> &'static str {
+        "Themes"
+    }
+
+    fn fields() -> Vec<Field<Self>> {
+        vec![
+            prefix_field(lens!(prefix)),
+            Field::number("width", "Window width", lens!(width or 600.0))
+                .range(400.0, 2000.0)
+                .unit("px")
+                .describe("Custom width for themes menu. Unset to follow launcher width"),
+            Field::number("height", "Window height", lens!(height or 450.0))
+                .range(300.0, 1600.0)
+                .unit("px")
+                .describe("Custom height for themes menu. Unset to follow launcher height"),
+        ]
+    }
 }
 
 impl Editable for ShellConfig {
@@ -763,6 +839,14 @@ impl Editable for ShellConfig {
             Field::text("terminal", "Terminal", lens!(terminal))
                 .hint(TextHint::Command)
                 .describe("Terminal to run commands in; empty picks one that is installed"),
+            Field::number("width", "Window width", lens!(width or 600.0))
+                .range(400.0, 2000.0)
+                .unit("px")
+                .describe("Custom width for shell menu. Unset to follow launcher width"),
+            Field::number("height", "Window height", lens!(height or 450.0))
+                .range(300.0, 1600.0)
+                .unit("px")
+                .describe("Custom height for shell menu. Unset to follow launcher height"),
         ]
     }
 }
@@ -785,6 +869,14 @@ impl Editable for WallpaperConfig {
                 .describe("Offer dark and light themes generated from the applied wallpaper"),
             Field::text("matugen_scheme", "Matugen scheme", lens!(matugen_scheme))
                 .describe("matugen --type, e.g. scheme-tonal-spot or scheme-content"),
+            Field::number("width", "Window width", lens!(width or 600.0))
+                .range(400.0, 2000.0)
+                .unit("px")
+                .describe("Custom width for wallpaper menu. Unset to follow launcher width"),
+            Field::number("height", "Window height", lens!(height or 450.0))
+                .range(300.0, 1600.0)
+                .unit("px")
+                .describe("Custom height for wallpaper menu. Unset to follow launcher height"),
         ]
     }
 }

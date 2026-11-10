@@ -30,8 +30,8 @@ pub struct LauncherConfig {
 impl Default for LauncherConfig {
     fn default() -> Self {
         Self {
-            width: 800.0,
-            height: 540.0,
+            width: 600.0,
+            height: 450.0,
             margin_top: 100.0,
             margin_right: 0.0,
             margin_bottom: 0.0,

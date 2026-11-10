@@ -15,15 +15,16 @@ pub mod row;
 use std::ops::Range;
 
 use gpui::{
-    AnyElement, App, Bounds, ClickEvent, Context, EntityId, FocusHandle, Focusable, MouseButton,
-    Point, ScrollHandle, SharedString, Size, Subscription, Window, WindowBackgroundAppearance,
-    WindowBounds, WindowKind, WindowOptions, div, layer_shell::*, prelude::*, px, relative, size,
+    AnyElement, App, Bounds, ClickEvent, Context, ElementId, EntityId, FocusHandle, Focusable,
+    MouseButton, Pixels, Point, ScrollHandle, SharedString, Size, Subscription, Window,
+    WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div, layer_shell::*,
+    prelude::*, px, relative, size,
 };
 use ui::patterns::{LauncherFrame, footer_hints};
 use ui::{
-    ActiveTheme, Color, Icon, IconSize, InputBuffer, Label, LabelCommon, Radius, ScrollStrategy,
-    Scrollbar, Spacing, TextSize, ThumbnailCache, VirtualList, VirtualListScrollHandle,
-    render_input_line,
+    ActiveTheme, Breadcrumb, BreadcrumbItem, Clickable, Color, Icon, IconSize, InputBuffer, Label,
+    LabelCommon, Radius, ScrollStrategy, Scrollbar, Spacing, TextSize, ThumbnailCache, VirtualList,
+    VirtualListScrollHandle, render_input_line,
 };
 
 use self::action::{Action, ActionPanel, Outcome};
@@ -119,6 +120,7 @@ struct Pushed {
     _observe: Subscription,
     input: String,
     selected: Option<SharedString>,
+    title: SharedString,
 }
 
 #[derive(Default)]
@@ -438,11 +440,17 @@ impl Launcher {
 
     fn push(&mut self, page: Page, input: Option<String>, cx: &mut Context<Self>) {
         let observe = page.observe(cx);
+        let title: SharedString = self
+            .body
+            .as_ref()
+            .and_then(|b| b.chrome().title.clone())
+            .unwrap_or_else(|| self.metas[self.route.module].name.into());
         self.stack.push(Pushed {
             page,
             _observe: observe,
             input: self.input.text().to_string(),
             selected: self.selected_item().map(|item| item.id.clone()),
+            title,
         });
         let text = input.unwrap_or_default();
         self.input.set_text(text.clone());
@@ -463,6 +471,16 @@ impl Launcher {
             let bottom = self.stack.swap_remove(0);
             self.stack.clear();
             self.restore_below(bottom, cx);
+        }
+    }
+
+    fn pop_to_depth(&mut self, depth: usize, cx: &mut Context<Self>) {
+        if depth == 0 {
+            self.pop_to_root(cx);
+            return;
+        }
+        while self.stack.len() > depth {
+            self.pop(cx);
         }
     }
 
@@ -716,7 +734,7 @@ impl Launcher {
     /// Bare prefixes at the root; where you are once a page is pushed.
     fn footer_left(&self) -> String {
         if !self.stack.is_empty() {
-            return format!("{} › Esc to go back", self.metas[self.route.module].name);
+            return "Esc to go back".to_string();
         }
         self.metas
             .iter()
@@ -1078,6 +1096,81 @@ impl Launcher {
                 .into_any_element(),
         )
     }
+
+    pub fn target_size(&self, cx: &App) -> Size<Pixels> {
+        let config = &Config::global(cx).launcher;
+        launcher_target_size(&self.route, &self.metas, config)
+    }
+
+    fn render_breadcrumbs(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.stack.is_empty() {
+            return None;
+        }
+
+        let mut breadcrumb = Breadcrumb::new();
+        let entity = cx.entity().clone();
+
+        for (depth, pushed) in self.stack.iter().enumerate() {
+            let title = pushed.title.clone();
+            let mut item = BreadcrumbItem::new(
+                ElementId::NamedInteger("breadcrumb".into(), depth as u64),
+                title,
+            );
+            if depth == 0 {
+                item = item.icon(self.metas[self.route.module].icon);
+            }
+            let entity = entity.clone();
+            item = item.on_click(move |_, _window, cx| {
+                entity.update(cx, |this, cx| {
+                    this.pop_to_depth(depth, cx);
+                });
+            });
+            breadcrumb = breadcrumb.child(item);
+        }
+
+        let current_title = self
+            .body
+            .as_ref()
+            .and_then(|b| b.chrome().title.clone())
+            .unwrap_or_else(|| self.metas[self.route.module].name.into());
+
+        breadcrumb = breadcrumb.child(
+            BreadcrumbItem::new(
+                ElementId::NamedInteger("breadcrumb".into(), self.stack.len() as u64),
+                current_title,
+            )
+            .current(true),
+        );
+
+        Some(
+            div()
+                .w_full()
+                .px(Spacing::XLarge.pixels())
+                .py(Spacing::Small.pixels())
+                .child(breadcrumb)
+                .into_any_element(),
+        )
+    }
+}
+
+pub fn launcher_target_size(
+    route: &Route,
+    metas: &[ModuleMeta],
+    config: &config::LauncherConfig,
+) -> Size<Pixels> {
+    let module_id = metas.get(route.module).map(|m| m.id).unwrap_or("");
+    let (mod_width, mod_height) = match module_id {
+        "config" => (config.modules.config.width, config.modules.config.height),
+        "apps" => (config.modules.apps.width, config.modules.apps.height),
+        "clipboard" => (config.modules.clipboard.width, config.modules.clipboard.height),
+        "wallpaper" => (config.modules.wallpaper.width, config.modules.wallpaper.height),
+        "themes" => (config.modules.themes.width, config.modules.themes.height),
+        "shell" => (config.modules.shell.width, config.modules.shell.height),
+        _ => (None, None),
+    };
+    let width = mod_width.unwrap_or(config.width);
+    let height = mod_height.unwrap_or(config.height);
+    Size::new(px(width), px(height))
 }
 
 /// Navigation keys, after the launcher's own bindings resolved them.
@@ -1104,6 +1197,10 @@ impl Focusable for Launcher {
 
 impl Render for Launcher {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let desired = self.target_size(cx);
+        if window.viewport_size() != desired {
+            window.resize(desired);
+        }
         window.set_rem_size(cx.theme().font_size);
         if !self.focus_handle.is_focused(window) {
             self.focus_handle.focus(window, cx);
@@ -1215,6 +1312,7 @@ impl Render for Launcher {
                     .loading(loading)
                     .hints(self.footer_left())
                     .actions(footer_hints(self.footer_right(), cx))
+                    .breadcrumbs(self.render_breadcrumbs(cx))
                     .children(header)
                     .children(dropdown)
                     .child(body),
@@ -1250,12 +1348,18 @@ pub fn toggle(input: Option<String>, cx: &mut App) {
     }
 
     let cfg = Config::global(cx).launcher.clone();
+    let registry = modules::registry(&cfg.modules);
+    let metas: Vec<ModuleMeta> = registry.iter().map(|d| d.meta.clone()).collect();
+    let initial_input = input.as_deref().unwrap_or_default();
+    let initial_route = route::route(initial_input, &metas);
+    let target_size = launcher_target_size(&initial_route, &metas, &cfg);
+
     if let Ok(handle) = cx.open_window(
         WindowOptions {
             titlebar: None,
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: Point::new(px(0.), px(0.)),
-                size: Size::new(px(cfg.width), px(cfg.height)),
+                size: target_size,
             })),
             app_id: Some("conchy-shell-launcher".to_string()),
             window_background: WindowBackgroundAppearance::Transparent,

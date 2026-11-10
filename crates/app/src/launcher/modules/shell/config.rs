@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 pub struct ShellConfig {
     pub prefix: String,
     pub terminal: String,
+    pub width: Option<f32>,
+    pub height: Option<f32>,
 }
 
 impl Default for ShellConfig {
@@ -15,6 +17,8 @@ impl Default for ShellConfig {
         Self {
             prefix: "$".into(),
             terminal: String::new(),
+            width: None,
+            height: None,
         }
     }
 }

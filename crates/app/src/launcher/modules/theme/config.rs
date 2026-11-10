@@ -7,10 +7,16 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct ThemesConfig {
     pub prefix: String,
+    pub width: Option<f32>,
+    pub height: Option<f32>,
 }
 
 impl Default for ThemesConfig {
     fn default() -> Self {
-        Self { prefix: "~".into() }
+        Self {
+            prefix: "~".into(),
+            width: None,
+            height: None,
+        }
     }
 }
