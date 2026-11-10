@@ -1,0 +1,475 @@
+//! Hyprland compositor backend.
+//!
+//! This module provides integration with the Hyprland compositor via its IPC socket.
+//! Uses incremental updates with direct Mutable mutation for efficiency.
+
+use crate::lifecycle::RunToken;
+use anyhow::Result;
+use futures_signals::signal::Mutable;
+use hyprland::{
+    data::{Client, Clients, Devices, Monitors, Workspace as HWorkspace, Workspaces},
+    dispatch::{
+        Dispatch, DispatchType, MonitorIdentifier, WindowIdentifier, WorkspaceIdentifierWithSpecial,
+    },
+    event_listener::EventListener,
+    prelude::*,
+};
+use itertools::Itertools;
+use tracing::{debug, info};
+
+use super::types::{ActiveWindow, CompositorCommand, CompositorState, Monitor, Workspace};
+
+/// Check if Hyprland is available (running).
+pub fn is_available() -> bool {
+    std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
+}
+
+/// Map a Hyprland `Client` into our generic `Window`, resolving its
+/// monitor id to a name via the already-fetched monitor list.
+fn map_client(c: Client, monitors: &[super::types::Monitor]) -> super::types::Window {
+    let monitor = c
+        .monitor
+        .and_then(|id| monitors.iter().find(|m| m.id == id))
+        .map(|m| m.name.clone())
+        .unwrap_or_default();
+
+    super::types::Window {
+        id: c.address.to_string(),
+        app_id: c.class,
+        title: c.title,
+        monitor,
+        workspace_id: c.workspace.id,
+        is_focused: false,
+        is_minimized: false,
+        is_urgent: false,
+        pid: u32::try_from(c.pid).ok(),
+        geometry: Some(super::types::WindowGeometry {
+            x: c.at.0 as i32,
+            y: c.at.1 as i32,
+            width: c.size.0 as u32,
+            height: c.size.1 as u32,
+        }),
+    }
+}
+
+/// Refetch the full client list and replace `state.windows` with it.
+/// Called from the window opened/closed/moved event handlers, which don't
+/// carry enough information in their event payload to patch the list
+/// incrementally.
+fn refresh_windows(state: &mut super::types::CompositorState) {
+    if let Ok(clients) = Clients::get() {
+        let monitors = state.monitors.clone();
+        let focused_address = state.active_window.as_ref().map(|w| w.address.clone());
+        // Clients carry no urgency, so keep what the `urgent` events set.
+        let urgent: Vec<String> = state
+            .windows
+            .iter()
+            .filter(|w| w.is_urgent)
+            .map(|w| w.id.clone())
+            .collect();
+        state.windows = clients
+            .into_iter()
+            .map(|c| {
+                let mut w = map_client(c, &monitors);
+                w.is_focused = Some(&w.id) == focused_address.as_ref();
+                w.is_urgent = !w.is_focused && urgent.contains(&w.id);
+                w
+            })
+            .collect();
+        sync_urgent_workspaces(state);
+    }
+}
+
+fn sync_urgent_workspaces(state: &mut super::types::CompositorState) {
+    for ws in state.workspaces.iter_mut() {
+        ws.has_urgent = state
+            .windows
+            .iter()
+            .any(|w| w.is_urgent && w.workspace_id == ws.id);
+    }
+}
+
+/// Execute a compositor command synchronously.
+pub fn execute_command(cmd: CompositorCommand) -> Result<()> {
+    match cmd {
+        CompositorCommand::FocusWorkspace(id) => {
+            Dispatch::call(DispatchType::Workspace(WorkspaceIdentifierWithSpecial::Id(
+                id,
+            )))?;
+        }
+        CompositorCommand::FocusSpecialWorkspace(name) => {
+            Dispatch::call(DispatchType::Workspace(
+                WorkspaceIdentifierWithSpecial::Special(Some(name.as_str())),
+            ))?;
+        }
+        CompositorCommand::ToggleSpecialWorkspace(name) => {
+            Dispatch::call(DispatchType::ToggleSpecialWorkspace(Some(name)))?;
+        }
+        CompositorCommand::FocusMonitor(id) => {
+            Dispatch::call(DispatchType::FocusMonitor(MonitorIdentifier::Id(id)))?;
+        }
+        CompositorCommand::ScrollWorkspace(dir) => {
+            let d = if dir > 0 { "+1" } else { "-1" };
+            Dispatch::call(DispatchType::Workspace(
+                WorkspaceIdentifierWithSpecial::Relative(d.to_string().parse()?),
+            ))?;
+        }
+        CompositorCommand::NextKeyboardLayout => {
+            hyprland::ctl::switch_xkb_layout::call(
+                "all",
+                hyprland::ctl::switch_xkb_layout::SwitchXKBLayoutCmdTypes::Next,
+            )?;
+        }
+        CompositorCommand::FocusWindow(address) => {
+            Dispatch::call(DispatchType::FocusWindow(WindowIdentifier::Address(
+                hyprland::shared::Address::new(address),
+            )))?;
+        }
+        CompositorCommand::CloseWindow(address) => {
+            Dispatch::call(DispatchType::CloseWindow(WindowIdentifier::Address(
+                hyprland::shared::Address::new(address),
+            )))?;
+        }
+        CompositorCommand::Custom(dispatcher, args) => {
+            Dispatch::call(DispatchType::Custom(&dispatcher, &args))?;
+        }
+        CompositorCommand::ToggleMinimizeWindow(_) | CompositorCommand::ToggleOverview => {
+            anyhow::bail!("ToggleMinimizeWindow / ToggleOverview not supported on Hyprland");
+        }
+    }
+    Ok(())
+}
+
+/// Fetch the complete compositor state from Hyprland.
+/// Used for initial state and occasional full refresh.
+pub fn fetch_full_state() -> Result<CompositorState> {
+    let workspaces = Workspaces::get()?
+        .into_iter()
+        .sorted_by_key(|w| w.id)
+        .map(|w| Workspace {
+            id: w.id,
+            index: w.id,
+            name: w.name,
+            monitor: w.monitor,
+            monitor_id: w.monitor_id,
+            windows: w.windows,
+            is_special: w.id < 0,
+            has_urgent: false,
+        })
+        .collect();
+
+    let monitors: Vec<Monitor> = Monitors::get()?
+        .into_iter()
+        .map(|m| Monitor {
+            id: m.id,
+            name: m.name,
+            active_workspace_id: m.active_workspace.id,
+            special_workspace_id: m.special_workspace.id,
+            width: m.width as u32,
+            height: m.height as u32,
+            x: m.x,
+            y: m.y,
+            scale: m.scale,
+        })
+        .collect();
+
+    let windows: Vec<super::types::Window> = Clients::get()?
+        .into_iter()
+        .map(|c| map_client(c, &monitors))
+        .collect();
+
+    let active_workspace_id = HWorkspace::get_active().ok().map(|w| w.id);
+
+    let active_window = Client::get_active().ok().flatten().map(|w| ActiveWindow {
+        title: w.title,
+        class: w.class,
+        address: w.address.to_string(),
+    });
+
+    let keyboard_layout = Devices::get()
+        .ok()
+        .and_then(|d| {
+            d.keyboards
+                .into_iter()
+                .find(|k| k.main)
+                .map(|k| k.active_keymap)
+        })
+        .unwrap_or_else(|| "Unknown".to_string());
+
+    Ok(CompositorState {
+        workspaces,
+        monitors,
+        active_workspace_id,
+        active_window,
+        windows,
+        keyboard_layout,
+        submap: None,
+    })
+}
+
+/// Follow Hyprland's event socket on a dedicated thread. The socket closing
+/// fails the attempt, and the retry refetches whatever it missed.
+pub fn start_listener(data: Mutable<CompositorState>, token: RunToken) {
+    let mut resync = false;
+    token.supervise_blocking("Hyprland", move |token| {
+        if std::mem::replace(&mut resync, true) {
+            data.set_neq(fetch_full_state()?);
+        }
+        token.active();
+        run_listener(data.clone())?;
+        anyhow::bail!("Hyprland event socket closed")
+    });
+}
+
+/// Run the sync event listener with incremental updates.
+fn run_listener(data: Mutable<CompositorState>) -> Result<()> {
+    info!("Starting Hyprland event listener (incremental updates)");
+
+    let mut listener = EventListener::new();
+
+    // Workspace changed (active workspace switched)
+    {
+        let data = data.clone();
+        listener.add_workspace_changed_handler(move |evt| {
+            debug!("Workspace changed: {:?}", evt.name);
+            let mut state = data.lock_mut();
+            state.active_workspace_id = Some(evt.id);
+        });
+    }
+
+    // Workspace added
+    {
+        let data = data.clone();
+        listener.add_workspace_added_handler(move |evt| {
+            debug!("Workspace added: {:?}", evt.name);
+            let mut state = data.lock_mut();
+            // Check if workspace already exists
+            if !state.workspaces.iter().any(|w| w.id == evt.id) {
+                state.workspaces.push(Workspace {
+                    id: evt.id,
+                    index: evt.id,
+                    name: evt.name.to_string(),
+                    monitor: String::new(), // Will be updated by monitor events
+                    monitor_id: None,
+                    windows: 0,
+                    is_special: evt.id < 0,
+                    has_urgent: false,
+                });
+                state.workspaces.sort_by_key(|w| w.id);
+            }
+        });
+    }
+
+    // Workspace deleted
+    {
+        let data = data.clone();
+        listener.add_workspace_deleted_handler(move |evt| {
+            debug!("Workspace deleted: {:?}", evt.name);
+            let mut state = data.lock_mut();
+            state.workspaces.retain(|w| w.id != evt.id);
+        });
+    }
+
+    // Workspace moved to different monitor
+    {
+        let data = data.clone();
+        listener.add_workspace_moved_handler(move |evt| {
+            debug!("Workspace {} moved to monitor {}", evt.id, evt.monitor);
+            let mut state = data.lock_mut();
+            if let Some(ws) = state.workspaces.iter_mut().find(|w| w.id == evt.id) {
+                ws.monitor = evt.monitor.clone();
+            }
+        });
+    }
+
+    // Active window changed
+    {
+        let data = data.clone();
+        listener.add_active_window_changed_handler(move |evt| {
+            debug!("Active window changed: {:?}", evt);
+            let mut state = data.lock_mut();
+            let focused_address = evt.as_ref().map(|w| w.address.to_string());
+            for w in state.windows.iter_mut() {
+                w.is_focused = Some(&w.id) == focused_address.as_ref();
+                // Hyprland clears urgency once the window is focused.
+                w.is_urgent &= !w.is_focused;
+            }
+            sync_urgent_workspaces(&mut state);
+            state.active_window = evt.map(|w| ActiveWindow {
+                title: w.title,
+                class: w.class,
+                address: w.address.to_string(),
+            });
+        });
+    }
+
+    // Window asked for attention
+    {
+        let data = data.clone();
+        listener.add_urgent_state_changed_handler(move |address| {
+            debug!("Urgent window: {}", address);
+            let address = address.to_string();
+            let mut state = data.lock_mut();
+            if let Some(w) = state
+                .windows
+                .iter_mut()
+                .find(|w| w.id == address && !w.is_focused)
+            {
+                w.is_urgent = true;
+            }
+            sync_urgent_workspaces(&mut state);
+        });
+    }
+
+    // Window opened - increment window count
+    {
+        let data = data.clone();
+        listener.add_window_opened_handler(move |evt| {
+            debug!(
+                "Window opened: {} on workspace {:?}",
+                evt.window_class, evt.workspace_name
+            );
+            let mut state = data.lock_mut();
+            // Try to find workspace by name and increment window count
+            if let Some(ws) = state
+                .workspaces
+                .iter_mut()
+                .find(|w| w.name == evt.workspace_name)
+            {
+                ws.windows = ws.windows.saturating_add(1);
+            }
+            refresh_windows(&mut state);
+        });
+    }
+
+    // Window closed - decrement window count
+    {
+        let data = data.clone();
+        listener.add_window_closed_handler(move |_evt| {
+            debug!("Window closed");
+            // We don't know which workspace, so do a lightweight refresh of window counts
+            // This is a compromise - we could track window addresses but that adds complexity
+            if let Ok(workspaces) = Workspaces::get() {
+                let mut state = data.lock_mut();
+                for ws_data in workspaces {
+                    if let Some(ws) = state.workspaces.iter_mut().find(|w| w.id == ws_data.id) {
+                        ws.windows = ws_data.windows;
+                    }
+                }
+                refresh_windows(&mut state);
+            }
+        });
+    }
+
+    // Window moved between workspaces
+    {
+        let data = data.clone();
+        listener.add_window_moved_handler(move |evt| {
+            debug!("Window moved to workspace {}", evt.workspace_name);
+            // Refresh window counts for affected workspaces
+            if let Ok(workspaces) = Workspaces::get() {
+                let mut state = data.lock_mut();
+                for ws_data in workspaces {
+                    if let Some(ws) = state.workspaces.iter_mut().find(|w| w.id == ws_data.id) {
+                        ws.windows = ws_data.windows;
+                    }
+                }
+                refresh_windows(&mut state);
+            }
+        });
+    }
+
+    // Monitor added/changed
+    {
+        let data = data.clone();
+        listener.add_active_monitor_changed_handler(move |evt| {
+            debug!(
+                "Active monitor changed: {} workspace {:?}",
+                evt.monitor_name, evt.workspace_name
+            );
+            // Find workspace id first (before mutable borrow)
+            let ws_id = evt.workspace_name.as_ref().and_then(|ws_type| {
+                let ws_name = ws_type.to_string();
+                let state = data.lock_ref();
+                state
+                    .workspaces
+                    .iter()
+                    .find(|w| w.name == ws_name)
+                    .map(|w| w.id)
+            });
+            // Now update the monitor
+            if let Some(ws_id) = ws_id {
+                let mut state = data.lock_mut();
+                if let Some(mon) = state
+                    .monitors
+                    .iter_mut()
+                    .find(|m| m.name == evt.monitor_name)
+                {
+                    mon.active_workspace_id = ws_id;
+                }
+            }
+        });
+    }
+
+    // Submap changed
+    {
+        let data = data.clone();
+        listener.add_sub_map_changed_handler(move |submap| {
+            debug!("Submap changed: {}", submap);
+            let mut state = data.lock_mut();
+            state.submap = if submap.is_empty() {
+                None
+            } else {
+                Some(submap)
+            };
+        });
+    }
+
+    // Keyboard layout changed
+    {
+        let data = data.clone();
+        listener.add_layout_changed_handler(move |evt| {
+            debug!("Keyboard layout changed: {}", evt.layout_name);
+            let mut state = data.lock_mut();
+            state.keyboard_layout = evt.layout_name;
+        });
+    }
+
+    // Special workspace events
+    {
+        let data = data.clone();
+        listener.add_changed_special_handler(move |evt| {
+            debug!("Special workspace changed: {:?}", evt.workspace_name);
+            // Refresh special workspace state
+            if let Ok(monitors) = Monitors::get() {
+                let mut state = data.lock_mut();
+                for mon_data in monitors {
+                    if let Some(mon) = state.monitors.iter_mut().find(|m| m.name == mon_data.name) {
+                        mon.special_workspace_id = mon_data.special_workspace.id;
+                    }
+                }
+            }
+        });
+    }
+
+    {
+        let data = data.clone();
+        listener.add_special_removed_handler(move |_evt| {
+            debug!("Special workspace removed");
+            // Refresh special workspace state
+            if let Ok(monitors) = Monitors::get() {
+                let mut state = data.lock_mut();
+                for mon_data in monitors {
+                    if let Some(mon) = state.monitors.iter_mut().find(|m| m.name == mon_data.name) {
+                        mon.special_workspace_id = mon_data.special_workspace.id;
+                    }
+                }
+            }
+        });
+    }
+
+    // Start the blocking event listener
+    listener.start_listener()?;
+
+    Ok(())
+}

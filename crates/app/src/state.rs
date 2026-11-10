@@ -1,0 +1,349 @@
+//! Application-wide runtime state stored as a GPUI global.
+
+use std::time::Instant;
+
+use futures_signals::signal::{Signal, SignalExt};
+use futures_util::StreamExt;
+use gpui::{AnyWindowHandle, App, Context, DisplayId, Global, Task, Window};
+use services::{ManagedService, ServiceMode};
+
+use crate::config::State;
+
+/// Maps each bar window to the display it was explicitly opened on.
+///
+/// We can't correlate a window to a compositor monitor by position: gpui's
+/// `Display::bounds()` doesn't reflect real global monitor placement in this
+/// fork (every display reports origin (0, 0) regardless of its actual
+/// position), and `Window::display()` is separately unreliable for
+/// layer-shell windows (gpui_linux derives it from `primary_output_scale()`,
+/// which just picks whichever output has the highest scale factor). We also
+/// can't assume `cx.displays()` and the compositor's own monitor list
+/// enumerate outputs in the same order - on at least one real dual-monitor
+/// setup they didn't, which silently swapped which bar controlled which
+/// monitor. So instead we record the specific `DisplayId` each window was
+/// opened with, and match it against a compositor monitor by name via
+/// `PlatformDisplay::uuid()` (see the `bar` and `dock` modules'
+/// monitor-matching code), which gpui_linux derives deterministically from
+/// the Wayland output's name.
+/// Look up the display a bar window was opened on.
+pub fn display_id_for_window(window: &Window, cx: &App) -> Option<DisplayId> {
+    crate::windows::ShellWindows::display_for_window(cx, window)
+}
+
+/// Find the compositor monitor backing a gpui display.
+///
+/// `gpui_linux`'s `PlatformDisplay::uuid()` is a deterministic hash of the
+/// Wayland output's name (`Uuid::new_v5(NAMESPACE_DNS, name)`), so hashing
+/// each compositor monitor name the same way identifies the pair without
+/// relying on enumeration order - which `cx.displays()` and the
+/// compositor's own list do not share (see [`display_id_for_window`]).
+pub(crate) fn monitor_for_display<'a>(
+    display_id: Option<DisplayId>,
+    state: &'a services::CompositorState,
+    cx: &App,
+) -> Option<&'a services::Monitor> {
+    let display_uuid = cx.find_display(display_id?)?.uuid().ok()?;
+    state.monitors.iter().find(|monitor| {
+        uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_DNS, monitor.name.as_bytes()) == display_uuid
+    })
+}
+
+/// Logical (scale-corrected) size of the monitor backing a gpui display.
+///
+/// Prefer this over `PlatformDisplay::bounds()` for anything that has to
+/// match the real screen extent. gpui derives its display bounds from the
+/// integer `wl_output.scale`, and Wayland's core output protocol carries no
+/// fractional scale - a screen running at 1.5 advertises 2, so gpui reports
+/// two thirds of the true logical size.
+///
+/// Returns `None` when the compositor backend does not publish monitor
+/// geometry (the Niri backend leaves it at zero), leaving the caller to
+/// fall back to gpui's own bounds.
+pub(crate) fn logical_display_size(
+    display_id: Option<DisplayId>,
+    cx: &App,
+) -> Option<gpui::Size<gpui::Pixels>> {
+    let state = AppState::compositor(cx).get();
+    let monitor = monitor_for_display(display_id, &state, cx)?;
+    if monitor.scale <= 0.0 || monitor.width == 0 || monitor.height == 0 {
+        return None;
+    }
+    Some(gpui::size(
+        gpui::px(monitor.width as f32 / monitor.scale),
+        gpui::px(monitor.height as f32 / monitor.scale),
+    ))
+}
+
+/// [`logical_display_size`], falling back to gpui's bounds and then 1080p.
+pub(crate) fn display_extent(display_id: Option<DisplayId>, cx: &App) -> gpui::Size<gpui::Pixels> {
+    logical_display_size(display_id, cx)
+        .or_else(|| {
+            display_id
+                .and_then(|id| cx.find_display(id))
+                .or_else(|| cx.primary_display())
+                .map(|display| display.bounds().size)
+        })
+        .unwrap_or_else(|| gpui::size(gpui::px(1920.), gpui::px(1080.)))
+}
+
+pub(crate) fn record_window_display(
+    handle: AnyWindowHandle,
+    display_id: Option<DisplayId>,
+    cx: &mut App,
+) {
+    crate::windows::ShellWindows::record_display(cx, handle, display_id);
+}
+
+/// Shared services container for all system integrations.
+///
+/// This struct holds instances of all available services and should be
+/// initialized once at application startup, then shared with widgets
+/// that need access to system information.
+#[derive(Clone)]
+pub(crate) struct Services {
+    pub applications: services::ApplicationsService,
+    pub audio: services::AudioSubscriber,
+    pub bluetooth: services::BluetoothSubscriber,
+    pub brightness: services::BrightnessSubscriber,
+    pub clipboard: services::ClipboardSubscriber,
+    pub compositor: services::CompositorSubscriber,
+    pub mpris: services::MprisSubscriber,
+    pub network: services::NetworkSubscriber,
+    pub notification: services::NotificationSubscriber,
+    pub privacy: services::PrivacySubscriber,
+    pub sysinfo: services::SysInfoSubscriber,
+    pub tray: services::TraySubscriber,
+    pub upower: services::UPowerSubscriber,
+    pub wallpaper: services::WallpaperSubscriber,
+}
+
+impl Services {
+    /// Every service the shell can inspect and control.
+    ///
+    /// NOTE: keep in sync with the struct above - a new field is not added
+    /// here automatically.
+    pub(crate) fn managed(&self) -> [&dyn ManagedService; 13] {
+        [
+            &self.audio,
+            &self.network,
+            &self.bluetooth,
+            &self.upower,
+            &self.mpris,
+            &self.notification,
+            &self.tray,
+            &self.sysinfo,
+            &self.privacy,
+            &self.wallpaper,
+            &self.brightness,
+            &self.clipboard,
+            &self.compositor,
+        ]
+    }
+}
+
+/// Build every service. Only the compositor connects here - the rest are
+/// inert until [`AppState::start_services`] applies the configured modes.
+pub(crate) async fn init_services() -> anyhow::Result<Services> {
+    let started = Instant::now();
+    let compositor = services::CompositorSubscriber::new().await?;
+    tracing::info!("Connected to the compositor in {:?}", started.elapsed());
+
+    Ok(Services {
+        applications: services::ApplicationsService::new(),
+        audio: services::AudioSubscriber::new(),
+        bluetooth: services::BluetoothSubscriber::new(),
+        brightness: services::BrightnessSubscriber::new(),
+        clipboard: services::ClipboardSubscriber::new(),
+        compositor,
+        mpris: services::MprisSubscriber::new(),
+        network: services::NetworkSubscriber::new(),
+        notification: services::NotificationSubscriber::new(),
+        privacy: services::PrivacySubscriber::new(),
+        sysinfo: services::SysInfoSubscriber::new(),
+        tray: services::TraySubscriber::new(),
+        upower: services::UPowerSubscriber::new(),
+        wallpaper: services::WallpaperSubscriber::new(),
+    })
+}
+
+/// Watch a signal and apply distinct consecutive updates to component state.
+pub(crate) fn watch<C, S, T, F>(cx: &mut Context<C>, signal: S, on_update: F)
+where
+    C: 'static,
+    S: Signal<Item = T> + Unpin + 'static,
+    T: Clone + PartialEq + 'static,
+    F: Fn(&mut C, T, &mut Context<C>) + 'static,
+{
+    watch_task(cx, signal, on_update).detach();
+}
+
+/// [`watch`] that stops when the returned task is dropped.
+pub(crate) fn watch_task<C, S, T, F>(cx: &mut Context<C>, signal: S, on_update: F) -> Task<()>
+where
+    C: 'static,
+    S: Signal<Item = T> + Unpin + 'static,
+    T: Clone + PartialEq + 'static,
+    F: Fn(&mut C, T, &mut Context<C>) + 'static,
+{
+    cx.spawn(async move |this, cx| {
+        let mut stream = signal.to_stream();
+        let mut previous = None;
+        while let Some(data) = stream.next().await {
+            if previous.as_ref() == Some(&data) {
+                continue;
+            }
+            previous = Some(data.clone());
+            let update = &on_update;
+            if this
+                .update(cx, move |this, cx| {
+                    update(this, data, cx);
+                })
+                .is_err()
+            {
+                break;
+            }
+        }
+    })
+}
+
+/// Global runtime state shared across views/widgets.
+#[derive(Clone)]
+pub struct AppState {
+    services: Services,
+}
+
+impl Global for AppState {}
+
+impl AppState {
+    /// Initialize the global app state and bring services up.
+    pub(crate) fn init(services: Services, cx: &mut App) {
+        cx.set_global(Self { services });
+        Self::start_services(cx);
+    }
+
+    /// Apply the configured startup mode to every service, starting the
+    /// eager ones. Lazy services start on first access, `off` ones never do.
+    fn start_services(cx: &App) {
+        for service in Self::services(cx).managed() {
+            if !service.controllable() {
+                continue;
+            }
+
+            let mode = State::service_mode(service.name(), cx);
+            service.lifecycle().set_mode(mode);
+            if mode == ServiceMode::Eager {
+                service.start();
+            }
+        }
+    }
+
+    /// Every service, for the launcher's services view.
+    pub fn managed_services(cx: &App) -> [&dyn ManagedService; 13] {
+        Self::services(cx).managed()
+    }
+
+    /// Get the global app state.
+    #[inline(always)]
+    pub fn global(cx: &App) -> &Self {
+        cx.global::<Self>()
+    }
+
+    #[inline(always)]
+    fn services(cx: &App) -> &Services {
+        &Self::global(cx).services
+    }
+
+    #[inline(always)]
+    pub fn applications(cx: &App) -> &services::ApplicationsService {
+        &Self::services(cx).applications
+    }
+
+    #[inline(always)]
+    pub fn audio(cx: &App) -> &services::AudioSubscriber {
+        let service = &Self::services(cx).audio;
+        service.ensure_started();
+        service
+    }
+
+    #[inline(always)]
+    pub fn bluetooth(cx: &App) -> &services::BluetoothSubscriber {
+        let service = &Self::services(cx).bluetooth;
+        service.ensure_started();
+        service
+    }
+
+    #[inline(always)]
+    pub fn brightness(cx: &App) -> &services::BrightnessSubscriber {
+        let service = &Self::services(cx).brightness;
+        service.ensure_started();
+        service
+    }
+
+    #[inline(always)]
+    pub fn clipboard(cx: &App) -> &services::ClipboardSubscriber {
+        let service = &Self::services(cx).clipboard;
+        service.ensure_started();
+        service
+    }
+
+    #[inline(always)]
+    pub fn compositor(cx: &App) -> &services::CompositorSubscriber {
+        &Self::services(cx).compositor
+    }
+
+    #[inline(always)]
+    pub fn mpris(cx: &App) -> &services::MprisSubscriber {
+        let service = &Self::services(cx).mpris;
+        service.ensure_started();
+        service
+    }
+
+    #[inline(always)]
+    pub fn network(cx: &App) -> &services::NetworkSubscriber {
+        let service = &Self::services(cx).network;
+        service.ensure_started();
+        service
+    }
+
+    #[inline(always)]
+    pub fn notification(cx: &App) -> &services::NotificationSubscriber {
+        let service = &Self::services(cx).notification;
+        service.ensure_started();
+        service
+    }
+
+    #[inline(always)]
+    pub fn privacy(cx: &App) -> &services::PrivacySubscriber {
+        let service = &Self::services(cx).privacy;
+        service.ensure_started();
+        service
+    }
+
+    #[inline(always)]
+    pub fn sysinfo(cx: &App) -> &services::SysInfoSubscriber {
+        let service = &Self::services(cx).sysinfo;
+        service.ensure_started();
+        service
+    }
+
+    #[inline(always)]
+    pub fn tray(cx: &App) -> &services::TraySubscriber {
+        let service = &Self::services(cx).tray;
+        service.ensure_started();
+        service
+    }
+
+    #[inline(always)]
+    pub fn upower(cx: &App) -> &services::UPowerSubscriber {
+        let service = &Self::services(cx).upower;
+        service.ensure_started();
+        service
+    }
+
+    #[inline(always)]
+    pub fn wallpaper(cx: &App) -> &services::WallpaperSubscriber {
+        let service = &Self::services(cx).wallpaper;
+        service.ensure_started();
+        service
+    }
+}

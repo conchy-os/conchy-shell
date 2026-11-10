@@ -1,0 +1,29 @@
+[package]
+name = "services"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+futures-util.workspace = true
+zbus.workspace = true
+futures-signals.workspace = true
+tracing.workspace = true
+itertools.workspace = true
+chrono.workspace = true
+hyprland.workspace = true
+conchy-ipc.workspace = true
+tokio.workspace = true
+inotify.workspace = true
+image = { workspace = true, features = ["png", "jpeg", "webp", "gif", "bmp"] }
+
+pipewire = "0.10"
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = "1"
+serde-saphyr = "0.0"
+sysinfo = "0.39"
+udev = "0.9"
+libpulse-binding = "2.30"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

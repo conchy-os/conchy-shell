@@ -1,0 +1,194 @@
+//! Compositor service for workspace and monitor management.
+//!
+//! This module provides an event-driven subscriber for monitoring compositor state
+//! (workspaces, monitors, active window, keyboard layout) and executing commands.
+//! It supports multiple compositor backends (Hyprland, Niri, Mango).
+//!
+//! Uses incremental updates with direct Mutable mutation for efficiency.
+
+pub mod hyprland;
+pub mod mango;
+pub mod niri;
+pub mod types;
+
+use anyhow::Result;
+use futures_signals::signal::{Mutable, MutableSignalCloned};
+use tracing::info;
+
+use crate::jobs::JobQueue;
+use crate::lifecycle::{Lifecycle, ManagedService, ServiceMode};
+pub use types::{
+    ActiveWindow, CompositorBackend, CompositorCommand, CompositorState, Monitor, Window,
+    WindowGeometry, Workspace,
+};
+
+/// Event-driven compositor subscriber.
+///
+/// This subscriber monitors compositor state (workspaces, monitors, windows)
+/// and provides reactive state updates through `futures_signals`.
+///
+/// Uses incremental updates - only the changed fields are updated on each event,
+/// rather than refetching the entire state.
+#[derive(Debug, Clone)]
+pub struct CompositorSubscriber {
+    data: Mutable<CompositorState>,
+    backend: CompositorBackend,
+    lifecycle: Lifecycle,
+    jobs: JobQueue<CompositorCommand>,
+}
+
+impl CompositorSubscriber {
+    /// Create a new compositor subscriber and start monitoring.
+    ///
+    /// Automatically detects the running compositor backend.
+    /// Returns an error if no supported compositor is detected.
+    pub async fn new() -> Result<Self> {
+        let backend = detect_backend().ok_or_else(|| {
+            anyhow::anyhow!("No supported compositor detected (Hyprland, Niri or Mango)")
+        })?;
+
+        info!("Detected compositor backend: {}", backend.name());
+
+        // Fetch initial state
+        let initial_state = match backend {
+            CompositorBackend::Hyprland => hyprland::fetch_full_state()?,
+            CompositorBackend::Niri => niri::fetch_full_state()?,
+            CompositorBackend::Mango => mango::fetch_full_state()?,
+        };
+
+        let data = Mutable::new(initial_state);
+        let lifecycle = Lifecycle::new(ServiceMode::Eager);
+        let token = lifecycle.begin();
+
+        // Blocking socket listeners, each on its own thread and retried on EOF.
+        match backend {
+            CompositorBackend::Hyprland => hyprland::start_listener(data.clone(), token.clone()),
+            CompositorBackend::Niri => niri::start_listener(data.clone(), token.clone()),
+            CompositorBackend::Mango => mango::start_listener(data.clone(), token.clone()),
+        }
+
+        // Every backend's IPC is a blocking socket round trip (two on Mango
+        // for a workspace switch), so commands run on the blocking pool,
+        // one at a time and in order, never on the caller's (UI) thread.
+        let jobs = JobQueue::new("Compositor");
+        jobs.run(token.clone(), move |command| async move {
+            tokio::task::spawn_blocking(move || execute(backend, command)).await?
+        });
+        token.active();
+
+        Ok(Self {
+            data,
+            backend,
+            lifecycle,
+            jobs,
+        })
+    }
+
+    /// Get a signal that emits when compositor state changes.
+    pub fn subscribe(&self) -> MutableSignalCloned<CompositorState> {
+        self.data.signal_cloned()
+    }
+
+    /// Get the current state snapshot.
+    pub fn get(&self) -> CompositorState {
+        self.data.get_cloned()
+    }
+
+    /// Get the detected compositor backend.
+    pub fn backend(&self) -> CompositorBackend {
+        self.backend
+    }
+
+    /// Queue a compositor command. Failures are logged.
+    pub fn dispatch(&self, command: CompositorCommand) {
+        self.jobs.send(command);
+    }
+
+    /// Force a full state refresh.
+    ///
+    /// Normally not needed as incremental updates keep state in sync,
+    /// but can be useful if state gets out of sync for some reason.
+    pub fn refresh(&self) -> Result<()> {
+        let new_state = match self.backend {
+            CompositorBackend::Hyprland => hyprland::fetch_full_state()?,
+            CompositorBackend::Niri => niri::fetch_full_state()?,
+            CompositorBackend::Mango => mango::fetch_full_state()?,
+        };
+        self.data.set_neq(new_state);
+        Ok(())
+    }
+}
+
+impl ManagedService for CompositorSubscriber {
+    fn name(&self) -> &'static str {
+        "Compositor"
+    }
+
+    fn lifecycle(&self) -> &Lifecycle {
+        &self.lifecycle
+    }
+
+    fn memory_bytes(&self) -> usize {
+        let data = self.data.lock_ref();
+        size_of::<CompositorState>()
+            + data.keyboard_layout.len()
+            + data.submap.as_ref().map_or(0, String::len)
+            + data
+                .workspaces
+                .iter()
+                .map(|ws| size_of::<Workspace>() + ws.name.len() + ws.monitor.len())
+                .sum::<usize>()
+            + data
+                .monitors
+                .iter()
+                .map(|monitor| size_of::<Monitor>() + monitor.name.len())
+                .sum::<usize>()
+            + data
+                .windows
+                .iter()
+                .map(|window| {
+                    size_of::<Window>()
+                        + window.id.len()
+                        + window.app_id.len()
+                        + window.title.len()
+                        + window.monitor.len()
+                })
+                .sum::<usize>()
+            + data.active_window.as_ref().map_or(0, |window| {
+                size_of::<ActiveWindow>()
+                    + window.title.len()
+                    + window.class.len()
+                    + window.address.len()
+            })
+    }
+
+    /// The shell has no meaning without a compositor connection, so this one
+    /// is brought up by [`CompositorSubscriber::new`] and shown read-only.
+    fn start(&self) {}
+
+    fn controllable(&self) -> bool {
+        false
+    }
+}
+
+/// Run one command against the backend (blocking IPC).
+fn execute(backend: CompositorBackend, command: CompositorCommand) -> Result<()> {
+    match backend {
+        CompositorBackend::Hyprland => hyprland::execute_command(command),
+        CompositorBackend::Niri => niri::execute_command(command),
+        CompositorBackend::Mango => mango::execute_command(command),
+    }
+}
+
+/// Detect which compositor backend is available.
+fn detect_backend() -> Option<CompositorBackend> {
+    if niri::is_available() {
+        Some(CompositorBackend::Niri)
+    } else if hyprland::is_available() {
+        Some(CompositorBackend::Hyprland)
+    } else if mango::is_available() {
+        Some(CompositorBackend::Mango)
+    } else {
+        None
+    }
+}
