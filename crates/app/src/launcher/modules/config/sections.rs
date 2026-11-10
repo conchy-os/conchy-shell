@@ -46,12 +46,12 @@ impl Editable for Config {
         "Config"
     }
 
-    /// `theme.toml` has its own module; link to it from here.
+    /// Theme settings link.
     fn shortcuts(cx: &App) -> Vec<Item> {
         let prefix = cx.config().launcher.modules.themes.prefix.clone();
         vec![
             Item::new("themes", "Themes")
-                .subtitle("Browse and apply themes, saved to theme.toml")
+                .subtitle("Browse and apply desktop themes")
                 .icon(IconName::Palette)
                 .keywords("theme colors palette")
                 .action(
@@ -120,14 +120,16 @@ impl Editable for Config {
                         |c: &Self| &c.osd,
                         |c: &mut Self| &mut c.osd,
                     )
-                    .icon(IconName::Sliders),
+                    .icon(IconName::Sliders)
+                    .describe("Where volume and brightness indicators appear"),
                     Field::nested(
                         "panels",
                         "Panels",
                         |c: &Self| &c.panels,
                         |c: &mut Self| &mut c.panels,
                     )
-                    .icon(IconName::Layout),
+                    .icon(IconName::Layout)
+                    .describe("Behavior of popup panels and menus"),
                 ],
             ),
             Group::new(
@@ -137,13 +139,13 @@ impl Editable for Config {
                         "watch",
                         "Hot reload",
                         vec![
-                            Field::toggle("watch_config", "config.toml", lens!(watch_config)),
-                            Field::toggle("watch_theme", "theme.toml", lens!(watch_theme)),
+                            Field::toggle("watch_config", "shell.kdl", lens!(watch_config)),
+                            Field::toggle("watch_theme", "theme", lens!(watch_theme)),
                         ],
                     )
                     .icon(IconName::Refresh)
                     .describe(
-                        "Reload a file when it changes on disk. Takes effect after a restart",
+                        "Reload configuration when it changes on disk (conchy-config)",
                     ),
                 ],
             ),

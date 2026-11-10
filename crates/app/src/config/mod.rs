@@ -81,13 +81,19 @@ impl Config {
     /// parse, and both watchers keep the last good value until the next save
     /// fixes the file. `gpuishell --validate` reports where the parse gave up.
     pub fn init(cx: &mut App) {
-        let config = match persistence::load_or_create() {
+        let mut config = match persistence::load_or_create() {
             Ok(config) => config,
             Err(err) => {
                 tracing::warn!("Failed to load config, using defaults: {err:#}");
                 Config::default()
             }
         };
+
+        // If launcher window has old small default (600x450), upgrade to comfortable 800x540
+        if config.launcher.width <= 600.0 && config.launcher.height <= 450.0 {
+            config.launcher.width = 800.0;
+            config.launcher.height = 540.0;
+        }
 
         let theme = match theme::persistence::load_theme() {
             Ok(theme) => theme,
@@ -101,6 +107,16 @@ impl Config {
         cx.set_global(config);
         State::init(cx);
         ConfigSignals::init(cx);
+
+        // Preload properties from ~/.config/conchy/shell.kdl if present
+        if let Ok(store) = conchy_config::store::ConfigStore::new(None) {
+            if let Ok(props) = store.list("shell") {
+                for (k, v) in props {
+                    Self::apply_conchy_property(&k, &v, cx);
+                }
+            }
+        }
+
         Self::start_hot_reload(cx);
         Self::start_conchy_config_listener(cx);
     }
@@ -122,7 +138,7 @@ impl Config {
             }
             Err(err) => {
                 tracing::warn!("Failed to reload config from disk: {err:#}");
-                notify_parse_failure(LocalSlot::ConfigError, "config.toml", &err, cx);
+                notify_parse_failure(LocalSlot::ConfigError, "shell.kdl", &err, cx);
             }
         }
     }
@@ -136,7 +152,7 @@ impl Config {
             }
             Err(err) => {
                 tracing::warn!("Failed to reload theme from disk: {err:#}");
-                notify_parse_failure(LocalSlot::ThemeError, "theme.toml", &err, cx);
+                notify_parse_failure(LocalSlot::ThemeError, "theme", &err, cx);
             }
         }
     }
@@ -267,15 +283,20 @@ impl Config {
     pub fn apply_conchy_property(key: &str, value: &str, cx: &mut App) {
         let mut config = cx.global::<Config>().clone();
         match key {
-            "bar.position" => match value.to_lowercase().as_str() {
+            "bar.position" | "panel.position" => match value.to_lowercase().as_str() {
                 "bottom" => config.bar.position = BarPosition::Bottom,
                 "left" => config.bar.position = BarPosition::Left,
                 "right" => config.bar.position = BarPosition::Right,
                 _ => config.bar.position = BarPosition::Top,
             },
-            "bar.height" | "bar.size" => {
+            "bar.height" | "bar.size" | "panel.height" => {
                 if let Ok(h) = value.parse::<f32>() {
                     config.bar.size = h;
+                }
+            }
+            "panel.opacity" => {
+                if let Ok(op) = value.parse::<f32>() {
+                    config.bar.opacity = Some(op);
                 }
             }
             "bar.style" => match value.to_lowercase().as_str() {
@@ -290,8 +311,18 @@ impl Config {
             "osd.enabled" => {
                 config.osd.enabled = Some(value == "true");
             }
-            "clock.format" => {
+            "clock.format" | "panel.center.widget.format" => {
                 config.bar.modules.clock.format_horizontal = value.to_string();
+            }
+            "launcher.width" => {
+                if let Ok(w) = value.parse::<f32>() {
+                    config.launcher.width = w;
+                }
+            }
+            "launcher.height" => {
+                if let Ok(h) = value.parse::<f32>() {
+                    config.launcher.height = h;
+                }
             }
             other => {
                 tracing::debug!("Unhandled conchy-config property: {}", other);
@@ -348,11 +379,11 @@ pub fn validate() -> bool {
 /// tell. Re-reading two small files beats threading the errors through.
 pub fn report_load_errors(cx: &App) {
     if let Err(err) = persistence::load() {
-        notify_parse_failure(LocalSlot::ConfigError, "config.toml", &err, cx);
+        notify_parse_failure(LocalSlot::ConfigError, "shell.kdl", &err, cx);
     }
 
     if let Err(err) = theme::persistence::load_theme() {
-        notify_parse_failure(LocalSlot::ThemeError, "theme.toml", &err, cx);
+        notify_parse_failure(LocalSlot::ThemeError, "theme", &err, cx);
     }
 }
 

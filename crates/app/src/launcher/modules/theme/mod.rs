@@ -584,7 +584,7 @@ fn render_current_card(theme: &Theme, current: Option<&Entry>) -> AnyElement {
         "Light"
     });
     if !theme.overrides.is_empty() {
-        meta.push("Overrides from theme.toml");
+        meta.push("Custom overrides");
     }
 
     let row = |colors: [Hsla; 8]| {

@@ -38,7 +38,7 @@ pub fn descriptor(config: &ConfigEditorConfig) -> ModuleDescriptor {
             prefix: config.prefix.clone().into(),
             name: "Config",
             icon: IconName::Sliders,
-            description: "Edit config.toml",
+            description: "Edit shell configuration (shell.kdl)",
             default: false,
             in_help: true,
         },

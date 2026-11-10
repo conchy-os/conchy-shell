@@ -275,7 +275,7 @@ fn open_all_bar_windows(cx: &mut App) -> usize {
         }
     } else {
         tracing::info!("Opening bar on {} displays", displays.len());
-        for d in displays {
+        for d in &displays {
             if let Some(target) = &filter {
                 let target_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_DNS, target.as_bytes());
                 if let Ok(u) = d.uuid() {
@@ -287,6 +287,20 @@ fn open_all_bar_windows(cx: &mut App) -> usize {
             tracing::info!("Opening bar on display {:?}", d.id());
             if open_with_config(Some(d.id()), cx) {
                 opened += 1;
+            }
+        }
+
+        // Fallback: If configured monitor was not found (e.g. running in nested mode or monitor disconnected),
+        // fallback to available displays so the bar isn't silently omitted.
+        if opened == 0 && filter.is_some() {
+            tracing::warn!(
+                "Configured monitor {:?} not found among connected displays, falling back to all displays",
+                filter
+            );
+            for d in &displays {
+                if open_with_config(Some(d.id()), cx) {
+                    opened += 1;
+                }
             }
         }
     }

@@ -108,7 +108,7 @@ impl<S: Editable> LauncherPage for SectionPage<S> {
 /// Save and discard, reachable from every row.
 pub fn file_actions(panel: ActionPanel) -> ActionPanel {
     panel.section(
-        "config.toml",
+        "shell.kdl",
         [
             Action::new("Save", |_, cx| {
                 store::save(cx);
@@ -209,9 +209,15 @@ pub fn field_item<S: Editable>(path: &ConfigPath<S>, field: &Field<S>, cx: &App)
         .icon(field.icon.unwrap_or_else(|| field.editor.icon()))
         .keywords(key_path.clone());
     item = match (&field.editor, value.is_empty()) {
-        // A nested row's subtitle is its child's values; the description
-        // moves to the detail pane.
-        (Editor::Nested { .. }, false) => item.subtitle(value),
+        (Editor::Nested { .. }, _) => {
+            if !field.description.is_empty() {
+                item.subtitle(field.description)
+            } else if !value.is_empty() {
+                item.subtitle(value)
+            } else {
+                item
+            }
+        }
         (_, false) => {
             if !field.description.is_empty() {
                 item = item.subtitle(field.description);

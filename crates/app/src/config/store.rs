@@ -101,10 +101,10 @@ pub fn save(cx: &mut App) {
                 ConfigSignals::publish(cx);
             }
             Err(err) => {
-                tracing::warn!("Failed to write config.toml: {err:#}");
+                tracing::warn!("Failed to write configuration: {err:#}");
                 AppState::notification(cx).post_local(
                     LocalSlot::ConfigWriteError,
-                    "config.toml was not written".into(),
+                    "Configuration was not written".into(),
                     one_line(&err),
                 );
             }
@@ -124,7 +124,22 @@ fn write(edits: &[Edit]) -> anyhow::Result<()> {
     let text =
         fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
     let text = rewrite(&text, edits)?;
-    persistence::write_atomic(&path, &text)
+    let res = persistence::write_atomic(&path, &text);
+
+    // Also synchronize shell settings to ~/.config/conchy/shell.kdl via ConfigStore
+    if let Ok(store) = conchy_config::store::ConfigStore::new(None) {
+        for edit in edits {
+            let path_parts = edit.path();
+            let dot_key = path_parts.join(".");
+            let val_str = match edit {
+                Edit::Set(_, val) => val.to_string().trim_matches('"').to_string(),
+                Edit::Remove(_) => continue,
+            };
+            let _ = store.set("shell", &dot_key, &val_str);
+        }
+    }
+
+    res
 }
 
 /// Apply `edits` to the document text. A file that does not parse is refused
@@ -132,7 +147,7 @@ fn write(edits: &[Edit]) -> anyhow::Result<()> {
 fn rewrite(text: &str, edits: &[Edit]) -> anyhow::Result<String> {
     let mut doc = text
         .parse::<DocumentMut>()
-        .map_err(|err| anyhow!("config.toml does not parse, not written: {err}"))?;
+        .map_err(|err| anyhow!("Configuration does not parse, not written: {err}"))?;
 
     for edit in edits {
         let (last, parents) = edit
@@ -157,7 +172,7 @@ fn rewrite(text: &str, edits: &[Edit]) -> anyhow::Result<String> {
 
     let text = doc.to_string();
     toml::from_str::<Config>(&text)
-        .map_err(|err| anyhow!("edit would break config.toml: {err}"))?;
+        .map_err(|err| anyhow!("edit would break configuration: {err}"))?;
     Ok(text)
 }
 
@@ -298,7 +313,7 @@ width = 700.0
             .expect_err("invalid variant");
 
         assert!(
-            err.to_string().contains("edit would break config.toml"),
+            err.to_string().contains("edit would break configuration"),
             "{err}"
         );
         assert!(err.to_string().contains("sideways"), "{err}");

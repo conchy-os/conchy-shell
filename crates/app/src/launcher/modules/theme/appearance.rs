@@ -81,7 +81,7 @@ const RADIUS: Knob = Knob {
 const OPACITY: Knob = Knob {
     id: "appearance:opacity",
     title: "Surface opacity",
-    subtitle: "Bar, panels, launcher, OSD, popups and dock; each can override it in config.toml",
+    subtitle: "Bar, panels, launcher, OSD, popups and dock; each can override it in shell.kdl",
     icon: IconName::Eye,
     keywords: "opacity transparent translucent blur alpha background",
     get: |theme| theme.opacity,
