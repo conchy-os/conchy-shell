@@ -41,7 +41,14 @@ impl<S: Editable> ValuePage<S> {
                 unit,
                 ..
             } => {
-                let value: f64 = query
+                let clean = query
+                    .trim()
+                    .trim_end_matches("px")
+                    .trim_end_matches("%")
+                    .trim_end_matches("pt")
+                    .trim_end_matches("rem")
+                    .trim();
+                let value: f64 = clean
                     .parse()
                     .map_err(|_| format!("{query:?} is not a number"))?;
                 if *integer && value.fract() != 0.0 {

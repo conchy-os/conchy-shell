@@ -215,32 +215,26 @@ impl Editable for BarConfig {
             Group::new(
                 "Placement",
                 vec![
-                    Field::bundle(
-                        "placement",
-                        "Position and style",
-                        vec![
-                            Field::choice(
-                                "position",
-                                "Position",
-                                lens!(position),
-                                &BarPosition::ALL,
-                                BarPosition::label,
-                            ),
-                            Field::choice(
-                                "style",
-                                "Style",
-                                lens!(style),
-                                &BarStyle::ALL,
-                                BarStyle::label,
-                            )
-                            .describe(
-                                "Attached to the edge, floating, or bubbles. An attached bar \
-                                 becomes a side of the frame when that is on",
-                            ),
-                        ],
+                    Field::choice(
+                        "position",
+                        "Position",
+                        lens!(position),
+                        &BarPosition::ALL,
+                        BarPosition::label,
                     )
-                    .icon(IconName::Layout)
-                    .describe("Click an edge of the preview to move the bar there")
+                    .describe("Which edge of the screen the bar sits on; click an edge of the preview to move it")
+                    .preview(bar_preview),
+                    Field::choice(
+                        "style",
+                        "Style",
+                        lens!(style),
+                        &BarStyle::ALL,
+                        BarStyle::label,
+                    )
+                    .describe(
+                        "Attached to the edge, floating, or bubbles. An attached bar \
+                                 becomes a side of the frame when that is on",
+                    )
                     .preview(bar_preview),
                     Field::number("size", "Size", lens!(size as f64))
                         .range(16.0, 96.0)
@@ -304,32 +298,29 @@ impl Editable for FrameConfig {
 
     fn fields() -> Vec<Field<Self>> {
         vec![
-            Field::bundle(
-                "shape",
-                "Shape",
-                vec![
-                    Field::toggle("enabled", "Enabled", lens!(enabled)).describe(
-                        "A band around the work area. An attached bar and a taskbar dock \
-                         become its sides; a floating bar or dock sits inside it",
-                    ),
-                    Field::number("thickness", "Thickness", lens!(thickness as f64))
-                        .range(0.0, 32.0)
-                        .unit("px")
-                        .describe("Width of the band on the edges nothing sits on"),
-                    Field::number(
-                        "radius",
-                        "Corner radius",
-                        lens!(radius or f64::from(FrameConfig::RADIUS.base())),
-                    )
-                    .range(0.0, 48.0)
-                    .unit("px")
-                    .describe(RADIUS_FOLLOWS_THEME),
-                ],
+            Field::toggle("enabled", "Enabled", lens!(enabled))
+                .describe(
+                    "A band around the work area. An attached bar and a taskbar dock \
+                     become its sides; a floating bar or dock sits inside it",
+                )
+                .preview(frame_preview),
+            Field::number("thickness", "Thickness", lens!(thickness as f64))
+                .range(0.0, 32.0)
+                .unit("px")
+                .describe("Width of the band on the edges nothing sits on")
+                .preview(frame_preview),
+            Field::number(
+                "radius",
+                "Corner radius",
+                lens!(radius or f64::from(FrameConfig::RADIUS.base())),
             )
-            .icon(IconName::Square)
+            .range(0.0, 48.0)
+            .unit("px")
+            .describe(RADIUS_FOLLOWS_THEME)
             .preview(frame_preview),
             opacity_field("Opacity", lens!(opacity or 1.0))
-                .describe("Unset, the band matches the bar's background"),
+                .describe("Unset, the band matches the bar's background")
+                .preview(frame_preview),
         ]
     }
 }
@@ -591,44 +582,45 @@ impl Editable for LauncherConfig {
                 ],
             ),
             Group::new(
-                "Window",
+                "Window Geometry",
                 vec![
-                    Field::bundle(
-                        "window",
-                        "Window",
-                        vec![
-                            Field::number("width", "Width", lens!(width as f64))
-                                .range(300.0, 2000.0)
-                                .unit("px"),
-                            Field::number("height", "Height", lens!(height as f64))
-                                .range(200.0, 1600.0)
-                                .unit("px"),
-                            Field::number("margin_top", "Margin top", lens!(margin_top as f64))
-                                .range(0.0, 1000.0)
-                                .unit("px"),
-                            Field::number(
-                                "margin_right",
-                                "Margin right",
-                                lens!(margin_right as f64),
-                            )
-                            .range(0.0, 1000.0)
-                            .unit("px"),
-                            Field::number(
-                                "margin_bottom",
-                                "Margin bottom",
-                                lens!(margin_bottom as f64),
-                            )
-                            .range(0.0, 1000.0)
-                            .unit("px"),
-                            Field::number("margin_left", "Margin left", lens!(margin_left as f64))
-                                .range(0.0, 1000.0)
-                                .unit("px"),
-                        ],
+                    Field::number("width", "Width", lens!(width as f64))
+                        .range(300.0, 2000.0)
+                        .unit("px")
+                        .describe("Launcher window width")
+                        .preview(launcher_preview),
+                    Field::number("height", "Height", lens!(height as f64))
+                        .range(200.0, 1600.0)
+                        .unit("px")
+                        .describe("Launcher window height")
+                        .preview(launcher_preview),
+                    Field::number("margin_top", "Margin top", lens!(margin_top as f64))
+                        .range(0.0, 1000.0)
+                        .unit("px")
+                        .describe("Distance from screen top")
+                        .preview(launcher_preview),
+                    Field::number(
+                        "margin_right",
+                        "Margin right",
+                        lens!(margin_right as f64),
                     )
-                    .icon(IconName::Layout)
-                    .describe("Size of the launcher and its distance from the screen edges")
+                    .range(0.0, 1000.0)
+                    .unit("px")
                     .preview(launcher_preview),
-                    opacity_field("Opacity", lens!(opacity or 1.0)),
+                    Field::number(
+                        "margin_bottom",
+                        "Margin bottom",
+                        lens!(margin_bottom as f64),
+                    )
+                    .range(0.0, 1000.0)
+                    .unit("px")
+                    .preview(launcher_preview),
+                    Field::number("margin_left", "Margin left", lens!(margin_left as f64))
+                        .range(0.0, 1000.0)
+                        .unit("px")
+                        .preview(launcher_preview),
+                    opacity_field("Opacity", lens!(opacity or 1.0))
+                        .preview(launcher_preview),
                 ],
             ),
         ]
@@ -916,67 +908,68 @@ impl Editable for NotificationConfig {
             Group::new(
                 "Popups",
                 vec![
-                    Field::bundle(
-                        "popups",
-                        "Popups",
-                        vec![
-                            Field::choice(
-                                "popup_position",
-                                "Corner",
-                                lens!(popup_position),
-                                &NotificationPopupPosition::ALL,
-                                NotificationPopupPosition::label,
-                            ),
-                            Field::number("popup_width", "Width", lens!(popup_width as f64))
-                                .range(200.0, 800.0)
-                                .unit("px"),
-                            Field::number(
-                                "popup_height",
-                                "Stack height",
-                                lens!(popup_height as f64),
-                            )
-                            .range(100.0, 1200.0)
-                            .unit("px")
-                            .describe("Most the stack of popups may take at rest"),
-                            Field::integer(
-                                "popup_stack_limit",
-                                "Stack limit",
-                                lens!(popup_stack_limit as f64),
-                            )
-                            .range(1.0, 64.0)
-                            .describe("Popups kept on screen before the oldest is dropped"),
-                            Field::number(
-                                "popup_margin_top",
-                                "Margin top",
-                                lens!(popup_margin_top as f64),
-                            )
-                            .range(0.0, 400.0)
-                            .unit("px"),
-                            Field::number(
-                                "popup_margin_right",
-                                "Margin right",
-                                lens!(popup_margin_right as f64),
-                            )
-                            .range(0.0, 400.0)
-                            .unit("px"),
-                            Field::number(
-                                "popup_margin_bottom",
-                                "Margin bottom",
-                                lens!(popup_margin_bottom as f64),
-                            )
-                            .range(0.0, 400.0)
-                            .unit("px"),
-                            Field::number(
-                                "popup_margin_left",
-                                "Margin left",
-                                lens!(popup_margin_left as f64),
-                            )
-                            .range(0.0, 400.0)
-                            .unit("px"),
-                        ],
+                    Field::choice(
+                        "popup_position",
+                        "Corner",
+                        lens!(popup_position),
+                        &NotificationPopupPosition::ALL,
+                        NotificationPopupPosition::label,
                     )
-                    .icon(IconName::Layout)
-                    .describe("Click a corner of the preview to move the popups there")
+                    .describe("Corner of the screen where popups appear; click preview to change")
+                    .preview(notification_preview),
+                    Field::number("popup_width", "Width", lens!(popup_width as f64))
+                        .range(200.0, 800.0)
+                        .unit("px")
+                        .describe("Width of notification cards")
+                        .preview(notification_preview),
+                    Field::number(
+                        "popup_height",
+                        "Stack height",
+                        lens!(popup_height as f64),
+                    )
+                    .range(100.0, 1200.0)
+                    .unit("px")
+                    .describe("Most the stack of popups may take at rest")
+                    .preview(notification_preview),
+                    Field::integer(
+                        "popup_stack_limit",
+                        "Stack limit",
+                        lens!(popup_stack_limit as f64),
+                    )
+                    .range(1.0, 64.0)
+                    .describe("Popups kept on screen before the oldest is dropped")
+                    .preview(notification_preview),
+                    Field::number(
+                        "popup_margin_top",
+                        "Margin top",
+                        lens!(popup_margin_top as f64),
+                    )
+                    .range(0.0, 400.0)
+                    .unit("px")
+                    .preview(notification_preview),
+                    Field::number(
+                        "popup_margin_right",
+                        "Margin right",
+                        lens!(popup_margin_right as f64),
+                    )
+                    .range(0.0, 400.0)
+                    .unit("px")
+                    .preview(notification_preview),
+                    Field::number(
+                        "popup_margin_bottom",
+                        "Margin bottom",
+                        lens!(popup_margin_bottom as f64),
+                    )
+                    .range(0.0, 400.0)
+                    .unit("px")
+                    .preview(notification_preview),
+                    Field::number(
+                        "popup_margin_left",
+                        "Margin left",
+                        lens!(popup_margin_left as f64),
+                    )
+                    .range(0.0, 400.0)
+                    .unit("px")
                     .preview(notification_preview),
                 ],
             ),
@@ -1050,10 +1043,13 @@ impl Editable for DockConfig {
     }
 
     fn fields() -> Vec<Field<Self>> {
+        flatten(Self::groups())
+    }
+
+    fn groups() -> Vec<Group<Self>> {
         vec![
-            Field::bundle(
-                "placement",
-                "Position and behaviour",
+            Group::new(
+                "Position & Style",
                 vec![
                     Field::choice(
                         "position",
@@ -1061,7 +1057,9 @@ impl Editable for DockConfig {
                         lens!(position),
                         &BarPosition::ALL,
                         BarPosition::label,
-                    ),
+                    )
+                    .describe("Which edge of the screen the dock is attached to; click preview to change")
+                    .preview(dock_preview),
                     Field::choice(
                         "style",
                         "Style",
@@ -1069,9 +1067,8 @@ impl Editable for DockConfig {
                         &DockStyle::ALL,
                         DockStyle::label,
                     )
-                    .describe("Floating off the edge like a card, or attached flush to it"),
-                    Field::toggle("stretch", "Stretch", lens!(stretch))
-                        .describe("Span the whole edge"),
+                    .describe("Floating off the edge like a card, or attached flush to it")
+                    .preview(dock_preview),
                     Field::choice(
                         "align",
                         "Align",
@@ -1079,13 +1076,34 @@ impl Editable for DockConfig {
                         &DockAlign::ALL,
                         DockAlign::label,
                     )
-                    .describe("Where the icons sit along the edge"),
-                    Field::toggle("launcher", "Launcher", lens!(launcher))
-                        .describe("A button at the start of the dock that opens the launcher"),
-                    Field::toggle("reserve_space", "Reserve", lens!(reserve_space)).describe(
-                        "Reserve the dock's space so windows stay off it, as they do the bar. \
-                         A reserved dock never hides",
-                    ),
+                    .describe("Where the icons sit along the edge")
+                    .preview(dock_preview),
+                    Field::toggle("stretch", "Stretch", lens!(stretch))
+                        .describe("Span the whole screen edge")
+                        .preview(dock_preview),
+                ],
+            ),
+            Group::new(
+                "Sizing & Look",
+                vec![
+                    Field::number("icon_size", "Icon size", lens!(icon_size as f64))
+                        .range(16.0, 96.0)
+                        .unit("px")
+                        .describe("Size of app icons in the dock")
+                        .preview(dock_preview),
+                    opacity_field("Opacity", lens!(opacity or 1.0))
+                        .preview(dock_preview),
+                ],
+            ),
+            Group::new(
+                "Behavior",
+                vec![
+                    Field::toggle("launcher", "Launcher button", lens!(launcher))
+                        .describe("A button at the start of the dock that opens the launcher")
+                        .preview(dock_preview),
+                    Field::toggle("reserve_space", "Reserve space", lens!(reserve_space))
+                        .describe("Reserve dock space so windows stay off it; a reserved dock never hides")
+                        .preview(dock_preview),
                     Field::choice(
                         "visibility",
                         "Visibility",
@@ -1093,30 +1111,28 @@ impl Editable for DockConfig {
                         &DockVisibility::ALL,
                         DockVisibility::label,
                     )
-                    .describe("Ignored while the dock reserves its space"),
+                    .describe("Ignored while the dock reserves its space")
+                    .preview(dock_preview),
                     Field::choice(
                         "hover_effect",
                         "Hover effect",
                         lens!(hover_effect),
                         &DockHoverEffect::ALL,
                         DockHoverEffect::label,
-                    ),
+                    )
+                    .describe("Magnify icon or lift on pointer hover")
+                    .preview(dock_preview),
+                    Field::choice(
+                        "monitors",
+                        "Monitors",
+                        lens!(monitors),
+                        &DockMonitors::ALL,
+                        DockMonitors::label,
+                    )
+                    .describe("Displays where the dock appears")
+                    .preview(dock_preview),
                 ],
-            )
-            .icon(IconName::Layout)
-            .describe("Click an edge of the preview to move the dock there")
-            .preview(dock_preview),
-            Field::choice(
-                "monitors",
-                "Monitors",
-                lens!(monitors),
-                &DockMonitors::ALL,
-                DockMonitors::label,
             ),
-            Field::number("icon_size", "Icon size", lens!(icon_size as f64))
-                .range(16.0, 96.0)
-                .unit("px"),
-            opacity_field("Opacity", lens!(opacity or 1.0)),
         ]
     }
 }

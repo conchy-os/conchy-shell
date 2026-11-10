@@ -520,6 +520,29 @@ impl Launcher {
             NavKey::Right if grid => {
                 self.selected = (self.selected + 1).min(count.saturating_sub(1));
             }
+            NavKey::Left if self.input.is_empty() => {
+                if let Some(actions) = self.current_actions()
+                    && let Some(secondary) = actions.get(1)
+                    && (secondary.title == "Step back" || secondary.title == "Previous option")
+                {
+                    let action = secondary.clone();
+                    self.run(&action, window, cx);
+                    return;
+                }
+                self.input.move_left(false);
+            }
+            NavKey::Right if self.input.is_empty() => {
+                if let Some(actions) = self.current_actions()
+                    && let Some(secondary) = actions.get(1)
+                    && (secondary.title == "Step back" || secondary.title == "Previous option")
+                    && let Some(primary) = actions.get(0)
+                {
+                    let action = primary.clone();
+                    self.run(&action, window, cx);
+                    return;
+                }
+                self.input.move_right(false);
+            }
             NavKey::Left => self.input.move_left(false),
             NavKey::Right => self.input.move_right(false),
             _ if count == 0 => {}

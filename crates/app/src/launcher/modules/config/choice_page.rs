@@ -9,11 +9,13 @@ use crate::launcher::action::{Action, ActionPanel, Outcome};
 use crate::launcher::content::{Accessory, Content, Item, List, Section};
 use crate::launcher::page::LauncherPage;
 
+#[allow(dead_code)]
 pub struct ChoicePage<S: Editable> {
     path: ConfigPath<S>,
     field: Field<S>,
 }
 
+#[allow(dead_code)]
 impl<S: Editable> ChoicePage<S> {
     pub fn new(path: ConfigPath<S>, field: Field<S>, cx: &mut Context<Self>) -> Self {
         watch_revision(cx);

@@ -14,8 +14,8 @@ impl Default for ConfigEditorConfig {
     fn default() -> Self {
         Self {
             prefix: ";cfg".to_string(),
-            width: Some(800.0),
-            height: Some(540.0),
+            width: Some(1080.0),
+            height: Some(680.0),
         }
     }
 }
