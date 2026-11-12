@@ -15,6 +15,7 @@ use tracing_subscriber::EnvFilter;
 
 mod args;
 mod bar;
+pub mod calendar;
 pub mod config;
 pub mod control_center;
 pub mod dock;

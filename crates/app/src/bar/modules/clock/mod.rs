@@ -4,9 +4,9 @@ mod config;
 pub use config::ClockConfig;
 
 use chrono::Local;
-use gpui::{AnyElement, Context, Window, prelude::*};
+use gpui::{AnyElement, ClickEvent, Context, Window, prelude::*};
 use std::time::Duration;
-use ui::IconName;
+use ui::{ButtonCommon, ButtonLike, ButtonStyle, Clickable, IconName};
 
 use super::{BarCtx, BarWidget, BarWidgetDescriptor, BarWidgetMeta, boxed, style};
 use crate::config::ActiveConfig;
@@ -41,6 +41,17 @@ impl Clock {
         Clock
     }
 
+    /// Wrap the clock's text in a button that toggles the calendar panel.
+    fn clickable(content: impl IntoElement, cx: &mut Context<Self>) -> AnyElement {
+        ButtonLike::new("clock")
+            .style(ButtonStyle::Transparent)
+            .on_click(cx.listener(|_, event: &ClickEvent, window, cx| {
+                crate::calendar::toggle_panel_at(event.position(), window, cx);
+            }))
+            .child(content)
+            .into_any_element()
+    }
+
     fn formatted(format: &str) -> String {
         Local::now().format(format).to_string()
     }
@@ -72,16 +83,15 @@ impl BarWidget for Clock {
         let config = &cx.config().bar.modules.clock;
         let lines = Self::lines(&config.format_vertical, &config.format_horizontal);
 
-        style::stack(ctx)
-            .id("clock")
+        let stack = style::stack(ctx)
             .gap(ctx.metrics.gap)
             .children(lines.into_iter().enumerate().map(|(idx, line)| {
                 // Hours and minutes carry the time; anything after (seconds,
                 // a date) is secondary and muted.
                 let color = if idx < 2 { ctx.ink.text } else { ctx.ink.muted };
                 style::text_line(ctx, style::label_in(ctx, line, color))
-            }))
-            .into_any_element()
+            }));
+        Self::clickable(stack, cx)
     }
 
     fn render_horizontal(
@@ -92,13 +102,10 @@ impl BarWidget for Clock {
     ) -> AnyElement {
         let config = &cx.config().bar.modules.clock;
 
-        style::stack(ctx)
-            .id("clock")
-            .gap(ctx.metrics.gap)
-            .child(style::label(
-                ctx,
-                Self::formatted(&config.format_horizontal),
-            ))
-            .into_any_element()
+        let stack = style::stack(ctx).gap(ctx.metrics.gap).child(style::label(
+            ctx,
+            Self::formatted(&config.format_horizontal),
+        ));
+        Self::clickable(stack, cx)
     }
 }

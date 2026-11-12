@@ -2,6 +2,7 @@
 //! [`registry`].
 
 pub mod apps;
+pub mod calendar;
 pub mod calculator;
 pub mod clipboard;
 pub mod config;
@@ -32,6 +33,7 @@ pub fn registry(config: &ModulesConfig) -> Vec<ModuleDescriptor> {
         sysinfo::descriptor(&config.sysinfo),
         mpris::descriptor(&config.mpris),
         calculator::descriptor(&config.calculator),
+        calendar::descriptor(&config.calendar),
         clipboard::descriptor(&config.clipboard),
         config::descriptor(&config.config),
     ];

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::modules::{
-    apps::config::AppsConfig, calculator::config::CalculatorConfig,
+    apps::config::AppsConfig, calculator::config::CalculatorConfig, calendar::config::CalendarConfig,
     clipboard::config::ClipboardConfig, config::config::ConfigEditorConfig,
     help::config::HelpConfig, mpris::config::MprisConfig, services::config::ServicesConfig,
     shell::config::ShellConfig, sysinfo::config::SysInfoConfig, theme::config::ThemesConfig,
@@ -60,6 +60,7 @@ pub struct ModulesConfig {
     pub sysinfo: SysInfoConfig,
     pub mpris: MprisConfig,
     pub calculator: CalculatorConfig,
+    pub calendar: CalendarConfig,
     pub clipboard: ClipboardConfig,
     pub config: ConfigEditorConfig,
     pub help: HelpConfig,
