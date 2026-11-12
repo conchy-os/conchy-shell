@@ -47,6 +47,28 @@ pub fn lookup_icon(name: &str) -> Option<PathBuf> {
     None
 }
 
+/// Look an icon up in a directory an application brought itself (the
+/// StatusNotifierItem `IconThemePath`): the directory may be a theme base, a
+/// theme, or a flat pile of images.
+pub fn lookup_in_dir(dir: &Path, name: &str) -> Option<PathBuf> {
+    for theme in [dir.join("hicolor"), dir.to_path_buf()] {
+        if let Some(found) = search_theme_dir(&theme, name) {
+            return Some(found);
+        }
+        for size in SIZE_DIRS {
+            for context in ["status", "panel"] {
+                for ext in EXTENSIONS {
+                    let candidate = theme.join(size).join(context).join(format!("{name}.{ext}"));
+                    if candidate.is_file() {
+                        return Some(candidate);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Search a single theme directory for an icon name.
 fn search_theme_dir(theme_dir: &Path, name: &str) -> Option<PathBuf> {
     for size in SIZE_DIRS {

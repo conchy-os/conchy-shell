@@ -7,6 +7,7 @@ mod dbus;
 
 pub use dbus::{MenuLayout, MenuLayoutProps};
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -25,13 +26,16 @@ use crate::lifecycle::{Lifecycle, ManagedService, RunToken};
 const ITEM_INTERFACE: &str = "org.kde.StatusNotifierItem";
 
 /// Properties whose change means the icon has to be re-read.
-const ICON_PROPERTIES: [&str; 2] = ["IconPixmap", "IconName"];
+const ICON_PROPERTIES: [&str; 3] = ["IconPixmap", "IconName", "IconThemePath"];
 
 /// Icon data for a tray item.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TrayIcon {
     /// Icon name for lookup via freedesktop icon theme.
     Name(String),
+    /// Image file on disk (PNG or SVG) that the item pointed at, either with
+    /// an absolute `IconName` or through its `IconThemePath`.
+    Path(PathBuf),
     /// RGBA pixel data.
     Pixmap {
         width: u32,
@@ -268,23 +272,56 @@ async fn fetch_icon(proxy: &StatusNotifierItemProxy<'_>) -> Option<TrayIcon> {
             })
     });
 
-    // Apps that offer no pixmap - the property errors, or is an empty array -
-    // name a themed icon instead.
-    match pixmap {
-        Some(icon) => Some(icon),
-        None => proxy
-            .icon_name()
-            .await
-            .ok()
-            .filter(|n| !n.is_empty())
-            .map(TrayIcon::Name),
+    if let Some(icon) = pixmap {
+        return Some(icon);
     }
+
+    // Apps that offer no pixmap - the property errors, or is an empty array -
+    // name an icon instead. The name may be a themed name, an absolute file
+    // path (Flutter, Electron and Qt apps do this), or a file in the item's
+    // own `IconThemePath`.
+    let name = proxy.icon_name().await.ok().filter(|n| !n.is_empty())?;
+    let theme_path = proxy
+        .icon_theme_path()
+        .await
+        .ok()
+        .filter(|p| !p.is_empty());
+
+    Some(match resolve_icon_file(&name, theme_path.as_deref()) {
+        Some(path) => TrayIcon::Path(path),
+        None => TrayIcon::Name(name),
+    })
+}
+
+/// Find the image file behind an item's `IconName`, if it has one on disk.
+fn resolve_icon_file(name: &str, theme_path: Option<&str>) -> Option<PathBuf> {
+    let as_path = Path::new(name);
+    if as_path.is_absolute() {
+        return as_path.is_file().then(|| as_path.to_path_buf());
+    }
+
+    if let Some(dir) = theme_path.map(Path::new) {
+        // The directory may hold the file directly, or an XDG-style tree.
+        let direct = ["", ".svg", ".png"]
+            .iter()
+            .map(|ext| dir.join(format!("{name}{ext}")))
+            .find(|p| p.is_file());
+        if direct.is_some() {
+            return direct;
+        }
+        if let Some(found) = crate::applications::icons::lookup_in_dir(dir, name) {
+            return Some(found);
+        }
+    }
+
+    crate::applications::icons::lookup_icon(name)
 }
 
 /// Whether two icons carry the same picture.
 fn same_icon(a: &TrayIcon, b: &TrayIcon) -> bool {
     match (a, b) {
         (TrayIcon::Name(a), TrayIcon::Name(b)) => a == b,
+        (TrayIcon::Path(a), TrayIcon::Path(b)) => a == b,
         (
             TrayIcon::Pixmap {
                 width: aw,
@@ -419,6 +456,7 @@ impl ManagedService for TraySubscriber {
                 .map(|item| {
                     let icon = match &item.icon {
                         Some(TrayIcon::Name(name)) => name.len(),
+                        Some(TrayIcon::Path(path)) => path.as_os_str().len(),
                         Some(TrayIcon::Pixmap { data, .. }) => data.len(),
                         None => 0,
                     };

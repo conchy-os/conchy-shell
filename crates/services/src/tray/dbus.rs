@@ -272,6 +272,9 @@ pub trait StatusNotifierItem {
     fn icon_pixmap(&self) -> zbus::Result<Vec<IconPixmap>>;
 
     #[zbus(property)]
+    fn icon_theme_path(&self) -> zbus::Result<String>;
+
+    #[zbus(property)]
     fn menu(&self) -> zbus::Result<OwnedObjectPath>;
 
     #[zbus(property)]
@@ -291,6 +294,10 @@ pub trait StatusNotifierItem {
     /// watches both.
     #[zbus(signal)]
     fn new_icon(&self) -> zbus::Result<()>;
+
+    /// Emitted when the icon theme path changes.
+    #[zbus(signal)]
+    fn new_icon_theme_path(&self) -> zbus::Result<()>;
 
     /// Left-click activation.
     fn activate(&self, x: i32, y: i32) -> zbus::Result<()>;

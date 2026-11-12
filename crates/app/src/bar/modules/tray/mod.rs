@@ -211,6 +211,8 @@ impl Tray {
 
         let icon_element: AnyElement = if let Some(image) = pixmap {
             img(image).size(px(icon_size)).into_any_element()
+        } else if let Some(TrayIcon::Path(path)) = &item.icon {
+            img(path.clone()).size(px(icon_size)).into_any_element()
         } else {
             let name = match &item.icon {
                 Some(TrayIcon::Name(name)) => get_icon_name(name, item.id.as_deref()),
