@@ -3,11 +3,13 @@
 mod config;
 pub use config::ActiveWindowConfig;
 
-use gpui::{AnyElement, Context, Window, div, prelude::*};
+use chrono::Local;
+use gpui::{AnyElement, Context, Window, prelude::*};
+use std::time::Duration;
 use services::CompositorState;
 use ui::{IconName, LabelCommon};
 
-use super::{BarCtx, BarWidget, BarWidgetDescriptor, BarWidgetMeta, BarWidgetShell, boxed, style};
+use super::{BarCtx, BarWidget, BarWidgetDescriptor, BarWidgetMeta, boxed, style};
 use crate::config::ActiveConfig;
 use crate::state::AppState;
 use crate::state::watch;
@@ -46,6 +48,17 @@ impl ActiveWindow {
             this.state = new_state;
             cx.notify();
         });
+
+        // Idle, the widget shows the date, which has to roll over at midnight.
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(Duration::from_secs(60)).await;
+                if this.update(cx, |_, cx| cx.notify()).is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
 
         Self {
             _compositor: compositor,
@@ -222,25 +235,46 @@ impl ActiveWindow {
     fn has_window_content(&self) -> bool {
         !self.window_text().is_empty()
     }
+
+    /// What the widget shows while no window is focused: the date, so the
+    /// centre of the bar is never an empty chip.
+    fn idle_lines(format: &str, fallback: &str) -> Vec<String> {
+        let lines: Vec<String> = Local::now()
+            .format(format)
+            .to_string()
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_string)
+            .collect();
+        if lines.is_empty() {
+            vec![Local::now().format(fallback).to_string()]
+        } else {
+            lines
+        }
+    }
 }
 
 impl BarWidget for ActiveWindow {
-    fn shell(&self) -> BarWidgetShell {
-        if self.has_window_content() {
-            BarWidgetShell::Standard
-        } else {
-            BarWidgetShell::None
-        }
-    }
-
     fn render_vertical(
         &mut self,
         ctx: &BarCtx,
         _window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         if !self.has_window_content() {
-            return div().id("active-window").into_any_element();
+            let config = &cx.config().bar.modules.active_window;
+            let lines =
+                Self::idle_lines(&config.idle_format_vertical, &config.idle_format_horizontal);
+            return style::stack(ctx)
+                .id("active-window")
+                .gap(ctx.metrics.line_gap)
+                .children(
+                    lines
+                        .into_iter()
+                        .map(|line| style::text_line(ctx, style::label(ctx, line))),
+                )
+                .into_any_element();
         }
 
         style::stack(ctx)
@@ -260,11 +294,18 @@ impl BarWidget for ActiveWindow {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let config = &cx.config().bar.modules.active_window;
         if !self.has_window_content() {
-            return div().id("active-window").into_any_element();
+            let date =
+                Self::idle_lines(&config.idle_format_horizontal, &config.idle_format_horizontal)
+                    .join(" ");
+            return style::stack(ctx)
+                .id("active-window")
+                .justify_center()
+                .child(style::label(ctx, date))
+                .into_any_element();
         }
 
-        let config = &cx.config().bar.modules.active_window;
         let title = self.display_title(config.max_length, ctx.metrics.title_chars);
         let icon = config.show_app_icon.then(|| self.window_icon()).flatten();
 

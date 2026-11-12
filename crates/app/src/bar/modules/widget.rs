@@ -15,8 +15,6 @@ use super::ctx::BarCtx;
 /// The chip a widget asks for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BarWidgetShell {
-    /// Bare content: the widget has nothing to show.
-    None,
     /// One icon and a value.
     Standard,
     /// Several items side by side (workspaces, tray).
@@ -150,20 +148,17 @@ impl gpui::Render for WidgetHost {
         let ctx = self.ctx.clone();
         let (shell, interactive) = self.widget.chrome(cx);
         let content = self.widget.render(&ctx, window, cx);
-        match shell {
-            BarWidgetShell::None => content,
-            BarWidgetShell::Standard | BarWidgetShell::Group => BarChip::new(content)
-                .vertical(ctx.vertical)
-                .geometry(if shell == BarWidgetShell::Group {
-                    ctx.chip.group
-                } else {
-                    ctx.chip.single
-                })
-                .background(ctx.chip.background)
-                .border(ctx.chip.border)
-                .hover(interactive.then_some(ctx.chip.hover))
-                .into_any_element(),
-        }
+        BarChip::new(content)
+            .vertical(ctx.vertical)
+            .geometry(if shell == BarWidgetShell::Group {
+                ctx.chip.group
+            } else {
+                ctx.chip.single
+            })
+            .background(ctx.chip.background)
+            .border(ctx.chip.border)
+            .hover(interactive.then_some(ctx.chip.hover))
+            .into_any_element()
     }
 }
 

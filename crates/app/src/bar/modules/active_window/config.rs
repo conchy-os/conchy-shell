@@ -8,6 +8,10 @@ use serde::{Deserialize, Serialize};
 pub struct ActiveWindowConfig {
     pub max_length: usize,
     pub show_app_icon: bool,
+    /// `strftime` format shown on a horizontal bar while no window is focused.
+    pub idle_format_horizontal: String,
+    /// The same for a vertical bar; each line is one row.
+    pub idle_format_vertical: String,
 }
 
 impl Default for ActiveWindowConfig {
@@ -15,6 +19,8 @@ impl Default for ActiveWindowConfig {
         Self {
             max_length: 64,
             show_app_icon: true,
+            idle_format_horizontal: "%a, %d %b %Y".into(),
+            idle_format_vertical: "%d\n%m".into(),
         }
     }
 }

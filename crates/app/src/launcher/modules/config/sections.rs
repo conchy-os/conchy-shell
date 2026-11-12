@@ -1057,6 +1057,9 @@ impl Editable for DockConfig {
             Group::new(
                 "Position & Style",
                 vec![
+                    Field::toggle("enabled", "Enabled", lens!(enabled))
+                        .describe("Show the dock at all; off closes it and frees its reserved space")
+                        .preview(dock_preview),
                     Field::choice(
                         "position",
                         "Position",

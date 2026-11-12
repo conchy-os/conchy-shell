@@ -90,7 +90,8 @@ impl Config {
     /// edge the bar does not already hold.
     pub fn dock_is_frame_side(&self) -> bool {
         let dock = &self.dock;
-        dock.style == DockStyle::Attached
+        dock.enabled
+            && dock.style == DockStyle::Attached
             && dock.stretch
             && dock.reserve_space
             && !(self.bar_is_frame_side() && dock.position == self.bar.position)
