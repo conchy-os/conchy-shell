@@ -151,6 +151,7 @@ pub fn init(cx: &mut App) {
                 .reserve_space
                 .then(|| (dock.icon_size.to_bits(), dock.hover_effect));
             (
+                dock.enabled,
                 dock.position,
                 dock.monitors,
                 dock.style,

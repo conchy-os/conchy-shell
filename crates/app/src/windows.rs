@@ -458,7 +458,7 @@ impl ShellWindows {
         for (edge, thickness) in crate::frame::strips(config) {
             add(&mut edges, edge, thickness);
         }
-        if with_dock && config.dock.reserve_space {
+        if with_dock && config.dock.enabled && config.dock.reserve_space {
             let dock = &config.dock;
             add(
                 &mut edges,
