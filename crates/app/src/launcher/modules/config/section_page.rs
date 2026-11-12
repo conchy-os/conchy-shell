@@ -4,17 +4,17 @@
 //! section without opening it.
 
 use gpui::{
-    AnyElement, App, AppContext, Context, Div, ElementId, FontWeight, SharedString, Window, div,
+    AnyElement, App, AppContext, Context, Div, ElementId, FontWeight, SharedString, div,
     prelude::*, px,
 };
 use ui::{
-    ActiveTheme, Button, ButtonCommon, ButtonStyle, Clickable, Color, Icon, IconName, IconSize,
-    Label, LabelCommon, Radius, Slider, Spacing, Stepper, Switch, TextSize, h_flex, v_flex,
+    ActiveTheme, Button, ButtonCommon, ButtonStyle, Clickable, Color, IconName, Label, LabelCommon,
+    Radius, Slider, Spacing, Stepper, Switch, TextSize, h_flex, v_flex,
 };
 
 use super::schema::{ConfigPath, Editable, Editor, Field, Group};
 use super::value_page::ValuePage;
-use crate::config::{ConfigSignals, store};
+use crate::config::ConfigSignals;
 use crate::launcher::action::{Action, ActionPanel, Outcome};
 use crate::launcher::content::{Accessory, Content, Detail, Item, List, Section};
 use crate::launcher::page::LauncherPage;
@@ -68,9 +68,9 @@ impl<S: Editable> LauncherPage for SectionPage<S> {
     fn content(&mut self, _query: &str, cx: &mut Context<Self>) -> Content {
         let mut list = List::new()
             .show_detail(true)
+            .click_selects(true)
             .title(self.title)
-            .placeholder("Search settings…")
-            .actions(file_actions(ActionPanel::new()));
+            .placeholder("Search settings…");
         for group in &self.groups {
             let mut items = group
                 .fields
@@ -94,86 +94,6 @@ impl<S: Editable> LauncherPage for SectionPage<S> {
         }
         list.into()
     }
-
-    fn render_header(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        unsaved_banner(cx)
-    }
-}
-
-/// Save and discard, reachable from every row.
-pub fn file_actions(panel: ActionPanel) -> ActionPanel {
-    panel.section(
-        "shell.kdl",
-        [
-            Action::new("Save", |_, cx| {
-                store::save(cx);
-                Outcome::Stay
-            })
-            .icon(IconName::Save)
-            .shortcut("ctrl-s"),
-            Action::new("Discard unsaved changes", |_, cx| {
-                store::discard(cx);
-                Outcome::Stay
-            })
-            .icon(IconName::RotateCcw)
-            .shortcut("ctrl-shift-d")
-            .destructive(),
-        ],
-    )
-}
-
-/// Shown while edits are only in memory.
-pub fn unsaved_banner(cx: &App) -> Option<AnyElement> {
-    let pending = store::pending();
-    if pending == 0 {
-        return None;
-    }
-    let colors = cx.theme().colors();
-    let changes = if pending == 1 { "change" } else { "changes" };
-    Some(
-        header_card(
-            h_flex()
-                .w_full()
-                .items_center()
-                .gap(Spacing::Medium.pixels())
-                .bg(colors.status.warning_background)
-                .border_color(colors.status.warning_border)
-                .child(
-                    Icon::new(IconName::Save)
-                        .size(IconSize::Small)
-                        .color(Color::Warning),
-                )
-                .child(
-                    Label::new(format!("{pending} unsaved {changes}"))
-                        .size(TextSize::Small)
-                        .color(Color::Warning),
-                )
-                .child(
-                    div().flex_1().min_w(px(0.)).child(
-                        Label::new("Ctrl+S saves, Ctrl+Shift+D discards")
-                            .size(TextSize::XSmall)
-                            .color(Color::Muted)
-                            .truncate(),
-                    ),
-                )
-                // The same two actions for the mouse.
-                .child(
-                    Button::new("unsaved-discard", "Discard")
-                        .style(ButtonStyle::Outlined)
-                        .on_click(|_, _, cx| store::discard(cx)),
-                )
-                .child(
-                    Button::new("unsaved-save", "Save")
-                        .style(ButtonStyle::Filled)
-                        .on_click(|_, _, cx| store::save(cx)),
-                ),
-        )
-        .into_any_element(),
-    )
 }
 
 /// A page header card with the launcher's card chrome; `body` sets its own
@@ -276,7 +196,9 @@ pub fn primary_action<S: Editable>(
             })
             .icon(IconName::Check)
         }
-        Editor::Choice { current, options, .. } => {
+        Editor::Choice {
+            current, options, ..
+        } => {
             let current = current.clone();
             let options = options.clone();
             Action::new(title("Cycle"), move |_, cx| {
@@ -287,33 +209,15 @@ pub fn primary_action<S: Editable>(
             })
             .icon(IconName::ListTree)
         }
-        Editor::Number {
-            lens,
-            min,
-            max,
-            step,
-            integer,
-            ..
-        } => {
-            let lens = *lens;
-            let min = *min;
-            let max = *max;
-            let step = *step;
-            let integer = *integer;
-            Action::new(title("Step"), move |_, cx| {
-                let cur = (lens.get)(path.read(cx));
-                let mut next = cur + step;
-                if next > max {
-                    next = min;
-                }
-                if integer {
-                    next = next.round();
-                }
-                path.write(&field, |s| (lens.set)(s, next), cx);
-                Outcome::Stay
-            })
-            .icon(IconName::Hash)
-        }
+        // Typing the number beats stepping through a range: a step that
+        // passes the end would have to wrap or stop, and neither is a value
+        // the user asked for. Stepping is in the menu, bounded.
+        Editor::Number { .. } => Action::new(title("Edit"), move |_, cx| {
+            let current = field.display(path.read(cx));
+            let page = cx.new(|cx| ValuePage::new(path.clone(), field.clone(), cx));
+            Outcome::push_with_input(page, current)
+        })
+        .icon(IconName::Pencil),
         Editor::Text { .. } => Action::new(title("Edit"), move |_, cx| {
             let current = field.display(path.read(cx));
             let page = cx.new(|cx| ValuePage::new(path.clone(), field.clone(), cx));
@@ -348,7 +252,9 @@ fn field_actions<S: Editable>(
 ) -> ActionPanel {
     let mut panel = ActionPanel::new().action(primary_action(path, field, false));
     match &field.editor {
-        Editor::Choice { current, options, .. } => {
+        Editor::Choice {
+            current, options, ..
+        } => {
             let prev_current = current.clone();
             let prev_options = options.clone();
             let prev_field = field.clone();
@@ -375,28 +281,24 @@ fn field_actions<S: Editable>(
             integer,
             ..
         } => {
-            let lens = *lens;
-            let min = *min;
-            let max = *max;
-            let step = *step;
-            let integer = *integer;
-            let prev_field = field.clone();
-            let prev_path = path.clone();
-            panel = panel.action(
-                Action::new("Step back", move |_, cx| {
-                    let cur = (lens.get)(prev_path.read(cx));
-                    let mut next = cur - step;
-                    if next < min {
-                        next = max;
-                    }
+            let nudge = |label: &'static str, shortcut: &'static str, direction: f64| {
+                let (lens, min, max, step, integer) = (*lens, *min, *max, *step, *integer);
+                let field = field.clone();
+                let path = path.clone();
+                Action::new(label, move |_, cx| {
+                    let cur = (lens.get)(path.read(cx));
+                    let mut next = (cur + direction * step).clamp(min, max);
                     if integer {
                         next = next.round();
                     }
-                    prev_path.write(&prev_field, |s| (lens.set)(s, next), cx);
+                    path.write(&field, |s| (lens.set)(s, next), cx);
                     Outcome::Stay
                 })
-                .shortcut("shift-enter"),
-            );
+                .shortcut(shortcut)
+            };
+            panel = panel
+                .action(nudge("Increase", "alt-up", 1.0))
+                .action(nudge("Decrease", "alt-down", -1.0));
         }
         Editor::Nested { quick, .. } => panel = panel.section("Settings", quick(path)),
         Editor::Bundle(fields) => {
@@ -423,7 +325,7 @@ fn field_actions<S: Editable>(
         panel = panel.action(reset);
     }
     panel = panel.action(Action::copy(key_path.to_string()).title("Copy key"));
-    file_actions(panel)
+    panel
 }
 
 /// The detail pane: a small header (label, key, description), then the
@@ -499,17 +401,15 @@ fn field_detail<S: Editable>(
             Editor::Choice {
                 commit: Some(_), ..
             } if field.preview.is_some() => div().into_any_element(),
-            Editor::Toggle(_) | Editor::Number { .. } | Editor::Choice { .. } => {
-                div()
-                    .w_full()
-                    .p(Spacing::Large.pixels())
-                    .rounded(Radius::Large.pixels())
-                    .bg(colors.surface_background)
-                    .border_1()
-                    .border_color(colors.border_variant)
-                    .child(field_widget(&path, &field, cx))
-                    .into_any_element()
-            }
+            Editor::Toggle(_) | Editor::Number { .. } | Editor::Choice { .. } => div()
+                .w_full()
+                .p(Spacing::Large.pixels())
+                .rounded(Radius::Large.pixels())
+                .bg(colors.surface_background)
+                .border_1()
+                .border_color(colors.border_variant)
+                .child(field_widget(&path, &field, cx))
+                .into_any_element(),
             Editor::Text { .. } => h_flex()
                 .w_full()
                 .items_center()
@@ -677,15 +577,21 @@ fn field_widget<S: Editable>(path: &ConfigPath<S>, field: &Field<S>, cx: &App) -
                 .child(
                     div()
                         .text_size(TextSize::Small.rems())
-                        .text_color(if is_on { colors.text } else { colors.text_muted })
-                        .font_weight(if is_on { FontWeight::MEDIUM } else { FontWeight::NORMAL })
+                        .text_color(if is_on {
+                            colors.text
+                        } else {
+                            colors.text_muted
+                        })
+                        .font_weight(if is_on {
+                            FontWeight::MEDIUM
+                        } else {
+                            FontWeight::NORMAL
+                        })
                         .child(if is_on { "Enabled" } else { "Disabled" }),
                 )
-                .child(
-                    Switch::new(id, is_on).on_click(move |_, _, cx| {
-                        path.write(&field, |s| (lens.set)(s, !(lens.get)(s)), cx);
-                    }),
-                )
+                .child(Switch::new(id, is_on).on_click(move |_, _, cx| {
+                    path.write(&field, |s| (lens.set)(s, !(lens.get)(s)), cx);
+                }))
                 .into_any_element()
         }
         Editor::Number {
@@ -786,7 +692,10 @@ fn field_widget<S: Editable>(path: &ConfigPath<S>, field: &Field<S>, cx: &App) -
                     let field = field.clone();
                     pills = pills.child(
                         div()
-                            .id(ElementId::NamedInteger(format!("{id}-opt").into(), ix as u64))
+                            .id(ElementId::NamedInteger(
+                                format!("{id}-opt").into(),
+                                ix as u64,
+                            ))
                             .px(Spacing::Medium.pixels())
                             .py(px(4.))
                             .rounded(Radius::Small.pixels())

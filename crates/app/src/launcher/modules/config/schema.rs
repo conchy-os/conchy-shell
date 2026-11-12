@@ -3,7 +3,7 @@
 //! optionally a page of its own.
 //!
 //! A [`ConfigPath`] ties a section to its place in the live [`Config`] and in
-//! `config.toml`, so a page deep in the tree can read and write without
+//! `shell.kdl`, so a page deep in the tree can read and write without
 //! knowing its parents.
 
 use std::rc::Rc;
@@ -44,7 +44,7 @@ pub trait Editable: Serialize + Default + Clone + 'static {
     }
 }
 
-/// Serialize a field the way `config.toml` spells it, enum renames included.
+/// Serialize a field the way `shell.kdl` spells it, enum renames included.
 pub fn to_value<T: Serialize + ?Sized>(value: &T) -> toml_edit::Value {
     value
         .serialize(ValueSerializer::new())
@@ -696,7 +696,7 @@ type Get<S> = Rc<dyn Fn(&Config) -> &S>;
 type GetMut<S> = Rc<dyn Fn(&mut Config) -> &mut S>;
 
 /// Where a section lives: accessors from the root config, and its table in
-/// `config.toml`.
+/// `shell.kdl`.
 pub struct ConfigPath<S> {
     keys: Rc<[&'static str]>,
     get: Get<S>,

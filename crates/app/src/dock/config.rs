@@ -197,10 +197,10 @@ pub struct DockConfig {
     /// Icon size in px.
     pub icon_size: f32,
     /// Opacity of the dock surface, from 0.0 to 1.0. Unset, it follows
-    /// `opacity` in `theme.toml`.
+    /// `opacity` in `theme.kdl`.
     pub opacity: Option<f32>,
     /// Pinned app identifiers (desktop file names, e.g. `"firefox.desktop"`).
-    /// Pinning from the UI writes `state.toml`, which then overrides this.
+    /// Pinning from the UI writes `state.kdl`, which then overrides this.
     pub pinned: Vec<String>,
 }
 

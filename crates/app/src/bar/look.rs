@@ -1,5 +1,5 @@
 //! Presets for the bar's overall look: one choice that sets the handful of
-//! `[bar]` keys and the theme's `radius_scale` that together make the
+//! `bar` keys and the theme's `radius_scale` that together make the
 //! shell blocky, rounded or floating. Widgets and their order are left
 //! alone.
 
@@ -43,7 +43,7 @@ impl Look {
         }
     }
 
-    /// Set the `[bar]` keys the look owns. Everything else - widgets,
+    /// Set the `bar` keys the look owns. Everything else - widgets,
     /// size, position, modules - stays as it is.
     pub fn apply(self, bar: &mut BarConfig) {
         let (style, show_border, chrome, stretch, padding) = match self {
@@ -110,7 +110,7 @@ mod tests {
     }
 
     /// Out of the box the shell is in the floating look, so the chooser
-    /// marks it and the stock config needs no `[bar]` keys for it.
+    /// marks it and the stock config needs no `bar` keys for it.
     #[test]
     fn the_default_config_is_the_floating_look() {
         let bar = BarConfig::default();

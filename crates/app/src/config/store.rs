@@ -1,16 +1,23 @@
-//! Key-path edits to `config.toml`, written through `toml_edit` so only the
+//! Key-path edits to `shell.kdl`, written one node at a time so only the
 //! edited keys change and the hand-written rest of the file survives.
+//!
+//! An edit is live the moment it is made and on disk a moment later: there is
+//! no Save. Edits made in quick succession (a slider drag) are written once.
 
-use std::fs;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 
 use anyhow::{Context, anyhow};
 use gpui::{App, AppContext};
 use services::LocalSlot;
-use toml_edit::{DocumentMut, Item, Table, TableLike, Value};
+use toml_edit::Value;
 
-use super::{Config, ConfigSignals, one_line, persistence};
+use super::{Config, ConfigSignals, codec, one_line, persistence};
 use crate::state::AppState;
+
+/// How long an edit waits for the next one before it is written.
+const SAVE_DELAY: Duration = Duration::from_millis(300);
 
 #[derive(Debug, Clone)]
 pub enum Edit {
@@ -38,13 +45,16 @@ struct Pending {
 
 static PENDING: Mutex<Vec<Pending>> = Mutex::new(Vec::new());
 static NEXT_SEQ: Mutex<u64> = Mutex::new(0);
+/// The newest edit's generation: a timer that wakes to find a newer one has
+/// been overtaken, and leaves the write to that edit's timer.
+static LATEST_EDIT: AtomicU64 = AtomicU64::new(0);
 
 fn pending_lock() -> MutexGuard<'static, Vec<Pending>> {
     PENDING.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// Apply `mutate` to the live config now and remember the key edit until
-/// [`save`] or [`discard`].
+/// Apply `mutate` to the live config now, remember the key edit, and write it
+/// shortly.
 pub fn apply(cx: &mut App, edit: Edit, mutate: impl FnOnce(&mut Config)) {
     mutate(cx.global_mut::<Config>());
     ConfigSignals::publish(cx);
@@ -55,6 +65,7 @@ pub fn apply(cx: &mut App, edit: Edit, mutate: impl FnOnce(&mut Config)) {
         *next
     };
     remember(&mut pending_lock(), Pending { seq, edit });
+    save_soon(cx);
 }
 
 /// One entry per key path: a slider drag leaves one edit, and a Remove after
@@ -79,9 +90,20 @@ pub fn has_pending() -> bool {
     pending() > 0
 }
 
-/// Write every pending edit to `config.toml` in one `toml_edit` pass, then
-/// forget them. A failed write keeps them pending and says so in a sticky
-/// notification; the live config is already what the user asked for.
+fn save_soon(cx: &mut App) {
+    let generation = LATEST_EDIT.fetch_add(1, Ordering::Relaxed) + 1;
+    cx.spawn(async move |cx| {
+        cx.background_executor().timer(SAVE_DELAY).await;
+        if LATEST_EDIT.load(Ordering::Relaxed) == generation {
+            cx.update(save);
+        }
+    })
+    .detach();
+}
+
+/// Write every pending edit to `shell.kdl` in one pass, then forget them. A
+/// failed write keeps them pending and says so in a sticky notification; the
+/// live config is already what the user asked for.
 pub fn save(cx: &mut App) {
     let snapshot = pending_lock().clone();
     if snapshot.is_empty() {
@@ -116,94 +138,53 @@ pub fn save(cx: &mut App) {
 /// Forget pending edits and reload the live config from disk.
 pub fn discard(cx: &mut App) {
     pending_lock().clear();
+    LATEST_EDIT.fetch_add(1, Ordering::Relaxed);
     Config::reload(cx);
 }
 
 fn write(edits: &[Edit]) -> anyhow::Result<()> {
     let path = persistence::config_path()?;
-    let text =
-        fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
+    let text = if path.exists() {
+        std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read {}", path.display()))?
+    } else {
+        String::new()
+    };
     let text = rewrite(&text, edits)?;
-    let res = persistence::write_atomic(&path, &text);
-
-    // Also synchronize shell settings to ~/.config/conchy/shell.kdl via ConfigStore
-    if let Ok(store) = conchy_config::store::ConfigStore::new(None) {
-        for edit in edits {
-            let path_parts = edit.path();
-            let dot_key = path_parts.join(".");
-            let val_str = match edit {
-                Edit::Set(_, val) => val.to_string().trim_matches('"').to_string(),
-                Edit::Remove(_) => continue,
-            };
-            let _ = store.set("shell", &dot_key, &val_str);
-        }
-    }
-
-    res
+    persistence::write_atomic(&path, &text)
 }
 
 /// Apply `edits` to the document text. A file that does not parse is refused
 /// rather than overwritten, and so is an edit that would make it stop parsing.
 fn rewrite(text: &str, edits: &[Edit]) -> anyhow::Result<String> {
-    let mut doc = text
-        .parse::<DocumentMut>()
+    let mut doc = persistence::parse_document(text)
         .map_err(|err| anyhow!("Configuration does not parse, not written: {err}"))?;
 
     for edit in edits {
-        let (last, parents) = edit
-            .path()
-            .split_last()
-            .ok_or_else(|| anyhow!("empty key path"))?;
-        let table = descend(doc.as_table_mut(), parents)?;
         match edit {
-            Edit::Set(_, value) => {
-                let mut value = value.clone();
-                // Replacing in place keeps the trailing comment on the old value.
-                if let Some(Item::Value(old)) = table.get(last) {
-                    *value.decor_mut() = old.decor().clone();
-                }
-                table.insert(last, Item::Value(value));
-            }
-            Edit::Remove(_) => {
-                table.remove(last);
+            Edit::Set(path, value) => codec::set(&mut doc, path, &tree_value(value)?)?,
+            Edit::Remove(path) => {
+                codec::remove(&mut doc, path);
             }
         }
     }
 
     let text = doc.to_string();
-    toml::from_str::<Config>(&text)
-        .map_err(|err| anyhow!("edit would break configuration: {err}"))?;
+    persistence::config_from_text(&text)
+        .map_err(|err| anyhow!("edit would break configuration: {err:#}"))?;
     Ok(text)
 }
 
-/// Walk `path` from the root, creating implicit tables on the way so a new
-/// `bar.modules.clock.x` renders as `[bar.modules.clock]` and never as an empty
-/// `[bar.modules]`.
-fn descend<'a>(root: &'a mut Table, path: &[&str]) -> anyhow::Result<&'a mut dyn TableLike> {
-    let mut table: &mut dyn TableLike = root;
-    for (depth, key) in path.iter().enumerate() {
-        // Old files spell `launcher.modules` as `views`; serde rejects both at once.
-        let key = if depth == 1
-            && path[0] == "launcher"
-            && *key == "modules"
-            && !table.contains_key("modules")
-            && table.contains_key("views")
-        {
-            "views"
-        } else {
-            key
-        };
-
-        let item = table.entry(key).or_insert_with(|| {
-            let mut table = Table::new();
-            table.set_implicit(true);
-            Item::Table(table)
-        });
-        table = item
-            .as_table_like_mut()
-            .ok_or_else(|| anyhow!("`{}` is not a table", path[..=depth].join(".")))?;
-    }
-    Ok(table)
+/// An editor value as the settings tree spells it.
+fn tree_value(value: &Value) -> anyhow::Result<toml::Value> {
+    let table: toml::Table = format!("v = {value}")
+        .parse()
+        .map_err(|err| anyhow!("value does not encode: {err}"))?;
+    table
+        .into_iter()
+        .next()
+        .map(|(_, value)| value)
+        .ok_or_else(|| anyhow!("value does not encode"))
 }
 
 #[cfg(test)]
@@ -213,13 +194,15 @@ mod tests {
     use super::*;
 
     const FIXTURE: &str = "\
-# My shell config
+// My shell config
 
-[bar]
-position = \"top\" # keep me
+bar {
+    position \"top\" // keep me
+}
 
-[launcher]
-width = 700.0
+launcher {
+    width 700.0
+}
 ";
 
     fn set(path: &[&'static str], value: impl Into<Value>) -> Edit {
@@ -239,7 +222,7 @@ width = 700.0
     }
 
     #[test]
-    fn a_deep_key_gets_its_own_header_without_an_empty_parent() {
+    fn a_deep_key_gets_its_own_node_and_the_rest_stays_put() {
         let out = rewrite(
             FIXTURE,
             &[set(
@@ -249,10 +232,8 @@ width = 700.0
         )
         .expect("rewrite succeeds");
 
-        assert!(out.contains("[bar.modules.clock]\n"), "{out}");
-        assert!(out.contains("format_horizontal = \"%H:%M\"\n"), "{out}");
-        assert!(!out.lines().any(|l| l.trim() == "[bar.modules]"), "{out}");
-        assert!(out.contains("# keep me"), "{out}");
+        assert!(out.contains("format_horizontal \"%H:%M\"\n"), "{out}");
+        assert!(out.contains("// keep me"), "{out}");
         assert!(keeps_lines_in_order(FIXTURE, &out), "{out}");
     }
 
@@ -260,9 +241,24 @@ width = 700.0
     fn replacing_a_value_keeps_its_trailing_comment() {
         let out = rewrite(FIXTURE, &[set(&["bar", "position"], "bottom")]).expect("rewrite");
 
-        assert!(out.contains("position = \"bottom\" # keep me\n"), "{out}");
+        assert!(out.contains("position \"bottom\" // keep me\n"), "{out}");
         assert!(!out.contains("\"top\""), "{out}");
         assert_eq!(out.lines().count(), FIXTURE.lines().count(), "{out}");
+    }
+
+    #[test]
+    fn a_float_stays_a_float_and_an_integer_an_integer() {
+        let out = rewrite(
+            FIXTURE,
+            &[
+                set(&["launcher", "width"], 640.0),
+                set(&["launcher", "height"], 480.5),
+            ],
+        )
+        .expect("rewrite");
+
+        assert!(out.contains("width 640.0\n"), "{out}");
+        assert!(out.contains("height 480.5\n"), "{out}");
     }
 
     #[test]
@@ -272,23 +268,34 @@ width = 700.0
 
         let out = rewrite(FIXTURE, &[set(&["bar", "start"], start)]).expect("rewrite");
 
-        assert!(
-            out.contains("start = [\"Launcher\", [\"Workspaces\", \"Clock\"]]"),
+        let config = persistence::config_from_text(&out).expect("config parses");
+        assert_eq!(config.bar.start.len(), 2, "{out}");
+        assert_eq!(
+            config.bar.start[1].names(),
+            ["Workspaces", "Clock"],
             "{out}"
         );
-        let config: Config = toml::from_str(&out).expect("config parses");
-        assert_eq!(config.bar.start.len(), 2);
-        assert_eq!(config.bar.start[1].names(), ["Workspaces", "Clock"]);
+    }
+
+    #[test]
+    fn a_list_of_scalars_is_written_as_arguments() {
+        let list = Array::from_iter(["Clock", "Mpris"]);
+
+        let out = rewrite(FIXTURE, &[set(&["bar", "end"], list)]).expect("rewrite");
+
+        assert!(out.contains("end \"Clock\" \"Mpris\"\n"), "{out}");
     }
 
     #[test]
     fn remove_drops_only_that_line() {
-        let out = rewrite(FIXTURE, &[remove(&["bar", "position"])]).expect("rewrite");
+        let out = rewrite(FIXTURE, &[remove(&["launcher", "width"])]).expect("rewrite");
 
-        assert!(!out.contains("position"), "{out}");
-        assert!(out.contains("[bar]\n"), "{out}");
-        assert!(out.contains("width = 700.0\n"), "{out}");
-        assert_eq!(out.lines().count(), FIXTURE.lines().count() - 1, "{out}");
+        assert!(!out.contains("width"), "{out}");
+        assert!(out.contains("position \"top\" // keep me"), "{out}");
+        assert!(
+            !out.contains("launcher"),
+            "an emptied table goes too: {out}"
+        );
     }
 
     #[test]
@@ -301,8 +308,11 @@ width = 700.0
 
     #[test]
     fn a_file_that_does_not_parse_is_refused() {
-        let err = rewrite("[bar\nposition = ", &[set(&["bar", "position"], "top")])
-            .expect_err("broken input");
+        let err = rewrite(
+            "bar {\n    position \"top",
+            &[set(&["bar", "position"], "top")],
+        )
+        .expect_err("broken input");
 
         assert!(err.to_string().contains("not written"), "{err}");
     }
@@ -330,17 +340,10 @@ width = 700.0
     }
 
     #[test]
-    fn launcher_modules_follow_the_views_alias() {
-        let fixture = "[launcher.views.apps]\nprefix = \"@\"\n";
+    fn an_empty_file_takes_the_first_edit() {
+        let out = rewrite("", &[set(&["bar", "position"], "bottom")]).expect("rewrite");
 
-        let out = rewrite(
-            fixture,
-            &[set(&["launcher", "modules", "apps", "prefix"], "!")],
-        )
-        .expect("rewrite");
-
-        assert_eq!(out, "[launcher.views.apps]\nprefix = \"!\"\n");
-        assert!(!out.contains("modules"), "{out}");
+        assert_eq!(out, "bar {\n    position \"bottom\"\n}\n");
     }
 
     fn entry(seq: u64, edit: Edit) -> Pending {

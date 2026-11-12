@@ -1,10 +1,10 @@
 //! Pick one value for an enum field: a row per option, the current one tagged.
 
-use gpui::{AnyElement, Context, Window};
+use gpui::Context;
 use ui::Color;
 
 use super::schema::{ConfigPath, Editable, Editor, Field};
-use super::section_page::{file_actions, unsaved_banner, watch_revision};
+use super::section_page::watch_revision;
 use crate::launcher::action::{Action, ActionPanel, Outcome};
 use crate::launcher::content::{Accessory, Content, Item, List, Section};
 use crate::launcher::page::LauncherPage;
@@ -27,8 +27,7 @@ impl<S: Editable> LauncherPage for ChoicePage<S> {
     fn content(&mut self, _query: &str, cx: &mut Context<Self>) -> Content {
         let list = List::new()
             .title(self.field.label)
-            .placeholder("Filter options…")
-            .actions(file_actions(ActionPanel::new()));
+            .placeholder("Filter options…");
         let Editor::Choice {
             current, options, ..
         } = &self.field.editor
@@ -42,26 +41,17 @@ impl<S: Editable> LauncherPage for ChoicePage<S> {
 
             let mut item = Item::new(option.label, option.label)
                 .icon(self.field.editor.icon())
-                .actions(file_actions(ActionPanel::new().action(Action::new(
-                    "Select",
-                    move |_, cx| {
+                .actions(
+                    ActionPanel::new().action(Action::new("Select", move |_, cx| {
                         field.choose(&path, ix, cx);
                         Outcome::Pop
-                    },
-                ))));
+                    })),
+                );
             if ix == selected {
                 item = item.accessory(Accessory::tag("current").color(Color::Accent));
             }
             item
         });
         list.section(Section::untitled().items(items)).into()
-    }
-
-    fn render_header(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        unsaved_banner(cx)
     }
 }

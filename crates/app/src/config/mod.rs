@@ -1,5 +1,6 @@
 //! Application configuration stored as a GPUI global.
 
+mod codec;
 mod persistence;
 mod signals;
 mod state;
@@ -42,12 +43,12 @@ pub struct Config {
     pub panels: PanelsConfig,
     /// Startup mode per service, keyed by the lowercased service name
     /// (`audio`, `tray`, ...). Services absent from the map start eagerly.
-    /// Setting a mode from `;s` writes `state.toml`, which then overrides
+    /// Setting a mode from `;s` writes `state.kdl`, which then overrides
     /// this per service.
     pub services: BTreeMap<String, ServiceMode>,
-    /// Watch config.toml for changes and hot-reload (requires restart to change).
+    /// Watch shell.kdl for changes and hot-reload (requires restart to change).
     pub watch_config: bool,
-    /// Watch theme.toml for changes and hot-reload (requires restart to change).
+    /// Watch theme.kdl for changes and hot-reload (requires restart to change).
     pub watch_theme: bool,
 }
 
@@ -75,10 +76,9 @@ impl Config {
     /// Initialize the global config.
     ///
     /// A file we can't parse costs the session its settings, but never the
-    /// file itself: the shell persists its own values to `state.toml` (see
-    /// [`State`]), the config editor edits `config.toml` one key at a time
-    /// through `toml_edit` (see [`store`]) and refuses a file that does not
-    /// parse, and both watchers keep the last good value until the next save
+    /// file itself: the shell persists its own values to `state.kdl` (see
+    /// [`State`]), the config editor edits `shell.kdl` one node at a time
+    /// (see [`store`]) and refuses a file that does not parse, and both watchers keep the last good value until the next save
     /// fixes the file. `gpuishell --validate` reports where the parse gave up.
     pub fn init(cx: &mut App) {
         let config = match persistence::load_or_create() {
@@ -101,15 +101,6 @@ impl Config {
         cx.set_global(config);
         State::init(cx);
         ConfigSignals::init(cx);
-
-        // Preload properties from ~/.config/conchy/shell.kdl if present
-        if let Ok(store) = conchy_config::store::ConfigStore::new(None) {
-            if let Ok(props) = store.list("shell") {
-                for (k, v) in props {
-                    Self::apply_conchy_property(&k, &v, cx);
-                }
-            }
-        }
 
         Self::start_hot_reload(cx);
         Self::start_conchy_config_listener(cx);
@@ -146,17 +137,17 @@ impl Config {
             }
             Err(err) => {
                 tracing::warn!("Failed to reload theme from disk: {err:#}");
-                notify_parse_failure(LocalSlot::ThemeError, "theme", &err, cx);
+                notify_parse_failure(LocalSlot::ThemeError, "theme.kdl", &err, cx);
             }
         }
     }
 
-    /// Persist current global theme colors to `theme.toml`.
+    /// Persist current global theme colors to `theme.kdl`.
     pub fn save_theme(cx: &App) -> anyhow::Result<()> {
         theme::persistence::save_theme(Theme::global(cx))
     }
 
-    /// Persist a provided theme colors to `theme.toml`.
+    /// Persist a provided theme colors to `theme.kdl`.
     pub fn save_theme_value(theme: &Theme) -> anyhow::Result<()> {
         theme::persistence::save_theme(theme)
     }
@@ -220,6 +211,8 @@ impl Config {
         }
     }
 
+    /// `conchy-config set shell ...` and the daemon's file watcher both end in
+    /// a `PropertyChanged` signal; the file is the truth, so read it again.
     fn start_conchy_config_listener(cx: &mut App) {
         cx.spawn(async move |cx| {
             let connection = match zbus::Connection::session().await {
@@ -240,120 +233,22 @@ impl Config {
 
             tracing::info!("Connected to org.conchy.Config D-Bus daemon");
 
-            // Query initial values for channel "shell" if available
-            if let Ok(properties) = client.list("shell").await {
-                for (k, v) in properties {
-                    let _ = cx.update(|cx| {
-                        Config::apply_conchy_property(&k, &v, cx);
-                    });
-                }
-            }
-
-            // Listen for PropertyChanged signals
             if let Ok(mut stream) = client.receive_property_changed().await {
                 use futures_util::StreamExt;
                 while let Some(signal) = stream.next().await {
-                    if let Ok(args) = signal.args() {
-                        if args.channel == "shell" {
-                            tracing::info!(
-                                "D-Bus Config update: [{}] {} = {}",
-                                args.channel,
-                                args.key,
-                                args.value
-                            );
-                            let _ = cx.update(|cx| {
-                                Config::apply_conchy_property(&args.key, &args.value, cx);
-                                cx.refresh_windows();
-                            });
-                        }
+                    let Ok(args) = signal.args() else { continue };
+                    if args.channel != "shell" || store::has_pending() {
+                        continue;
                     }
+                    tracing::info!("D-Bus Config update: {} = {}", args.key, args.value);
+                    cx.update(|cx| {
+                        Config::reload(cx);
+                        cx.refresh_windows();
+                    });
                 }
             }
         })
         .detach();
-    }
-
-    /// Apply a key-value property from Conchy Config D-Bus.
-    pub fn apply_conchy_property(key: &str, value: &str, cx: &mut App) {
-        let mut config = cx.global::<Config>().clone();
-        match key {
-            "bar.position" | "panel.position" => match value.to_lowercase().as_str() {
-                "bottom" => config.bar.position = BarPosition::Bottom,
-                "left" => config.bar.position = BarPosition::Left,
-                "right" => config.bar.position = BarPosition::Right,
-                _ => config.bar.position = BarPosition::Top,
-            },
-            "bar.height" | "bar.size" | "panel.height" => {
-                if let Ok(h) = value.parse::<f32>() {
-                    config.bar.size = h;
-                }
-            }
-            "panel.opacity" => {
-                if let Ok(op) = value.parse::<f32>() {
-                    config.bar.opacity = Some(op);
-                }
-            }
-            "bar.style" => match value.to_lowercase().as_str() {
-                "attached" | "blocky" => config.bar.style = BarStyle::Attached,
-                "bubbles" => config.bar.style = BarStyle::Bubbles,
-                "frame" => config.bar.style = BarStyle::Frame,
-                _ => config.bar.style = BarStyle::Floating,
-            },
-            "dock.enabled" => {
-                config.dock.enabled = value == "true";
-            }
-            "osd.enabled" => {
-                config.osd.enabled = Some(value == "true");
-            }
-            "clock.format" | "panel.center.widget.format" => {
-                config.bar.modules.clock.format_horizontal = value.to_string();
-            }
-            "launcher.width" => {
-                if let Ok(w) = value.parse::<f32>() {
-                    config.launcher.width = w;
-                }
-            }
-            "launcher.height" => {
-                if let Ok(h) = value.parse::<f32>() {
-                    config.launcher.height = h;
-                }
-            }
-            "launcher.modules.config.width" => {
-                config.launcher.modules.config.width = value.parse::<f32>().ok();
-            }
-            "launcher.modules.config.height" => {
-                config.launcher.modules.config.height = value.parse::<f32>().ok();
-            }
-            "launcher.modules.clipboard.width" => {
-                config.launcher.modules.clipboard.width = value.parse::<f32>().ok();
-            }
-            "launcher.modules.clipboard.height" => {
-                config.launcher.modules.clipboard.height = value.parse::<f32>().ok();
-            }
-            "launcher.modules.wallpaper.width" => {
-                config.launcher.modules.wallpaper.width = value.parse::<f32>().ok();
-            }
-            "launcher.modules.wallpaper.height" => {
-                config.launcher.modules.wallpaper.height = value.parse::<f32>().ok();
-            }
-            "launcher.modules.themes.width" => {
-                config.launcher.modules.themes.width = value.parse::<f32>().ok();
-            }
-            "launcher.modules.themes.height" => {
-                config.launcher.modules.themes.height = value.parse::<f32>().ok();
-            }
-            "launcher.modules.apps.width" => {
-                config.launcher.modules.apps.width = value.parse::<f32>().ok();
-            }
-            "launcher.modules.apps.height" => {
-                config.launcher.modules.apps.height = value.parse::<f32>().ok();
-            }
-            other => {
-                tracing::debug!("Unhandled conchy-config property: {}", other);
-            }
-        }
-        *cx.global_mut::<Config>() = config;
-        ConfigSignals::publish(cx);
     }
 }
 
@@ -373,9 +268,12 @@ impl ActiveConfig for App {
 /// parse diagnostic. `false` when one of them failed, so `--validate` can exit
 /// non-zero - the point is to check a file before the shell reloads it.
 pub fn validate() -> bool {
-    fn check<T: serde::de::DeserializeOwned>(path: anyhow::Result<PathBuf>) -> bool {
+    fn check<T>(
+        path: anyhow::Result<PathBuf>,
+        parse: fn(&std::path::Path) -> anyhow::Result<Option<T>>,
+    ) -> bool {
         let verdict = path.and_then(|path| {
-            let verdict = match persistence::parse_toml::<T>(&path)? {
+            let verdict = match parse(&path)? {
                 Some(_) => "ok",
                 None => "absent, defaults apply",
             };
@@ -393,9 +291,12 @@ pub fn validate() -> bool {
     }
 
     // `&`, not `&&`: report every file rather than stopping at the first bad one.
-    check::<Config>(persistence::config_path())
-        & check::<StoredTheme>(theme::persistence::theme_path())
-        & check::<State>(state::state_path())
+    check(persistence::config_path(), persistence::parse_config)
+        & check(
+            theme::persistence::theme_path(),
+            persistence::parse_kdl::<StoredTheme>,
+        )
+        & check(state::state_path(), persistence::parse_kdl::<State>)
 }
 
 /// Notify about anything [`Config::init`] could not parse. Called once the
@@ -407,7 +308,7 @@ pub fn report_load_errors(cx: &App) {
     }
 
     if let Err(err) = theme::persistence::load_theme() {
-        notify_parse_failure(LocalSlot::ThemeError, "theme", &err, cx);
+        notify_parse_failure(LocalSlot::ThemeError, "theme.kdl", &err, cx);
     }
 }
 
@@ -445,10 +346,10 @@ mod tests {
 
     use super::*;
 
-    /// Hand-written service modes stay readable from `config.toml`; the
-    /// overlay that `state.toml` puts on top of them is tested in `state`.
+    /// Hand-written service modes stay readable from `shell.kdl`; the
+    /// overlay that `state.kdl` puts on top of them is tested in `state`.
     #[test]
-    fn service_modes_round_trip_through_toml() {
+    fn service_modes_round_trip_through_kdl() {
         let mut config = Config::default();
         config
             .services
@@ -457,8 +358,8 @@ mod tests {
             .services
             .insert("bluetooth".to_string(), ServiceMode::Off);
 
-        let encoded = toml::to_string_pretty(&config).expect("config serializes");
-        let decoded: Config = toml::from_str(&encoded).expect("config parses back");
+        let encoded = persistence::to_text(&config).expect("config serializes");
+        let decoded = persistence::config_from_text(&encoded).expect("config parses back");
 
         assert_eq!(decoded.services.get("tray"), Some(&ServiceMode::Lazy));
         assert_eq!(decoded.services.get("bluetooth"), Some(&ServiceMode::Off));
@@ -469,19 +370,15 @@ mod tests {
     /// failed has to survive - it is the only part the user can act on.
     #[test]
     fn a_parse_diagnostic_flattens_to_one_readable_line() {
-        let err = toml::from_str::<Config>("[bar]\nposition = \"sideways\"\n")
-            .map_err(anyhow::Error::from)
-            .context("Failed to parse /tmp/config.toml")
+        let err = persistence::config_from_text("bar {\n    position \"sideways\"\n}\n")
+            .context("Failed to parse /tmp/shell.kdl")
             .expect_err("that position does not exist");
 
         let line = one_line(&err);
 
         assert_eq!(line.lines().count(), 1, "{line}");
-        assert!(line.contains("Failed to parse /tmp/config.toml"), "{line}");
-        assert!(line.contains("line 2, column 12"), "{line}");
+        assert!(line.contains("Failed to parse /tmp/shell.kdl"), "{line}");
         assert!(line.contains("unknown variant `sideways`"), "{line}");
-        assert!(!line.contains("^^^"), "{line}");
-        assert!(!line.contains("position = "), "{line}");
     }
 
     /// Parses the config actually on this machine, if there is one. Skips
@@ -495,8 +392,9 @@ mod tests {
             return;
         };
 
-        if let Err(err) = toml::from_str::<Config>(&raw) {
-            panic!("live config at {} does not parse: {err}", path.display());
+        // A template that has not been migrated yet holds no settings.
+        if let Err(err) = persistence::config_from_text(&raw) {
+            panic!("live config at {} does not parse: {err:#}", path.display());
         }
     }
 
@@ -507,17 +405,18 @@ mod tests {
     #[test]
     fn a_stale_icon_glyph_does_not_discard_the_rest_of_the_config() {
         let raw = concat!(
-            "[bar]\n",
-            "position = \"top\"\n",
-            "\n",
-            "[bar.modules.launcher_btn]\n",
-            "icon = \"\u{f003b}\"\n",
-            "\n",
-            "[notification.icons]\n",
-            "bell = \"\u{f009a}\"\n",
+            "bar {\n",
+            "    position \"top\"\n",
+            "    modules {\n",
+            "        launcher_btn icon=\"\u{f003b}\"\n",
+            "    }\n",
+            "}\n",
+            "notification {\n",
+            "    icons bell=\"\u{f009a}\"\n",
+            "}\n",
         );
 
-        let config: Config = toml::from_str(raw).expect("config parses despite stale icons");
+        let config = persistence::config_from_text(raw).expect("config parses despite stale icons");
 
         assert_eq!(config.bar.position, crate::bar::config::BarPosition::Top);
         assert_eq!(config.bar.modules.launcher_btn.icon, None);

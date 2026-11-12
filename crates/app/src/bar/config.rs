@@ -235,7 +235,7 @@ pub struct BarConfig {
     /// `attached`, `floating`, `frame` or `bubbles`.
     pub style: BarStyle,
     /// Opacity of the bar (and frame) background, from 0.0 (transparent) to
-    /// 1.0. Unset, it follows `opacity` in `theme.toml`. `background` is
+    /// 1.0. Unset, it follows `opacity` in `theme.kdl`. `background` is
     /// accepted as an older spelling.
     #[serde(alias = "background")]
     pub opacity: Option<f32>,

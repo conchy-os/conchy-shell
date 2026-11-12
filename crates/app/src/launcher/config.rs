@@ -15,6 +15,9 @@ use super::modules::{
 pub struct LauncherConfig {
     pub width: f32,
     pub height: f32,
+    /// Centered on the screen, whatever the module's size. Off, the window
+    /// hangs from the top edge by `margin_top`, and the margins apply.
+    pub centered: bool,
     pub margin_top: f32,
     pub margin_right: f32,
     pub margin_bottom: f32,
@@ -32,6 +35,7 @@ impl Default for LauncherConfig {
         Self {
             width: 600.0,
             height: 450.0,
+            centered: true,
             margin_top: 100.0,
             margin_right: 0.0,
             margin_bottom: 0.0,

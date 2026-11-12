@@ -1,6 +1,6 @@
-//! Applying a bar [`Look`] from the editor and drawing it: the `[bar]` keys
+//! Applying a bar [`Look`] from the editor and drawing it: the `bar` keys
 //! become pending edits like any other change (Save writes them), the
-//! theme's radius scale is written to `theme.toml` at once, like a scheme
+//! theme's radius scale is written to `theme.kdl` at once, like a scheme
 //! switch.
 
 use gpui::{AnyElement, App, FontWeight, Hsla, MouseButton, SharedString, div, prelude::*, px};

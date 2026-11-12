@@ -8,9 +8,7 @@ use ui::{
 };
 
 use super::schema::{ConfigPath, to_value};
-use super::section_page::{
-    file_actions, form_heading, header_card, unsaved_banner, watch_revision,
-};
+use super::section_page::{form_heading, header_card, watch_revision};
 use crate::bar::config::{BarConfig, BarItem};
 use crate::bar::modules::{self as widgets, BarWidgetMeta};
 use crate::launcher::action::{Action, ActionPanel, Outcome};
@@ -219,8 +217,7 @@ impl LayoutPage {
             .shortcut("ctrl-x")
             .destructive(),
         );
-        row.actions(file_actions(panel))
-            .detail(layout_detail(&self.path))
+        row.actions(panel).detail(layout_detail(&self.path))
     }
 
     fn add_row(&self, slot: Slot) -> Item {
@@ -231,14 +228,14 @@ impl LayoutPage {
                 "Append to the {} slot",
                 slot.label().to_lowercase()
             ))
-            .actions(file_actions(
+            .actions(
                 ActionPanel::new().action(
                     Action::new("Choose a widget", move |_, cx| {
                         Outcome::push(cx.new(|cx| AddWidgetPage::new(path.clone(), slot, cx)))
                     })
                     .icon(IconName::ChevronRight),
                 ),
-            ))
+            )
             .detail(layout_detail(&self.path))
     }
 }
@@ -440,8 +437,7 @@ impl LauncherPage for LayoutPage {
         let mut list = List::new()
             .filtering(false)
             .title("Bar layout")
-            .placeholder("Alt+Up/Down moves, Ctrl+X removes")
-            .actions(file_actions(ActionPanel::new()));
+            .placeholder("Alt+Up/Down moves, Ctrl+X removes");
         for section in sections {
             list = list.section(section);
         }
@@ -481,8 +477,7 @@ impl LauncherPage for LayoutPage {
                         .truncate(),
                 ),
         );
-        let banner = unsaved_banner(cx);
-        Some(v_flex().children(banner).child(card).into_any_element())
+        Some(card.into_any_element())
     }
 }
 
@@ -515,18 +510,15 @@ impl LauncherPage for AddWidgetPage {
                 .subtitle(kind.description)
                 .icon(kind.icon)
                 .keywords(kind.name)
-                .actions(file_actions(ActionPanel::new().action(Action::new(
-                    "Add",
-                    move |_, cx| {
-                        edit_slots(
-                            &path,
-                            &[slot],
-                            |bar| slot.items_mut(bar).push(BarItem::Widget(kind.name.into())),
-                            cx,
-                        );
-                        Outcome::Pop
-                    },
-                ))));
+                .actions(ActionPanel::new().action(Action::new("Add", move |_, cx| {
+                    edit_slots(
+                        &path,
+                        &[slot],
+                        |bar| slot.items_mut(bar).push(BarItem::Widget(kind.name.into())),
+                        cx,
+                    );
+                    Outcome::Pop
+                })));
             if placed.contains(&kind) {
                 item = item.accessory(Accessory::tag("placed"));
             }
@@ -536,16 +528,7 @@ impl LauncherPage for AddWidgetPage {
             .title(format!("Add to {}", slot.label().to_lowercase()))
             .placeholder("Search widgets…")
             .empty(EmptyView::new("No such widget").icon(IconName::Layout))
-            .actions(file_actions(ActionPanel::new()))
             .section(Section::untitled().items(items))
             .into()
-    }
-
-    fn render_header(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        unsaved_banner(cx)
     }
 }

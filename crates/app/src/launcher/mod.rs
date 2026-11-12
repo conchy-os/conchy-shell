@@ -48,7 +48,10 @@ const DETAIL_SPLIT: f32 = 0.40;
 
 #[derive(Clone, Copy)]
 enum Layout {
-    List { show_detail: bool },
+    List {
+        show_detail: bool,
+        click_selects: bool,
+    },
     Grid { columns: usize, aspect_ratio: f32 },
 }
 
@@ -63,7 +66,10 @@ impl From<Content> for Body {
     fn from(content: Content) -> Self {
         match content {
             Content::List(list) => Body::Collection(
-                list.map_layout(|ListLayout { show_detail }| Layout::List { show_detail }),
+                list.map_layout(|ListLayout { show_detail, click_selects }| Layout::List {
+                    show_detail,
+                    click_selects,
+                }),
             ),
             Content::Grid(grid) => Body::Collection(grid.map_layout(
                 |GridLayout {
@@ -810,9 +816,16 @@ impl Launcher {
             Row::Items(range) => range.clone(),
         };
 
+        let click_selects = matches!(
+            collection.layout,
+            Layout::List {
+                click_selects: true,
+                ..
+            }
+        );
         let page = self.current_page();
         let (columns, content_size, compact) = match collection.layout {
-            Layout::List { show_detail } => (1, size(px(0.), px(0.)), show_detail),
+            Layout::List { show_detail, .. } => (1, size(px(0.), px(0.)), show_detail),
             Layout::Grid {
                 columns,
                 aspect_ratio,
@@ -856,9 +869,17 @@ impl Launcher {
                 .flex()
                 .flex_col()
                 .justify_center()
-                .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                     this.selected = entry_ix;
-                    this.activate(0, window, cx);
+                    // A list with a detail pane is a master list: a click
+                    // shows the item's pane, as selecting with the arrows
+                    // does, and only a double click runs its action. A
+                    // single click that changed a setting was a surprise.
+                    if click_selects && event.click_count() < 2 {
+                        cx.notify();
+                    } else {
+                        this.activate(0, window, cx);
+                    }
                 }))
                 .on_mouse_down(
                     MouseButton::Right,
@@ -939,7 +960,10 @@ impl Launcher {
                     .track_scroll(self.list.clone())
                     .size_full(),
                 );
-                let Layout::List { show_detail: true } = collection.layout else {
+                let Layout::List {
+                    show_detail: true, ..
+                } = collection.layout
+                else {
                     return div()
                         .flex_1()
                         .overflow_hidden()
@@ -1389,7 +1413,13 @@ pub fn toggle(input: Option<String>, cx: &mut App) {
             kind: WindowKind::LayerShell(LayerShellOptions {
                 namespace: "launcher".to_string(),
                 layer: Layer::Overlay,
-                anchor: Anchor::TOP,
+                // No anchor: the compositor centers the window on both axes,
+                // and keeps it there as a module resizes it.
+                anchor: if cfg.centered {
+                    Anchor::empty()
+                } else {
+                    Anchor::TOP
+                },
                 exclusive_zone: None,
                 margin: Some((
                     px(cfg.margin_top),

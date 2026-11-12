@@ -1,12 +1,12 @@
-//! Values the shell persists on its own, kept out of `config.toml`.
+//! Values the shell persists on its own, kept out of `shell.kdl`.
 //!
-//! `config.toml` is hand-written, so the shell never serializes over it: a
+//! `shell.kdl` is hand-written, so the shell never serializes over it: a
 //! dock pin toggled from the UI or a service mode set from `;s` lands in
-//! `state.toml` instead. The config editor is the one exception, and it edits
-//! `config.toml` one key at a time through `toml_edit` (see `store`), so a
-//! file that does not parse is never written and nothing else in it moves.
+//! `state.kdl` instead. The settings editor is the one exception, and it edits
+//! `shell.kdl` one node at a time (see `store`), so a file that does not parse
+//! is never written and nothing else in it moves.
 //!
-//! Each field here overrides its `config.toml` counterpart rather than
+//! Each field here overrides its `shell.kdl` counterpart rather than
 //! replacing it, so a hand-written value stays live until the UI overrides it.
 
 use std::collections::BTreeMap;
@@ -18,7 +18,7 @@ use gpui::{App, AppContext, Global};
 use serde::{Deserialize, Serialize};
 use services::ServiceMode;
 
-use super::persistence::{config_dir, parse_toml, write_toml};
+use super::persistence::{config_dir, parse_kdl, write_kdl};
 use super::{ActiveConfig, ConfigSignals};
 
 /// State written by the shell itself.
@@ -40,7 +40,7 @@ static NEXT_SAVE: AtomicU64 = AtomicU64::new(0);
 static WRITTEN_SAVE: Mutex<u64> = Mutex::new(0);
 
 impl State {
-    /// Load `state.toml` into the global. A broken one is not worth a fuss:
+    /// Load `state.kdl` into the global. A broken one is not worth a fuss:
     /// the config values it overrides still apply.
     pub(super) fn init(cx: &mut App) {
         let state = load().unwrap_or_else(|err| {
@@ -50,7 +50,7 @@ impl State {
         cx.set_global(state);
     }
 
-    /// Pinned dock entries: what the UI last saved, else what `config.toml`
+    /// Pinned dock entries: what the UI last saved, else what `shell.kdl`
     /// declares.
     pub fn pinned(cx: &App) -> &[String] {
         cx.global::<Self>()
@@ -67,7 +67,7 @@ impl State {
     }
 
     /// Startup mode for a service: what the UI last saved, else what
-    /// `config.toml` declares, else eager.
+    /// `shell.kdl` declares, else eager.
     pub fn service_mode(name: &str, cx: &App) -> ServiceMode {
         resolve_mode(&cx.global::<Self>().services, &cx.config().services, name)
     }
@@ -90,7 +90,7 @@ impl State {
             if *written > generation {
                 return;
             }
-            match state_path().and_then(|path| write_toml(&path, &state)) {
+            match state_path().and_then(|path| write_kdl(&path, &state)) {
                 Ok(()) => *written = generation,
                 Err(err) => tracing::warn!("Failed to persist state: {err:#}"),
             }
@@ -114,11 +114,11 @@ fn resolve_mode(
 }
 
 pub(super) fn state_path() -> anyhow::Result<PathBuf> {
-    Ok(config_dir()?.join("state.toml"))
+    Ok(config_dir()?.join("state.kdl"))
 }
 
 fn load() -> anyhow::Result<State> {
-    Ok(parse_toml(&state_path()?)?.unwrap_or_default())
+    Ok(parse_kdl(&state_path()?)?.unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -149,14 +149,15 @@ mod tests {
     }
 
     #[test]
-    fn state_round_trips_through_toml() {
+    fn state_round_trips_through_kdl() {
         let state = State {
             pinned: Some(vec!["firefox.desktop".to_string()]),
             services: modes(&[("tray", ServiceMode::Off)]),
         };
 
-        let encoded = toml::to_string_pretty(&state).expect("state serializes");
-        let decoded: State = toml::from_str(&encoded).expect("state parses back");
+        let encoded = super::super::persistence::to_text(&state).expect("state serializes");
+        let decoded: State =
+            super::super::persistence::from_text(&encoded).expect("state parses back");
 
         assert_eq!(
             decoded.pinned.as_deref(),

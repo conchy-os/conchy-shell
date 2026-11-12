@@ -27,7 +27,7 @@ pub struct PanelsConfig {
     pub close_on_click_outside: bool,
     /// Opacity of every panel's surface (control center, notification
     /// center, tray menus, media panel), from 0.0 to 1.0. Unset, it follows
-    /// `opacity` in `theme.toml`.
+    /// `opacity` in `theme.kdl`.
     pub opacity: Option<f32>,
 }
 

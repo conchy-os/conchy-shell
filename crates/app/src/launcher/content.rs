@@ -94,6 +94,7 @@ pub struct Collection<L> {
 
 pub struct ListLayout {
     pub(super) show_detail: bool,
+    pub(super) click_selects: bool,
 }
 
 pub struct GridLayout {
@@ -174,13 +175,24 @@ impl Default for List {
 
 impl List {
     pub fn new() -> Self {
-        Self::with_layout(ListLayout { show_detail: false })
+        Self::with_layout(ListLayout {
+            show_detail: false,
+            click_selects: false,
+        })
     }
 
     /// Split the body: the list on the left, the selected item's
     /// [`Item::detail`] on the right.
     pub fn show_detail(mut self, show: bool) -> Self {
         self.layout.show_detail = show;
+        self
+    }
+
+    /// A click selects the row, which shows its detail; only a double click
+    /// runs its action. For lists whose rows change something on Enter and
+    /// whose pane is where the change is made.
+    pub fn click_selects(mut self, selects: bool) -> Self {
+        self.layout.click_selects = selects;
         self
     }
 }

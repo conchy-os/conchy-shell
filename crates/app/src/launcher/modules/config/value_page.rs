@@ -1,11 +1,11 @@
 //! Edit a number or text field: the launcher's search input is the value,
 //! prefilled; Enter saves what parses.
 
-use gpui::{AnyElement, Context, Window};
+use gpui::Context;
 use ui::IconName;
 
 use super::schema::{ConfigPath, Editable, Editor, Field};
-use super::section_page::{file_actions, unsaved_banner, watch_revision};
+use super::section_page::watch_revision;
 use crate::launcher::action::{Action, ActionPanel, Outcome};
 use crate::launcher::content::{Content, EmptyView, Item, List};
 use crate::launcher::page::LauncherPage;
@@ -95,15 +95,14 @@ impl<S: Editable> LauncherPage for ValuePage<S> {
         let list = List::new()
             .filtering(false)
             .title(self.field.label)
-            .placeholder(format!("Currently {current}"))
-            .actions(file_actions(ActionPanel::new()));
+            .placeholder(format!("Currently {current}"));
         match self.parse(query) {
             Ok(commit) => {
                 let mut item = Item::new("set", commit.title).icon(IconName::Check);
                 if let Some(subtitle) = commit.subtitle {
                     item = item.subtitle(subtitle);
                 }
-                list.item(item.actions(file_actions(ActionPanel::new().action(commit.action))))
+                list.item(item.actions(ActionPanel::new().action(commit.action)))
             }
             Err(reason) => list.empty(
                 EmptyView::new(reason)
@@ -112,13 +111,5 @@ impl<S: Editable> LauncherPage for ValuePage<S> {
             ),
         }
         .into()
-    }
-
-    fn render_header(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        unsaved_banner(cx)
     }
 }

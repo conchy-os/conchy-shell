@@ -56,23 +56,36 @@ pub fn launcher_preview(path: &ConfigPath<LauncherConfig>, cx: &App) -> AnyEleme
                 .child(line(f32::from(width) * 0.4, Some(Opacity::Soft))),
         );
 
-    // The margins shrink the area the window is centred in, top first.
-    let area = div()
-        .absolute()
-        .top(margin(config.margin_top))
-        .right(margin(config.margin_right))
-        .bottom(margin(config.margin_bottom))
-        .left(margin(config.margin_left))
-        .flex()
-        .justify_center()
-        .items_start()
-        .child(window);
+    // Centered, the window sits in the middle of the screen. Otherwise the
+    // margins shrink the area the window is centred in, top first.
+    let area = if config.centered {
+        div()
+            .absolute()
+            .inset_0()
+            .flex()
+            .justify_center()
+            .items_center()
+            .child(window)
+    } else {
+        div()
+            .absolute()
+            .top(margin(config.margin_top))
+            .right(margin(config.margin_right))
+            .bottom(margin(config.margin_bottom))
+            .left(margin(config.margin_left))
+            .flex()
+            .justify_center()
+            .items_start()
+            .child(window)
+    };
 
+    let placement = if config.centered {
+        "centered".to_string()
+    } else {
+        format!("{:.0} px from top", config.margin_top)
+    };
     frame(
         screen(cx).child(area),
-        format!(
-            "{:.0} × {:.0} px · {:.0} px from top",
-            config.width, config.height, config.margin_top
-        ),
+        format!("{:.0} × {:.0} px · {placement}", config.width, config.height),
     )
 }

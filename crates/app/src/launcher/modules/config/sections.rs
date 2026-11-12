@@ -594,6 +594,12 @@ impl Editable for LauncherConfig {
                         .unit("px")
                         .describe("Launcher window height")
                         .preview(launcher_preview),
+                    Field::toggle("centered", "Centered", lens!(centered))
+                        .describe(
+                            "Center the window on the screen. Off, it hangs from the top \
+                             edge and the margins below apply",
+                        )
+                        .preview(launcher_preview),
                     Field::number("margin_top", "Margin top", lens!(margin_top as f64))
                         .range(0.0, 1000.0)
                         .unit("px")

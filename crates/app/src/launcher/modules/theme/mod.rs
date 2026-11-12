@@ -401,7 +401,7 @@ fn hex_palette(p: &services::Base16Palette) -> Result<Base16Palette, ()> {
     .map_err(drop)
 }
 
-/// Make `palette` the theme and save it to `theme.toml`, keeping the user's
+/// Make `palette` the theme and save it to `theme.kdl`, keeping the user's
 /// font size, radius scale, opacity and token overrides.
 pub(crate) fn apply_palette(name: SharedString, palette: Base16Palette, cx: &mut App) {
     let mut theme = cx.theme().clone();
@@ -409,7 +409,7 @@ pub(crate) fn apply_palette(name: SharedString, palette: Base16Palette, cx: &mut
     apply_theme(theme, cx);
 }
 
-/// Install `theme` and save it to `theme.toml`.
+/// Install `theme` and save it to `theme.kdl`.
 pub(crate) fn apply_theme(theme: Theme, cx: &mut App) {
     Theme::set(theme.clone(), cx);
     cx.background_spawn(async move {
@@ -567,7 +567,7 @@ fn render_current_card(theme: &Theme, current: Option<&Entry>) -> AnyElement {
         .map(|wallpaper| wallpaper.to_string().into())
         .unwrap_or_else(|| theme.name.clone());
 
-    // A palette no entry matches was hand-edited in theme.toml, unless its
+    // A palette no entry matches was hand-edited in theme.kdl, unless its
     // name says it was generated from a wallpaper since lost.
     let source = current
         .map(|entry| entry.source)

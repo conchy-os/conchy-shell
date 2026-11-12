@@ -186,7 +186,7 @@ pub struct BarCtx {
     pub metrics: BarMetrics,
     pub segment: SegmentStyle,
     pub rhythm: BarRhythm,
-    /// Padding at the bar's two ends: `[bar] padding`, or a unit so the
+    /// Padding at the bar's two ends: `bar padding`, or a unit so the
     /// first chip sits one breath from the end like every other.
     pub end_padding: Pixels,
 }

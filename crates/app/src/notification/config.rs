@@ -54,7 +54,7 @@ pub struct NotificationConfig {
     pub popup_card_collapsed_height: f32,
     pub popup_card_expanded_height: f32,
     /// Opacity of popup cards, from 0.0 to 1.0. Unset, it follows `opacity`
-    /// in `theme.toml`. The notification center is a panel and follows
+    /// in `theme.kdl`. The notification center is a panel and follows
     /// `[panels] opacity`.
     pub opacity: Option<f32>,
     pub icons: NotificationIcons,

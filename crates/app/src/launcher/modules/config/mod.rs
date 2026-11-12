@@ -1,8 +1,8 @@
-//! Config module - edit `config.toml` from the launcher.
+//! Config module - edit `shell.kdl` from the launcher.
 //!
 //! `;cfg` lists the config sections; each field is a row whose Enter action
 //! toggles, picks from a list or edits the value in the search line. Edits
-//! apply at once and are written when the user saves (Ctrl+S).
+//! apply at once and are written to the file a moment later.
 
 mod bar_preview;
 mod choice_page;
