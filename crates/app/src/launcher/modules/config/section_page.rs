@@ -580,15 +580,116 @@ fn form_row<S: Editable>(
             .gap(Spacing::Small.pixels())
             .children(field.preview.as_ref().map(|preview| preview(path, cx)))
             .into_any_element(),
-        Editor::Choice { .. } | Editor::Number { .. } => {
-            labeled_row(label, field_widget(path, field, cx))
-        }
+        Editor::Number { .. } => number_widget(path, field, Some(label), cx),
+        Editor::Choice { .. } => labeled_row(label, field_widget(path, field, cx)),
         // Text and custom fields edit from their own row; a deep nested one
         // shows its summary.
         Editor::Text { .. } if value.is_empty() => labeled_row(label, muted("Not set".into())),
         Editor::Custom { .. } => labeled_row(label, muted("Opens its own page".into())),
         _ => labeled_row(label, muted(value)),
     }
+}
+
+/// A number as a stepper over a slider. With a `label` the label and the
+/// stepper share the first line, the unit trailing the label; without, a
+/// value badge stands in for it.
+fn number_widget<S: Editable>(
+    path: &ConfigPath<S>,
+    field: &Field<S>,
+    label: Option<Label>,
+    cx: &App,
+) -> AnyElement {
+    let Editor::Number {
+        lens,
+        min,
+        max,
+        step,
+        integer,
+        unit,
+    } = &field.editor
+    else {
+        return div().into_any_element();
+    };
+    let section = path.read(cx);
+    let id: SharedString = path.key_string(field.key).into();
+    let colors = cx.theme().colors();
+    let lens = *lens;
+    let value = (lens.get)(section);
+    let is_int = *integer;
+    let (min_f, max_f, step_f) = (*min, *max, *step);
+    let number = if is_int {
+        format!("{}", value.round() as i64)
+    } else {
+        format!("{value:.1}")
+    };
+
+    let slider = {
+        let path = path.clone();
+        let field = field.clone();
+        Slider::new(id.clone(), value as f32)
+            .min(min_f as f32)
+            .max(max_f as f32)
+            .step(step_f as f32)
+            .show_value(false)
+            .on_change(move |v, _, cx| {
+                let v = if is_int { (v as f64).round() } else { v as f64 };
+                path.write(&field, |s| (lens.set)(s, v), cx);
+            })
+    };
+
+    let stepper = {
+        let path = path.clone();
+        let field = field.clone();
+        Stepper::new(SharedString::from(format!("{id}-stepper")), value)
+            .min(min_f)
+            .max(max_f)
+            .step(step_f)
+            .on_change(move |v, _, cx| {
+                let v = if is_int { v.round() } else { v };
+                path.write(&field, |s| (lens.set)(s, v), cx);
+            })
+    };
+
+    let leading = match label {
+        Some(label) => h_flex()
+            .items_baseline()
+            .gap(Spacing::Small.pixels())
+            .child(label)
+            .children(unit.map(|unit| {
+                Label::new(unit)
+                    .size(TextSize::XSmall)
+                    .color(Color::Muted)
+            }))
+            .into_any_element(),
+        None => div()
+            .px(Spacing::Medium.pixels())
+            .py(px(4.))
+            .rounded(Radius::Small.pixels())
+            .bg(colors.element_background)
+            .text_size(TextSize::Small.rems())
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(colors.accent)
+            .child(match unit {
+                Some(unit) => format!("{number} {unit}"),
+                None => number,
+            })
+            .into_any_element(),
+    };
+
+    v_flex()
+        .w_full()
+        .gap(Spacing::Small.pixels())
+        .child(
+            h_flex()
+                .w_full()
+                .items_center()
+                .justify_between()
+                .gap(Spacing::Medium.pixels())
+                .child(leading)
+                .child(stepper),
+        )
+        .child(div().w_full().child(slider))
+        .into_any_element()
 }
 
 /// Mouse control for one field; handlers write through the store.
@@ -620,87 +721,7 @@ fn field_widget<S: Editable>(path: &ConfigPath<S>, field: &Field<S>, cx: &App) -
                 }))
                 .into_any_element()
         }
-        Editor::Number {
-            lens,
-            min,
-            max,
-            step,
-            integer,
-            unit,
-        } => {
-            let lens = *lens;
-            let value = (lens.get)(section);
-            let is_int = *integer;
-            let min_f = *min;
-            let max_f = *max;
-            let step_f = *step;
-            let colors = cx.theme().colors();
-            let display_val = match unit {
-                Some(u) => {
-                    if is_int {
-                        format!("{} {}", value.round() as i64, u)
-                    } else {
-                        format!("{:.1} {}", value, u)
-                    }
-                }
-                None => {
-                    if is_int {
-                        format!("{}", value.round() as i64)
-                    } else {
-                        format!("{:.1}", value)
-                    }
-                }
-            };
-
-            let slider = {
-                let path = path.clone();
-                let field_slider = field.clone();
-                Slider::new(id.clone(), value as f32)
-                    .min(min_f as f32)
-                    .max(max_f as f32)
-                    .step(step_f as f32)
-                    .show_value(false)
-                    .on_change(move |v, _, cx| {
-                        let final_v = if is_int { (v as f64).round() } else { v as f64 };
-                        path.write(&field_slider, |s| (lens.set)(s, final_v), cx);
-                    })
-            };
-
-            let path_step = path.clone();
-            let field_step = field.clone();
-            let stepper = Stepper::new(SharedString::from(format!("{id}-stepper")), value)
-                .min(min_f)
-                .max(max_f)
-                .step(step_f)
-                .on_change(move |v, _, cx| {
-                    let final_v = if is_int { v.round() } else { v };
-                    path_step.write(&field_step, |s| (lens.set)(s, final_v), cx);
-                });
-
-            let badge = div()
-                .px(Spacing::Medium.pixels())
-                .py(px(4.))
-                .rounded(Radius::Small.pixels())
-                .bg(colors.element_background)
-                .text_size(TextSize::Small.rems())
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(colors.accent)
-                .child(display_val);
-
-            v_flex()
-                .w_full()
-                .gap(Spacing::Small.pixels())
-                .child(
-                    h_flex()
-                        .w_full()
-                        .items_center()
-                        .justify_between()
-                        .child(badge)
-                        .child(stepper),
-                )
-                .child(div().w_full().child(slider))
-                .into_any_element()
-        }
+        Editor::Number { .. } => number_widget(path, field, None, cx),
         Editor::Choice {
             current, options, ..
         } => {
