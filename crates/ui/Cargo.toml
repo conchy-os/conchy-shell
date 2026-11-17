@@ -18,6 +18,7 @@ strum = { version = "0.27", features = ["derive"] }
 unicode-segmentation = "1"
 lyon = "1.0"
 image = { workspace = true, features = ["png", "jpeg", "webp", "gif", "bmp"] }
+material-colors = { version = "0.5.0", features = ["quantize", "serde"] }
 
 [dev-dependencies]
 toml = "1.1"

@@ -10,14 +10,14 @@ use std::time::SystemTime;
 use gpui::{AnyElement, App, Context, Global, Hsla, SharedString, Window, div, prelude::*, px};
 use services::WallpaperCommand;
 use ui::{
-    ActiveTheme, Base16Palette, Color, Icon, IconName, IconSize, Label, LabelCommon, Radius,
-    Spacing, TextSize, WallpaperPalettes,
+    ActiveTheme, Base16Palette, Color, Icon, IconName, IconSize, Label, LabelCommon,
+    MaterialPalette, Radius, Spacing, TextSize, WallpaperPalettes,
 };
 
 use self::config::WallpaperConfig;
 use crate::launcher::action::{Action, Outcome};
 use crate::launcher::content::{Content, EmptyView, Grid, Item, ItemIcon};
-use crate::launcher::modules::theme::{apply_palette, palette_is_active};
+use crate::launcher::modules::theme::{apply_material, apply_palette, palette_is_active};
 use crate::launcher::page::{LauncherPage, ModuleDescriptor, ModuleMeta};
 use crate::state::AppState;
 
@@ -171,12 +171,25 @@ fn palette_chip(
     id: &'static str,
     label: &'static str,
     palette: Base16Palette,
+    material: Option<MaterialPalette>,
     name: SharedString,
     cx: &App,
 ) -> impl IntoElement {
     let colors = cx.theme().colors();
     let active = palette_is_active(&palette, cx.theme());
     let swatch = |color: Hsla| div().size(px(10.)).rounded(Radius::Full.pixels()).bg(color);
+
+    let swatches = if let Some(m) = material {
+        vec![m.primary, m.secondary, m.tertiary, m.surface_container, m.error]
+    } else {
+        vec![
+            palette.base05,
+            palette.base08,
+            palette.base0b,
+            palette.base0d,
+            palette.base0e,
+        ]
+    };
 
     div()
         .id(id)
@@ -188,19 +201,12 @@ fn palette_chip(
         .rounded(Radius::Small.pixels())
         .bg(palette.base00)
         .border_1()
-        .border_color(if active { colors.accent } else { colors.border })
+        .border_color(if active { colors.primary } else { colors.border })
         .cursor_pointer()
-        .hover(|s| s.border_color(colors.accent))
+        .hover(|s| s.border_color(colors.primary))
         .child(
             div().flex().gap(px(2.)).children(
-                [
-                    palette.base05,
-                    palette.base08,
-                    palette.base0b,
-                    palette.base0d,
-                    palette.base0e,
-                ]
-                .map(swatch),
+                swatches.into_iter().map(swatch),
             ),
         )
         .child(
@@ -210,7 +216,11 @@ fn palette_chip(
                 .child(label),
         )
         .on_click(move |_, _, cx| {
-            apply_palette(generated_theme_name(&name).into(), palette, cx);
+            if let Some(m) = material {
+                apply_material(generated_theme_name(&name).into(), m, cx);
+            } else {
+                apply_palette(generated_theme_name(&name).into(), palette, cx);
+            }
         })
 }
 
@@ -281,6 +291,7 @@ impl LauncherPage for WallpaperModule {
                         "wallpaper-theme-dark",
                         "Dark",
                         palettes.dark,
+                        palettes.material_dark,
                         name.clone(),
                         cx,
                     ))
@@ -288,6 +299,7 @@ impl LauncherPage for WallpaperModule {
                         "wallpaper-theme-light",
                         "Light",
                         palettes.light,
+                        palettes.material_light,
                         name.clone(),
                         cx,
                     )),

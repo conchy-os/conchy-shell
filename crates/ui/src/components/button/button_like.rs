@@ -67,6 +67,9 @@ pub enum ButtonStyle {
 pub enum TintColor {
     #[default]
     Accent,
+    Primary,
+    Secondary,
+    Tertiary,
     Error,
     Warning,
     Success,
@@ -80,30 +83,66 @@ pub(super) struct ButtonLikeStyles {
 }
 
 impl TintColor {
-    /// The foreground status color for this tint flavor.
+    /// The foreground status or accent color for this tint flavor.
     fn foreground(self, cx: &App) -> Hsla {
-        let status = &cx.theme().colors().status;
+        let colors = cx.theme().colors();
         match self {
-            TintColor::Accent => status.info,
-            TintColor::Error => status.error,
-            TintColor::Warning => status.warning,
-            TintColor::Success => status.success,
+            TintColor::Accent | TintColor::Primary => colors.primary,
+            TintColor::Secondary => colors.secondary,
+            TintColor::Tertiary => colors.tertiary,
+            TintColor::Error => colors.status.error,
+            TintColor::Warning => colors.status.warning,
+            TintColor::Success => colors.status.success,
         }
     }
 
     fn enabled_styles(self, cx: &App) -> ButtonLikeStyles {
-        let fg = self.foreground(cx);
-        ButtonLikeStyles {
-            background: fg.fade(Opacity::Faint),
-            border: fg.fade(Opacity::Muted),
+        let colors = cx.theme().colors();
+        match self {
+            TintColor::Accent | TintColor::Primary => ButtonLikeStyles {
+                background: colors.primary_container,
+                border: colors.primary.alpha(0.35),
+            },
+            TintColor::Secondary => ButtonLikeStyles {
+                background: colors.secondary_container,
+                border: colors.secondary.alpha(0.35),
+            },
+            TintColor::Tertiary => ButtonLikeStyles {
+                background: colors.tertiary_container,
+                border: colors.tertiary.alpha(0.35),
+            },
+            _ => {
+                let fg = self.foreground(cx);
+                ButtonLikeStyles {
+                    background: fg.fade(Opacity::Faint),
+                    border: fg.fade(Opacity::Muted),
+                }
+            }
         }
     }
 
     fn hovered_styles(self, cx: &App) -> ButtonLikeStyles {
-        let fg = self.foreground(cx);
-        ButtonLikeStyles {
-            background: fg.fade(Opacity::Subtle),
-            border: fg.fade(Opacity::Soft),
+        let colors = cx.theme().colors();
+        match self {
+            TintColor::Accent | TintColor::Primary => ButtonLikeStyles {
+                background: colors.primary_container.fade(Opacity::Soft),
+                border: colors.primary.alpha(0.55),
+            },
+            TintColor::Secondary => ButtonLikeStyles {
+                background: colors.secondary_container.fade(Opacity::Soft),
+                border: colors.secondary.alpha(0.55),
+            },
+            TintColor::Tertiary => ButtonLikeStyles {
+                background: colors.tertiary_container.fade(Opacity::Soft),
+                border: colors.tertiary.alpha(0.55),
+            },
+            _ => {
+                let fg = self.foreground(cx);
+                ButtonLikeStyles {
+                    background: fg.fade(Opacity::Subtle),
+                    border: fg.fade(Opacity::Soft),
+                }
+            }
         }
     }
 }
@@ -112,9 +151,9 @@ impl ButtonStyle {
     pub(super) fn enabled(self, cx: &App) -> ButtonLikeStyles {
         let colors = cx.theme().colors();
         match self {
-            // Inverted "primary" - fg as background, bg as label.
+            // Filled primary button - vibrant accent fill with high-contrast on_primary text
             ButtonStyle::Filled => ButtonLikeStyles {
-                background: colors.text,
+                background: colors.primary,
                 border: transparent_black(),
             },
             ButtonStyle::Tinted(tint) => tint.enabled_styles(cx),
@@ -144,7 +183,7 @@ impl ButtonStyle {
         let colors = cx.theme().colors();
         match self {
             ButtonStyle::Filled => ButtonLikeStyles {
-                background: colors.text_muted,
+                background: colors.primary.fade(Opacity::Soft),
                 border: transparent_black(),
             },
             // Tinted backgrounds are alpha-blended from the status foreground
@@ -178,14 +217,30 @@ impl ButtonStyle {
         let colors = cx.theme().colors();
         match self {
             ButtonStyle::Filled => ButtonLikeStyles {
-                background: colors.text_placeholder,
+                background: colors.primary.fade(Opacity::Muted),
                 border: transparent_black(),
             },
             ButtonStyle::Tinted(tint) => {
-                let fg = tint.foreground(cx);
-                ButtonLikeStyles {
-                    background: fg.fade(Opacity::Muted),
-                    border: fg.fade(Opacity::Soft),
+                match tint {
+                    TintColor::Accent | TintColor::Primary => ButtonLikeStyles {
+                        background: colors.primary_container.fade(Opacity::Muted),
+                        border: colors.primary.alpha(0.7),
+                    },
+                    TintColor::Secondary => ButtonLikeStyles {
+                        background: colors.secondary_container.fade(Opacity::Muted),
+                        border: colors.secondary.alpha(0.7),
+                    },
+                    TintColor::Tertiary => ButtonLikeStyles {
+                        background: colors.tertiary_container.fade(Opacity::Muted),
+                        border: colors.tertiary.alpha(0.7),
+                    },
+                    _ => {
+                        let fg = tint.foreground(cx);
+                        ButtonLikeStyles {
+                            background: fg.fade(Opacity::Muted),
+                            border: fg.fade(Opacity::Soft),
+                        }
+                    }
                 }
             }
             ButtonStyle::Outlined => ButtonLikeStyles {
@@ -252,7 +307,16 @@ impl ButtonStyle {
     pub(super) fn label_color_override(self, cx: &App) -> Option<crate::theme::Color> {
         match self {
             ButtonStyle::Filled => {
-                Some(crate::theme::Color::Custom(cx.theme().colors().background))
+                Some(crate::theme::Color::Custom(cx.theme().colors().on_primary))
+            }
+            ButtonStyle::Tinted(TintColor::Accent | TintColor::Primary) => {
+                Some(crate::theme::Color::Custom(cx.theme().colors().on_primary_container))
+            }
+            ButtonStyle::Tinted(TintColor::Secondary) => {
+                Some(crate::theme::Color::Custom(cx.theme().colors().on_secondary_container))
+            }
+            ButtonStyle::Tinted(TintColor::Tertiary) => {
+                Some(crate::theme::Color::Custom(cx.theme().colors().on_tertiary_container))
             }
             _ => None,
         }

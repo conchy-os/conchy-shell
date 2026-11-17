@@ -25,6 +25,21 @@ pub struct Ink {
     pub accent: Hsla,
     /// Text drawn on top of `accent`.
     pub on_accent: Hsla,
+    /// Primary accent & container
+    pub primary: Hsla,
+    pub on_primary: Hsla,
+    pub primary_container: Hsla,
+    pub on_primary_container: Hsla,
+    /// Secondary accent & container
+    pub secondary: Hsla,
+    pub on_secondary: Hsla,
+    pub secondary_container: Hsla,
+    pub on_secondary_container: Hsla,
+    /// Tertiary accent & container
+    pub tertiary: Hsla,
+    pub on_tertiary: Hsla,
+    pub tertiary_container: Hsla,
+    pub on_tertiary_container: Hsla,
     /// Fill of something present but not active: an occupied workspace.
     pub occupied: Hsla,
     /// Fill of a cell under the pointer.
@@ -39,9 +54,21 @@ impl Ink {
         Self {
             text: colors.text,
             muted: colors.text_muted,
-            accent: colors.accent,
-            on_accent: colors.background,
-            occupied: colors.elevated_surface_background,
+            accent: colors.primary,
+            on_accent: colors.on_primary,
+            primary: colors.primary,
+            on_primary: colors.on_primary,
+            primary_container: colors.primary_container,
+            on_primary_container: colors.on_primary_container,
+            secondary: colors.secondary,
+            on_secondary: colors.on_secondary,
+            secondary_container: colors.secondary_container,
+            on_secondary_container: colors.on_secondary_container,
+            tertiary: colors.tertiary,
+            on_tertiary: colors.on_tertiary,
+            tertiary_container: colors.tertiary_container,
+            on_tertiary_container: colors.on_tertiary_container,
+            occupied: colors.primary_container,
             hover: colors.element_hover,
             status: colors.status,
         }

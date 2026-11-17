@@ -35,6 +35,11 @@ refineable! {
             ghost_element_background, ghost_element_hover, ghost_element_active,
             ghost_element_selected, ghost_element_disabled,
             accent,
+            primary, on_primary, primary_container, on_primary_container,
+            secondary, on_secondary, secondary_container, on_secondary_container,
+            tertiary, on_tertiary, tertiary_container, on_tertiary_container,
+            surface_container_low, surface_container, surface_container_high, surface_container_highest,
+            on_surface, on_surface_variant,
         }
         nested {
             status: StatusColorsRefinement,

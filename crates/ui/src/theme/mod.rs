@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 mod base16;
 mod color_string;
 mod colors;
+mod material;
 #[macro_use]
 mod refineable;
 mod refinement;
@@ -14,6 +15,7 @@ mod tokens;
 
 pub use base16::{Base16Palette, WallpaperPalettes};
 pub use colors::{Color, StatusColors, ThemeColors};
+pub use material::{MaterialPalette, WallpaperMaterialPalettes};
 pub use refinement::{StatusColorsRefinement, ThemeColorsRefinement};
 pub use schemes::{ThemeScheme, builtin_schemes};
 pub use tokens::{
@@ -86,6 +88,20 @@ impl Theme {
         }
     }
 
+    /// Build a theme from a native Material You palette.
+    pub fn from_material(name: impl Into<SharedString>, material: MaterialPalette) -> Self {
+        Self {
+            name: name.into(),
+            appearance: material.appearance,
+            colors: material.into_colors(),
+            palette: material.into_base16(),
+            overrides: ThemeColorsRefinement::default(),
+            font_size: Self::DEFAULT_FONT_SIZE,
+            radius_scale: Self::DEFAULT_RADIUS_SCALE,
+            opacity: Self::DEFAULT_OPACITY,
+        }
+    }
+
     /// The fill of a shell surface (bar, panel, launcher, OSD, popup, dock):
     /// the theme background at `opacity`, or at the theme's own opacity when
     /// a surface sets none. The one place the `0.0..=1.0` clamp lives.
@@ -126,6 +142,15 @@ impl Theme {
         self.appearance = palette.appearance();
         self.palette = palette;
         self.resolve();
+    }
+
+    /// Swap the theme to a native Material You palette.
+    pub fn set_material(&mut self, name: impl Into<SharedString>, material: MaterialPalette) {
+        self.name = name.into();
+        self.appearance = material.appearance;
+        self.palette = material.into_base16();
+        self.colors = material.into_colors();
+        self.overrides.refine(&mut self.colors);
     }
 
     /// Replace the user overrides, keeping the current palette.
