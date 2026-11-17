@@ -123,6 +123,29 @@ impl Base16Palette {
     pub fn into_colors(self) -> ThemeColors {
         let fg = self.base05;
         let accent = self.base0d;
+        let is_light = self.base00.l > 0.5;
+
+        let primary = accent;
+        let on_primary = if primary.l > 0.55 { self.base00 } else { self.base07 };
+        let primary_container = if is_light { accent.alpha(0.18) } else { accent.alpha(0.22) };
+        let on_primary_container = accent;
+
+        let secondary = self.base0e;
+        let on_secondary = if secondary.l > 0.55 { self.base00 } else { self.base07 };
+        let secondary_container = if is_light { secondary.alpha(0.18) } else { secondary.alpha(0.22) };
+        let on_secondary_container = secondary;
+
+        let tertiary = self.base09;
+        let on_tertiary = if tertiary.l > 0.55 { self.base00 } else { self.base07 };
+        let tertiary_container = if is_light { tertiary.alpha(0.18) } else { tertiary.alpha(0.22) };
+        let on_tertiary_container = tertiary;
+
+        let surface_container_low = self.base00;
+        let surface_container = self.base01;
+        let surface_container_high = self.base02;
+        let surface_container_highest = self.base03;
+        let on_surface = fg;
+        let on_surface_variant = self.base04;
 
         ThemeColors {
             // Surfaces climb base00 → base01 → base02.
@@ -171,6 +194,24 @@ impl Base16Palette {
             status: self.status_colors(),
 
             accent,
+            primary,
+            on_primary,
+            primary_container,
+            on_primary_container,
+            secondary,
+            on_secondary,
+            secondary_container,
+            on_secondary_container,
+            tertiary,
+            on_tertiary,
+            tertiary_container,
+            on_tertiary_container,
+            surface_container_low,
+            surface_container,
+            surface_container_high,
+            surface_container_highest,
+            on_surface,
+            on_surface_variant,
         }
     }
 
@@ -226,16 +267,26 @@ impl Base16Palette {
         Theme::from_palette(name, self)
     }
 
-    /// The dark and light palettes matugen derives from a wallpaper, from
-    /// one run. Blocks for the length of that run.
+    /// The dark and light palettes derived from a wallpaper.
+    /// Prefers fast in-process pure Rust Material You generation; falls back
+    /// to CLI matugen if needed.
     pub fn generate_from_wallpaper(
         wallpaper_path: impl AsRef<Path>,
         scheme_type: &str,
     ) -> anyhow::Result<WallpaperPalettes> {
         let path = wallpaper_path.as_ref();
 
-        // --dry-run: skip the user's matugen templates, reload hooks and
-        // wallpaper setter. A closed stdin stops it prompting for a color.
+        // 1. In-process pure-Rust Material You extraction (zero external CLI dependencies)
+        if let Ok(m3) = super::material::WallpaperMaterialPalettes::from_wallpaper(path) {
+            return Ok(WallpaperPalettes {
+                dark: m3.dark.into_base16(),
+                light: m3.light.into_base16(),
+                material_dark: Some(m3.dark),
+                material_light: Some(m3.light),
+            });
+        }
+
+        // 2. Fallback to CLI matugen if image format was not supported in-process
         let output = Command::new("matugen")
             .args([
                 "image",
@@ -285,6 +336,8 @@ impl Base16Palette {
         Ok(WallpaperPalettes {
             dark: palette("dark")?,
             light: palette("light")?,
+            material_dark: None,
+            material_light: None,
         })
     }
 }
@@ -294,6 +347,8 @@ impl Base16Palette {
 pub struct WallpaperPalettes {
     pub dark: Base16Palette,
     pub light: Base16Palette,
+    pub material_dark: Option<super::material::MaterialPalette>,
+    pub material_light: Option<super::material::MaterialPalette>,
 }
 
 fn status_triplet(fg: Hsla) -> (Hsla, Hsla, Hsla) {

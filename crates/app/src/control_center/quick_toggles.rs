@@ -359,17 +359,17 @@ impl ToggleInk {
         let colors = theme.colors();
         if active {
             Self {
-                background: colors.accent,
-                hover: colors.accent.fade(Opacity::Soft),
-                border: colors.accent,
-                icon: colors.background,
-                text: colors.background,
-                muted: colors.background.fade(Opacity::Soft),
+                background: colors.primary,
+                hover: colors.primary.fade(Opacity::Soft),
+                border: colors.primary,
+                icon: colors.on_primary,
+                text: colors.on_primary,
+                muted: colors.on_primary.fade(Opacity::Soft),
             }
         } else {
             Self {
-                background: colors.surface_background,
-                hover: colors.element_hover,
+                background: colors.surface_container,
+                hover: colors.surface_container_high,
                 border: colors.border_variant,
                 icon: colors.text_muted,
                 text: colors.text,

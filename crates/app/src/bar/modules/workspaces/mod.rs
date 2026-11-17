@@ -5,7 +5,7 @@ pub use config::WorkspacesConfig;
 
 use gpui::{AnyElement, Context, Pixels, Window, prelude::*, px};
 use services::{CompositorCommand, CompositorState};
-use ui::{IconName, h_flex};
+use ui::{Fade, IconName, Opacity, h_flex};
 
 /// What one scroll-wheel line counts as, and the jitter a trackpad may
 /// send without switching workspace. Input thresholds, not layout.
@@ -150,16 +150,18 @@ impl Workspaces {
             .rounded(cell.radius)
             .cursor_pointer()
             .bg(if is_active {
-                ink.accent
+                ink.primary
             } else if has_windows {
-                ink.occupied
+                ink.primary_container
             } else {
                 gpui::transparent_black()
             })
             .when(is_urgent, |s| s.border_1().border_color(ink.status.error))
             .hover(move |s| {
                 if is_active {
-                    s.bg(ink.accent)
+                    s.bg(ink.primary)
+                } else if has_windows {
+                    s.bg(ink.primary_container.fade(Opacity::Soft))
                 } else {
                     s.bg(ink.hover)
                 }
@@ -169,11 +171,11 @@ impl Workspaces {
             }))
             .when(!label.is_empty(), |this| {
                 let color = if is_active {
-                    ink.on_accent
+                    ink.on_primary
                 } else if is_urgent {
                     ink.status.error
                 } else if has_windows {
-                    ink.text
+                    ink.on_primary_container
                 } else {
                     ink.muted
                 };

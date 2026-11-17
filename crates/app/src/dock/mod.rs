@@ -482,7 +482,7 @@ impl Dock {
         let config = &cx.config().dock;
         let icon_size = config.icon_size;
         let hover_effect = config.hover_effect;
-        let accent = theme.colors.accent;
+        let accent = theme.colors.primary;
 
         let element = with_hover_effect(
             icon_cell(icon_size),
@@ -494,7 +494,7 @@ impl Dock {
 
         let window_count = item.windows.len();
         let indicator_width = if window_count > 1 { 20.0 } else { 6.0 };
-        let inactive_indicator = theme.colors.text_muted;
+        let inactive_indicator = theme.colors.secondary;
         let indicators =
             item.windows
                 .iter()

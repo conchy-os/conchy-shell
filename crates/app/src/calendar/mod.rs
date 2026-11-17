@@ -353,9 +353,9 @@ impl Render for CalendarPanel {
                     let is_today = day_date == today;
 
                     let text_color = if is_selected {
-                        colors.background
+                        colors.on_primary
                     } else if is_today {
-                        colors.text_accent
+                        colors.on_tertiary_container
                     } else if is_this_month {
                         colors.text
                     } else {
@@ -363,7 +363,9 @@ impl Render for CalendarPanel {
                     };
 
                     let bg_color = if is_selected {
-                        colors.accent
+                        colors.primary
+                    } else if is_today {
+                        colors.tertiary_container
                     } else {
                         colors.ghost_element_background
                     };
@@ -378,7 +380,7 @@ impl Render for CalendarPanel {
                         .justify_center()
                         .bg(bg_color)
                         .when(!is_selected && is_today, |el| {
-                            el.border_1().border_color(colors.accent)
+                            el.border_1().border_color(colors.tertiary)
                         })
                         .when(!is_selected, |el| {
                             el.hover(move |s| s.bg(colors.ghost_element_hover))

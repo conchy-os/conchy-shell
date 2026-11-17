@@ -32,6 +32,7 @@ use crate::launcher::config::{LauncherConfig, ModulesConfig as LauncherModulesCo
 use crate::launcher::content::Item;
 use crate::launcher::modules::{
     self, apps::config::AppsConfig, calculator::config::CalculatorConfig,
+    calendar::config::CalendarConfig,
     clipboard::config::ClipboardConfig, help::config::HelpConfig, mpris::config::MprisConfig,
     services::config::ServicesConfig, shell::config::ShellConfig, sysinfo::config::SysInfoConfig,
     theme::config::ThemesConfig, wallpaper::config::WallpaperConfig, web::config::WebConfig,
@@ -701,6 +702,12 @@ fn module_field(id: &str) -> Option<Field<LauncherModulesConfig>> {
             |m: &mut M| &mut m.config,
         ),
         "help" => Field::nested("help", "Help", |m: &M| &m.help, |m: &mut M| &mut m.help),
+        "calendar" => Field::nested(
+            "calendar",
+            "Calendar",
+            |m: &M| &m.calendar,
+            |m: &mut M| &mut m.calendar,
+        ),
         _ => return None,
     };
     Some(field)
@@ -754,6 +761,7 @@ prefix_only! {
     CalculatorConfig => "Calculator",
     HelpConfig => "Help",
     WebConfig => "Web",
+    CalendarConfig => "Calendar",
 }
 
 impl Editable for ConfigEditorConfig {

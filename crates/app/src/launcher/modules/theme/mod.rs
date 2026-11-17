@@ -16,8 +16,8 @@ use gpui::{
 };
 use services::{THEME_PROVIDERS, ThemeProvider, ThemeRepository, load_stylix_scheme};
 use ui::{
-    ActiveTheme, Base16Palette, Color, Icon, IconName, IconSize, Radius, Spacing, TextSize, Theme,
-    builtin_schemes,
+    ActiveTheme, Base16Palette, Color, Icon, IconName, IconSize, MaterialPalette, Radius, Spacing,
+    TextSize, Theme, builtin_schemes,
 };
 
 use self::config::ThemesConfig;
@@ -406,6 +406,14 @@ fn hex_palette(p: &services::Base16Palette) -> Result<Base16Palette, ()> {
 pub(crate) fn apply_palette(name: SharedString, palette: Base16Palette, cx: &mut App) {
     let mut theme = cx.theme().clone();
     theme.set_palette(name, palette);
+    apply_theme(theme, cx);
+}
+
+/// Make a native Material You `material` the theme and save it to `theme.kdl`,
+/// keeping the user's font size, radius scale, opacity and token overrides.
+pub(crate) fn apply_material(name: SharedString, material: MaterialPalette, cx: &mut App) {
+    let mut theme = cx.theme().clone();
+    theme.set_material(name, material);
     apply_theme(theme, cx);
 }
 

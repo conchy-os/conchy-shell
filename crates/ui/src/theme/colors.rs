@@ -18,6 +18,42 @@ pub enum Color {
     Accent,
     /// Selected foreground - used for items in the selected/active state.
     Selected,
+    /// Primary accent foreground / icon / fill.
+    Primary,
+    /// Foreground on primary accent.
+    OnPrimary,
+    /// Tonal container fill for primary interactive elements.
+    PrimaryContainer,
+    /// Foreground on primary container.
+    OnPrimaryContainer,
+    /// Secondary accent foreground / icon / fill.
+    Secondary,
+    /// Foreground on secondary accent.
+    OnSecondary,
+    /// Tonal container fill for secondary surfaces.
+    SecondaryContainer,
+    /// Foreground on secondary container.
+    OnSecondaryContainer,
+    /// Tertiary accent foreground / icon / fill.
+    Tertiary,
+    /// Foreground on tertiary accent.
+    OnTertiary,
+    /// Tonal container fill for tertiary surfaces.
+    TertiaryContainer,
+    /// Foreground on tertiary container.
+    OnTertiaryContainer,
+    /// Tonal surface container - lowest elevation.
+    SurfaceContainerLow,
+    /// Tonal surface container - default elevation.
+    SurfaceContainer,
+    /// Tonal surface container - high elevation.
+    SurfaceContainerHigh,
+    /// Tonal surface container - highest elevation.
+    SurfaceContainerHighest,
+    /// High-contrast text / foreground on surface.
+    OnSurface,
+    /// Medium-contrast text / foreground on surface.
+    OnSurfaceVariant,
     /// Hint or suggestion text.
     Hint,
     /// Visually hidden / strongly de-emphasized foreground.
@@ -45,6 +81,24 @@ impl Color {
             Self::Placeholder => colors.text_placeholder,
             Self::Disabled => colors.text_disabled,
             Self::Accent | Self::Selected => colors.text_accent,
+            Self::Primary => colors.primary,
+            Self::OnPrimary => colors.on_primary,
+            Self::PrimaryContainer => colors.primary_container,
+            Self::OnPrimaryContainer => colors.on_primary_container,
+            Self::Secondary => colors.secondary,
+            Self::OnSecondary => colors.on_secondary,
+            Self::SecondaryContainer => colors.secondary_container,
+            Self::OnSecondaryContainer => colors.on_secondary_container,
+            Self::Tertiary => colors.tertiary,
+            Self::OnTertiary => colors.on_tertiary,
+            Self::TertiaryContainer => colors.tertiary_container,
+            Self::OnTertiaryContainer => colors.on_tertiary_container,
+            Self::SurfaceContainerLow => colors.surface_container_low,
+            Self::SurfaceContainer => colors.surface_container,
+            Self::SurfaceContainerHigh => colors.surface_container_high,
+            Self::SurfaceContainerHighest => colors.surface_container_highest,
+            Self::OnSurface => colors.on_surface,
+            Self::OnSurfaceVariant => colors.on_surface_variant,
             Self::Hint => colors.status.hint,
             Self::Hidden => colors.status.hidden,
             Self::Ignored => colors.status.ignored,
@@ -197,4 +251,40 @@ pub struct ThemeColors {
 
     /// Primary accent color.
     pub accent: Hsla,
+
+    // Expressive / Material You semantic accents & containers
+    /// Primary accent color (synonym of `accent` for clarity).
+    pub primary: Hsla,
+    /// High-contrast foreground on primary accent.
+    pub on_primary: Hsla,
+    /// Tonal container fill for primary interactive elements.
+    pub primary_container: Hsla,
+    /// High-contrast foreground on primary container.
+    pub on_primary_container: Hsla,
+
+    /// Secondary accent color for supplementary actions and toggles.
+    pub secondary: Hsla,
+    /// Foreground on secondary accent.
+    pub on_secondary: Hsla,
+    /// Tonal container for secondary surfaces.
+    pub secondary_container: Hsla,
+    /// Foreground on secondary container.
+    pub on_secondary_container: Hsla,
+
+    /// Tertiary accent color for highlights, badges, and calendar markers.
+    pub tertiary: Hsla,
+    /// Foreground on tertiary accent.
+    pub on_tertiary: Hsla,
+    /// Tonal container for tertiary surfaces.
+    pub tertiary_container: Hsla,
+    /// Foreground on tertiary container.
+    pub on_tertiary_container: Hsla,
+
+    // Tonal Surface Layers
+    pub surface_container_low: Hsla,
+    pub surface_container: Hsla,
+    pub surface_container_high: Hsla,
+    pub surface_container_highest: Hsla,
+    pub on_surface: Hsla,
+    pub on_surface_variant: Hsla,
 }

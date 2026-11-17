@@ -5,7 +5,7 @@
 
 use gpui::{App, MouseButton, div, prelude::*, px};
 use services::{BluetoothCommand, BluetoothDevice, BluetoothSubscriber};
-use ui::{ActiveTheme, Color, Icon, IconName, IconSize, Spacing, Spinner, TextSize};
+use ui::{ActiveTheme, Color, Fade, Icon, IconName, IconSize, Spacing, Spinner, TextSize};
 
 use crate::state::AppState;
 use zbus::zvariant::OwnedObjectPath;
@@ -290,12 +290,12 @@ fn render_scan_button(discovering: bool, cx: &App) -> impl IntoElement {
     let services = AppState::bluetooth(cx).clone();
 
     let (bg_color, icon_color) = if discovering {
-        (theme.colors.accent, theme.colors.background)
+        (theme.colors.primary, theme.colors.on_primary)
     } else {
         (theme.colors.element_background, theme.colors.text_muted)
     };
     let hover_color = if discovering {
-        theme.colors.accent
+        theme.colors.primary.fade(ui::Opacity::Soft)
     } else {
         theme.colors.element_hover
     };
