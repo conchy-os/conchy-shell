@@ -128,6 +128,51 @@ pub struct VpnxData {
     pub can_tun: bool,
     /// The mihomo binary the daemon uses; empty when it is not installed.
     pub mihomo_path: String,
+    pub subscription: SubscriptionInfo,
+}
+
+/// What the subscription server reported; the daemon's `Subscription`
+/// property. Sizes in bytes, times in Unix seconds.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[serde(default)]
+pub struct SubscriptionInfo {
+    /// A subscription URL is set.
+    pub configured: bool,
+    /// Provider host, without the secret part of the URL.
+    pub host: Option<String>,
+    pub title: Option<String>,
+    pub upload: Option<u64>,
+    pub download: Option<u64>,
+    /// 0 or `None`: unlimited.
+    pub total: Option<u64>,
+    /// 0 or `None`: never expires.
+    pub expire: Option<u64>,
+    pub updated_at: Option<u64>,
+    /// `None`: automatic updates are off.
+    pub next_update: Option<u64>,
+    /// Why the last download failed; the old profile stays in use.
+    pub error: Option<String>,
+}
+
+impl SubscriptionInfo {
+    pub fn name(&self) -> &str {
+        self.title
+            .as_deref()
+            .or(self.host.as_deref())
+            .unwrap_or("Subscription")
+    }
+
+    pub fn used(&self) -> u64 {
+        self.upload.unwrap_or(0) + self.download.unwrap_or(0)
+    }
+
+    pub fn limit(&self) -> Option<u64> {
+        self.total.filter(|&t| t > 0)
+    }
+
+    pub fn expires(&self) -> Option<u64> {
+        self.expire.filter(|&e| e > 0)
+    }
 }
 
 impl VpnxData {
@@ -158,6 +203,7 @@ pub enum VpnxCommand {
     /// Measure every member of a group.
     TestDelay(String),
     UpdateSubscription,
+    SetSubscription(String),
     RefreshGroups,
     /// Give mihomo CAP_NET_ADMIN via polkit, then re-apply the mode.
     GrantTun,
@@ -204,6 +250,7 @@ impl VpnxSubscriber {
             VpnxCommand::Down => vpnx.down().await?,
             VpnxCommand::SetMode(mode) => vpnx.set_mode(mode.as_str()).await?,
             VpnxCommand::UpdateSubscription => vpnx.update_subscription().await?,
+            VpnxCommand::SetSubscription(url) => vpnx.set_subscription(&url).await?,
             VpnxCommand::Select { group, proxy } => {
                 vpnx.select_proxy(&group, &proxy).await?;
                 refresh_groups(&vpnx, &self.data).await?;
@@ -410,6 +457,13 @@ async fn refresh(vpnx: &VpnxProxy<'_>, data: &Mutable<VpnxData>) -> Result<()> {
     let warnings = vpnx.warnings().await?;
     let can_tun = vpnx.can_tun().await?;
     let mihomo_path = vpnx.mihomo_path().await?;
+    // Missing on daemons older than the property: show no subscription info.
+    let subscription = vpnx
+        .subscription()
+        .await
+        .ok()
+        .and_then(|json| serde_json::from_str(&json).ok())
+        .unwrap_or_default();
     let groups = if state == VpnxState::Up {
         fetch_groups(vpnx).await.unwrap_or_default()
     } else {
@@ -429,6 +483,7 @@ async fn refresh(vpnx: &VpnxProxy<'_>, data: &Mutable<VpnxData>) -> Result<()> {
     d.warnings = warnings;
     d.can_tun = can_tun;
     d.mihomo_path = mihomo_path;
+    d.subscription = subscription;
     if d.groups != groups {
         d.groups = groups;
     }
@@ -503,6 +558,27 @@ mod tests {
         assert!(data.current_server().is_some());
         data.groups.clear();
         assert_eq!(data.current_server(), None);
+    }
+
+    #[test]
+    fn parses_subscription_info() {
+        let info: SubscriptionInfo = serde_json::from_str(
+            r#"{"configured":true,"host":"sub.example.com","title":null,"upload":1,
+                "download":2,"total":0,"expire":0,"updated_at":5,"next_update":null,
+                "error":null,"added_later":1}"#,
+        )
+        .unwrap();
+        assert_eq!(info.name(), "sub.example.com");
+        assert_eq!(info.used(), 3);
+        assert_eq!(
+            (info.limit(), info.expires(), info.next_update),
+            (None, None, None)
+        );
+        assert!(
+            !serde_json::from_str::<SubscriptionInfo>("{}")
+                .unwrap()
+                .configured
+        );
     }
 
     #[test]

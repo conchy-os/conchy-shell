@@ -89,4 +89,22 @@ pub fn register(cx: &mut App) {
         KeyBinding::new("ctrl-h", CursorLeft, Some("WifiPassword")),
         KeyBinding::new("ctrl-l", CursorRight, Some("WifiPassword")),
     ]);
+
+    // Control Center VPNX subscription link (Ctrl+V is handled by the view).
+    let ctx = Some("VpnxLink");
+    cx.bind_keys([
+        KeyBinding::new("escape", Cancel, ctx),
+        KeyBinding::new("enter", Confirm, ctx),
+        KeyBinding::new("backspace", Backspace, ctx),
+        KeyBinding::new("ctrl-backspace", DeleteWordBack, ctx),
+        KeyBinding::new("left", CursorLeft, ctx),
+        KeyBinding::new("right", CursorRight, ctx),
+        KeyBinding::new("ctrl-left", WordLeft, ctx),
+        KeyBinding::new("ctrl-right", WordRight, ctx),
+        KeyBinding::new("ctrl-shift-left", SelectWordLeft, ctx),
+        KeyBinding::new("ctrl-shift-right", SelectWordRight, ctx),
+        KeyBinding::new("ctrl-a", SelectAll, ctx),
+        KeyBinding::new("shift-left", SelectLeft, ctx),
+        KeyBinding::new("shift-right", SelectRight, ctx),
+    ]);
 }

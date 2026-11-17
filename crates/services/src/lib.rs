@@ -69,6 +69,8 @@ pub use upower::{
     BatteryData, BatteryLevel, BatteryState, ChargeLimit, PowerProfile, UPowerCommand, UPowerData,
     UPowerSubscriber, WarningLevel,
 };
-pub use vpnx::{ProxyGroup, VpnxCommand, VpnxData, VpnxMode, VpnxState, VpnxSubscriber};
+pub use vpnx::{
+    ProxyGroup, SubscriptionInfo, VpnxCommand, VpnxData, VpnxMode, VpnxState, VpnxSubscriber,
+};
 pub use wallpaper::{WallpaperCommand, WallpaperData, WallpaperEngine, WallpaperSubscriber};
 pub use watcher::FileWatcher;
