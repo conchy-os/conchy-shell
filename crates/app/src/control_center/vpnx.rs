@@ -846,8 +846,8 @@ fn render_status(data: &VpnxData, busy: bool, cx: &App) -> Div {
         })
         .when(!data.warnings.is_empty(), |el| {
             let summary = match data.warnings.len() {
-                1 => "1 rule warning".to_string(),
-                n => format!("{n} rule warnings"),
+                1 => "1 config warning".to_string(),
+                n => format!("{n} config warnings"),
             };
             let details: SharedString = data.warnings.join("\n").into();
             el.child(
