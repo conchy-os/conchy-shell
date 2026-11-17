@@ -17,6 +17,7 @@ Built in 100% Rust using Zed's GPU-accelerated **GPUI** framework for Wayland (`
 - **Scrolling Ribbon & Window Minimizing:**
   - Native integration with `conchy-wm`'s horizontal scrolling ribbon and column management.
   - Full support for window minimizing (`Action::MinimizeWindow`): minimized windows are surfaced in the dock with subtle translucent styling, unminimizing and focusing in a single click.
+- **Shortcuts in the UI:** `;cfg` → Shortcuts rebinds, adds and removes the compositor's keys (stored in `~/.config/conchy/shortcuts.kdl`, read by `conchy-wm`). Tapping **Super** opens the launcher, also over fullscreen apps if you want; see [docs/CONFIG_SPEC.md](docs/CONFIG_SPEC.md#4-keyboard-shortcuts-shortcutskdl).
 - **Dynamic Theming & D-Bus Reactivity:** Listens to `org.conchy.Config` for dynamic size, position, and styling hot-reloading without restarting the shell.
 - **System Integration for Void Linux:**
   - Native PipeWire and PulseAudio bindings for audio and device management.

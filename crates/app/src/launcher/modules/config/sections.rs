@@ -46,10 +46,20 @@ impl Editable for Config {
         "Config"
     }
 
-    /// Theme settings link.
+    /// Links to settings that live outside `shell.kdl`.
     fn shortcuts(cx: &App) -> Vec<Item> {
         let prefix = cx.config().launcher.modules.themes.prefix.clone();
         vec![
+            Item::new("shortcuts", "Shortcuts")
+                .subtitle("Keyboard shortcuts, and the Super key")
+                .icon(IconName::Keyboard)
+                .keywords("shortcuts keybinds hotkeys keys super bindings")
+                .action(
+                    Action::new("Open shortcuts", |_, cx| {
+                        Outcome::Push(super::shortcuts_page::ShortcutsPage::open(cx))
+                    })
+                    .icon(IconName::ChevronRight),
+                ),
             Item::new("themes", "Themes")
                 .subtitle("Browse and apply desktop themes")
                 .icon(IconName::Palette)

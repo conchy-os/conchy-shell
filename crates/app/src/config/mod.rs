@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use services::{FileWatcher, LocalSlot, ServiceMode};
 use ui::{StoredTheme, Theme};
 
+pub(crate) use persistence::{config_dir, write_atomic};
 pub use signals::ConfigSignals;
 pub use state::State;
 

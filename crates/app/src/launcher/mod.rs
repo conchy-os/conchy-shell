@@ -435,6 +435,11 @@ impl Launcher {
             Outcome::Push(page) => self.push(page, None, cx),
             Outcome::PushWithInput(page, input) => self.push(page, Some(input), cx),
             Outcome::Pop => self.pop(cx),
+            Outcome::PopMany(count) => {
+                for _ in 0..count {
+                    self.pop(cx);
+                }
+            }
             Outcome::PopToRoot => self.pop_to_root(cx),
             Outcome::SetQuery(text) => {
                 self.pop_to_root(cx);

@@ -85,7 +85,47 @@ Methods: `Get(channel, key)`, `Set(channel, key, value)`, `List(channel)`.
 Signal: `PropertyChanged(channel, key, value)`. The shell reads `shell.kdl`
 again on any `PropertyChanged` for the `shell` channel.
 
-## 4. Coming from TOML
+## 4. Keyboard shortcuts (`shortcuts.kdl`)
+
+Shortcuts belong to the compositor, not the shell, so they are not in `shell.kdl`.
+`conchy-wm` reads `~/.config/conchy/wm.kdl` and then `shortcuts.kdl` next to it. Once
+`shortcuts.kdl` has a `binds` block, **those binds are all the binds**: it replaces the
+`binds` of `wm.kdl` instead of merging with them. That is how the editor can remove one.
+
+Edit them in the settings window (`;cfg`, Shortcuts): rebind a key, change what it runs,
+remove it, or add one. Keys and actions are typed in the search line (`Mod+Shift+T`,
+`spawn "alacritty"`), or an action is picked from a list. The first change copies the binds
+of `wm.kdl` into `shortcuts.kdl`; `wm.kdl` itself is never written. If `wm.kdl` includes
+other files, their binds are not copied, so the editor does not seed from it (and the Super
+shortcut below is not added automatically).
+
+Before saving, the shell asks `conchy-wm validate` whether it accepts the result, if it is
+installed; a rejected change is not written.
+
+### The Super key
+
+A modifier on its own is a *tap*: a bind that runs when you press and release it with
+nothing in between. The shell adds one on its first start, unless you already have it:
+
+```kdl
+binds {
+    Super allow-inhibiting=false {
+        spawn "conchy-shell" "toggle-launcher"
+    }
+    // ...your other binds
+}
+```
+
+Super+click, Super+drag and Super+any key are not taps, so moving windows with Super held
+works as before. In Shortcuts, **Super opens the launcher** turns the bind on and off, and
+**Also over fullscreen apps** chooses what happens while a fullscreen window has focus:
+
+| | `shortcuts.kdl` |
+|---|---|
+| over fullscreen (default) | `allow-inhibiting=false`: also works where a game or VM has grabbed the keyboard |
+| not over fullscreen | `allow-when-fullscreen=false`: Super goes to the fullscreen app |
+
+## 5. Coming from TOML
 
 The first start after the upgrade carries `shell.toml` / `config.toml` (and
 `theme.toml`, `state.toml`) over to KDL: the old file is renamed `*.toml.migrated`

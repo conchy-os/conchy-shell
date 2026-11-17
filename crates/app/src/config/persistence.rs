@@ -28,7 +28,7 @@ const CONFIG_KEYS: &[&str] = &[
 ];
 
 /// Directory holding every file the shell reads or writes.
-pub(super) fn config_dir() -> anyhow::Result<PathBuf> {
+pub(crate) fn config_dir() -> anyhow::Result<PathBuf> {
     let base = config_home()?;
     let conchy_dir = base.join("conchy");
     if conchy_dir.exists() {
@@ -179,7 +179,7 @@ pub(super) fn to_text<T: Serialize>(value: &T) -> anyhow::Result<String> {
 /// Write `text` to `path` through a sibling temp file and a rename, so the
 /// file is never absent: [`load`] treats a missing file as an error and the
 /// watcher's reload would otherwise race the write.
-pub(super) fn write_atomic(path: &Path, text: &str) -> anyhow::Result<()> {
+pub(crate) fn write_atomic(path: &Path, text: &str) -> anyhow::Result<()> {
     let parent = path
         .parent()
         .ok_or_else(|| anyhow!("Invalid path has no parent directory: {}", path.display()))?;

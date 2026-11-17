@@ -26,6 +26,7 @@ mod keybinds;
 pub mod launcher;
 pub mod notification;
 pub mod osd;
+pub mod shortcuts;
 pub mod state;
 mod windows;
 
@@ -52,6 +53,14 @@ async fn main() {
     let Some(ipc) = IpcSubscriber::init(&args) else {
         return;
     };
+
+    // Super opens the launcher, out of the box. Only the daemon gets here, so this
+    // runs once per session and never from a `toggle-launcher` key press.
+    match shortcuts::Store::standard().and_then(|store| shortcuts::ensure_launcher_tap(&store)) {
+        Ok(true) => tracing::info!("Added the Super launcher shortcut to shortcuts.kdl"),
+        Ok(false) => {}
+        Err(err) => tracing::warn!("Could not set up the Super launcher shortcut: {err:#}"),
+    }
 
     // Initialize services (requires async)
     let services = state::init_services()

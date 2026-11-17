@@ -20,6 +20,8 @@ pub enum Outcome {
     /// `Push`, with the search starting as `input`, selected, so typing replaces it.
     PushWithInput(Page, String),
     Pop,
+    /// `Pop`, this many times.
+    PopMany(usize),
     PopToRoot,
     /// Replace the whole input, prefix included. Leaves pushed pages first.
     SetQuery(String),
