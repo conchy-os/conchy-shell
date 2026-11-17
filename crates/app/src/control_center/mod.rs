@@ -24,6 +24,7 @@ mod quick_toggles;
 mod sliders;
 mod tooltip;
 mod vpn;
+mod vpnx;
 mod wifi;
 
 pub use config::{ControlCenterConfig, PowerActionsConfig};
@@ -83,6 +84,7 @@ impl ControlCenter {
             cx.notify()
         });
         watch(cx, AppState::upower(cx).subscribe(), |_, _, cx| cx.notify());
+        watch(cx, AppState::vpnx(cx).subscribe(), |_, _, cx| cx.notify());
 
         ControlCenter {
             expanded: ExpandedSection::None,
@@ -120,6 +122,16 @@ impl ControlCenter {
                 AppState::network(cx).pending_signal(),
                 |_, _, cx| cx.notify(),
             )),
+            ExpandedSection::Vpnx => {
+                // The selected proxy can change from the CLI without a signal.
+                let vpnx = AppState::vpnx(cx).clone();
+                if vpnx.get().state == services::VpnxState::Up {
+                    vpnx.dispatch(services::VpnxCommand::RefreshGroups);
+                }
+                Some(watch_task(cx, vpnx.pending_signal(), |_, _, cx| {
+                    cx.notify()
+                }))
+            }
             _ => None,
         };
         cx.notify();
@@ -423,6 +435,9 @@ impl Render for ControlCenter {
                         })
                         .when(expanded == ExpandedSection::Vpn, |el| {
                             el.child(vpn::render_vpn_section(cx))
+                        })
+                        .when(expanded == ExpandedSection::Vpnx, |el| {
+                            el.child(vpnx::render_vpnx_section(cx))
                         })
                         .when(expanded == ExpandedSection::Bluetooth, |el| {
                             el.child(bluetooth::render_bluetooth_section(cx))

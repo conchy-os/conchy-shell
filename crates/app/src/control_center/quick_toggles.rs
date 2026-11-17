@@ -4,7 +4,9 @@
 //! status.
 
 use gpui::{App, Hsla, MouseButton, div, prelude::*, px};
-use services::{AudioCommand, BluetoothCommand, BluetoothState, NetworkCommand};
+use services::{
+    AudioCommand, BluetoothCommand, BluetoothState, NetworkCommand, VpnxCommand, VpnxState,
+};
 use ui::patterns::surface_radius;
 use ui::{ActiveTheme, Color, Fade, Icon, IconName, IconSize, Opacity, Spacing, TextSize};
 
@@ -18,6 +20,8 @@ pub enum ExpandedSection {
     WiFi,
     Bluetooth,
     Vpn,
+    /// conchy-vpnx (mihomo)
+    Vpnx,
     Power,
 }
 
@@ -77,6 +81,26 @@ pub fn render_quick_toggles(
         [vpn] => vpn.name.clone(),
         many => format!("{} on", many.len()),
     };
+
+    // Shown only while the conchy-vpnx daemon is running.
+    let vpnx = AppState::vpnx(cx).get();
+    let vpnx_on = vpnx.state.is_on();
+    let vpnx_status = match vpnx.state {
+        VpnxState::Up => vpnx
+            .groups
+            .iter()
+            .find(|g| g.is_selectable())
+            .map(|g| g.now.clone())
+            .filter(|now| !now.is_empty())
+            .or_else(|| vpnx.effective_mode.map(|m| m.label().to_string()))
+            .unwrap_or_else(|| "On".to_string()),
+        VpnxState::Starting => "Starting...".to_string(),
+        VpnxState::Restarting => "Restarting...".to_string(),
+        VpnxState::Error => "Error".to_string(),
+        VpnxState::Down => "Off".to_string(),
+    };
+    let services_vpnx = AppState::vpnx(cx).clone();
+    let on_expand_vpnx = on_toggle_section.clone();
 
     let mic_status = if mic_muted { "Muted" } else { "On" };
     let cam_status = if cam_active { "In use" } else { "Idle" };
@@ -187,7 +211,26 @@ pub fn render_quick_toggles(
                     move |cx| {
                         on_toggle_bt(ExpandedSection::Bluetooth, cx);
                     },
-                )),
+                ))
+                .when(vpnx.available, |el| {
+                    el.child(render_expandable_module(
+                        "vpnx-toggle",
+                        IconName::Globe,
+                        "VPNX",
+                        vpnx_status,
+                        vpnx_on,
+                        expanded == ExpandedSection::Vpnx,
+                        cx,
+                        move |_| {
+                            services_vpnx.dispatch(if vpnx_on {
+                                VpnxCommand::Down
+                            } else {
+                                VpnxCommand::Up
+                            })
+                        },
+                        move |cx| on_expand_vpnx(ExpandedSection::Vpnx, cx),
+                    ))
+                }),
         )
 }
 

@@ -54,7 +54,7 @@ pub fn empty_state(text: &'static str, cx: &App) -> Div {
 }
 
 /// Scrollable framed list holding the rows.
-pub fn list(id: &'static str, cx: &App) -> Stateful<Div> {
+pub fn list(id: impl Into<ElementId>, cx: &App) -> Stateful<Div> {
     let theme = cx.theme();
     div()
         .id(id)
