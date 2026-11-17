@@ -129,6 +129,26 @@ pub struct VpnxData {
     /// The mihomo binary the daemon uses; empty when it is not installed.
     pub mihomo_path: String,
     pub subscription: SubscriptionInfo,
+    /// Remote overlays in merge order.
+    pub overlays: Vec<OverlayInfo>,
+    /// The local `overlay.yaml` (merged last); empty with older daemons.
+    pub overlay_path: String,
+}
+
+/// A remote overlay, from the daemon's `Overlays` property.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[serde(default)]
+pub struct OverlayInfo {
+    pub url: String,
+    /// Host and file name, safe to show (no token).
+    pub label: String,
+    /// File name, e.g. `overlay.yaml`.
+    pub name: String,
+    /// Host it is downloaded from, or "local file".
+    pub source: String,
+    pub updated_at: Option<u64>,
+    /// Why the last download failed; the cached copy is still used.
+    pub error: Option<String>,
 }
 
 /// What the subscription server reported; the daemon's `Subscription`
@@ -204,6 +224,13 @@ pub enum VpnxCommand {
     TestDelay(String),
     UpdateSubscription,
     SetSubscription(String),
+    AddOverlay(String),
+    RemoveOverlay(String),
+    /// Download remote overlays again and re-apply everything, including
+    /// edits to the local overlay.yaml.
+    UpdateOverlays,
+    /// Open the local overlay.yaml in the default editor, creating it first.
+    OpenLocalOverlay,
     RefreshGroups,
     /// Give mihomo CAP_NET_ADMIN via polkit, then re-apply the mode.
     GrantTun,
@@ -251,6 +278,10 @@ impl VpnxSubscriber {
             VpnxCommand::SetMode(mode) => vpnx.set_mode(mode.as_str()).await?,
             VpnxCommand::UpdateSubscription => vpnx.update_subscription().await?,
             VpnxCommand::SetSubscription(url) => vpnx.set_subscription(&url).await?,
+            VpnxCommand::AddOverlay(url) => vpnx.add_overlay(&url).await?,
+            VpnxCommand::RemoveOverlay(url) => vpnx.remove_overlay(&url).await?,
+            VpnxCommand::UpdateOverlays => vpnx.update_overlays().await?,
+            VpnxCommand::OpenLocalOverlay => open_local_overlay(&vpnx.overlay_path().await?)?,
             VpnxCommand::Select { group, proxy } => {
                 vpnx.select_proxy(&group, &proxy).await?;
                 refresh_groups(&vpnx, &self.data).await?;
@@ -464,6 +495,13 @@ async fn refresh(vpnx: &VpnxProxy<'_>, data: &Mutable<VpnxData>) -> Result<()> {
         .ok()
         .and_then(|json| serde_json::from_str(&json).ok())
         .unwrap_or_default();
+    let overlays = vpnx
+        .overlays()
+        .await
+        .ok()
+        .and_then(|json| serde_json::from_str(&json).ok())
+        .unwrap_or_default();
+    let overlay_path = vpnx.overlay_path().await.unwrap_or_default();
     let groups = if state == VpnxState::Up {
         fetch_groups(vpnx).await.unwrap_or_default()
     } else {
@@ -484,6 +522,8 @@ async fn refresh(vpnx: &VpnxProxy<'_>, data: &Mutable<VpnxData>) -> Result<()> {
     d.can_tun = can_tun;
     d.mihomo_path = mihomo_path;
     d.subscription = subscription;
+    d.overlays = overlays;
+    d.overlay_path = overlay_path;
     if d.groups != groups {
         d.groups = groups;
     }
@@ -497,6 +537,28 @@ async fn fetch_groups(vpnx: &VpnxProxy<'_>) -> Result<Vec<ProxyGroup>> {
     let mut groups: Vec<ProxyGroup> = serde_json::from_str(&vpnx.groups().await?)?;
     groups.retain(|g| g.name != "GLOBAL");
     Ok(groups)
+}
+
+/// The file is the user's to write; create it empty so the editor opens.
+fn open_local_overlay(path: &str) -> Result<()> {
+    if path.is_empty() {
+        bail!("conchy-vpnxd is too old to report the overlay path");
+    }
+    let path = std::path::Path::new(path);
+    if !path.exists() {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::write(
+            path,
+            "# conchy-vpnx overlay, merged over the subscription.\n\
+             # Keys: https://github.com/conchy-os/conchy-vpnx#merging-rules-overlays\n",
+        )?;
+    }
+    let mut open = std::process::Command::new("xdg-open");
+    open.arg(path);
+    crate::spawn_reaped(open, "xdg-open").context("running xdg-open")?;
+    Ok(())
 }
 
 async fn refresh_groups(vpnx: &VpnxProxy<'_>, data: &Mutable<VpnxData>) -> Result<()> {

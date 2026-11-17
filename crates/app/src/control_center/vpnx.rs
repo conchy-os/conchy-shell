@@ -6,14 +6,14 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use gpui::{
-    AnyElement, App, Context, Div, FocusHandle, KeyDownEvent, MouseButton, SharedString, Window,
-    div, prelude::*, px,
+    AnyElement, App, Context, Div, FocusHandle, KeyDownEvent, MouseButton, MouseDownEvent,
+    SharedString, Window, div, prelude::*, px,
 };
 use services::{
     ProxyGroup, SubscriptionInfo, VpnxCommand, VpnxData, VpnxMode, VpnxState, VpnxSubscriber,
 };
 use ui::{
-    ActiveTheme, IconName, IconSize, InputBuffer, Radius, Spacing, Spinner, TextSize,
+    ActiveTheme, Color, Icon, IconName, IconSize, InputBuffer, Radius, Spacing, Spinner, TextSize,
     render_input_line,
 };
 
@@ -33,15 +33,28 @@ pub struct VpnxSection {
     focus_handle: FocusHandle,
     /// Gets focus back when the editor closes.
     parent_focus: FocusHandle,
-    /// Present while the subscription link is being edited.
-    link: Option<InputBuffer>,
+    /// Present while a link (subscription or overlay) is being typed.
+    editing: Option<Editing>,
     /// Applied on the next render, which has the window.
     pending_focus: Option<PendingFocus>,
+    /// Subscription and overlays are expanded.
+    details_open: bool,
 }
 
 enum PendingFocus {
     Link,
     Parent,
+}
+
+struct Editing {
+    target: EditTarget,
+    input: InputBuffer,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EditTarget {
+    Subscription,
+    Overlay,
 }
 
 impl VpnxSection {
@@ -56,39 +69,47 @@ impl VpnxSection {
         Self {
             focus_handle: cx.focus_handle(),
             parent_focus,
-            link: None,
+            editing: None,
+            details_open: false,
             pending_focus: None,
         }
     }
 
-    fn open_editor(&mut self, cx: &mut Context<Self>) {
+    fn open_editor(&mut self, target: EditTarget, cx: &mut Context<Self>) {
         // Never prefill: the URL carries the account's secret token.
-        self.link = Some(InputBuffer::default());
+        self.editing = Some(Editing {
+            target,
+            input: InputBuffer::default(),
+        });
         self.pending_focus = Some(PendingFocus::Link);
         cx.notify();
     }
 
     fn close_editor(&mut self, cx: &mut Context<Self>) {
-        if self.link.take().is_some() {
+        if self.editing.take().is_some() {
             self.pending_focus = Some(PendingFocus::Parent);
         }
         cx.notify();
     }
 
     fn submit(&mut self, cx: &mut Context<Self>) {
-        let Some(url) = self.link.as_ref().map(|l| l.text().trim().to_string()) else {
+        let Some(editing) = &self.editing else {
             return;
         };
+        let url = editing.input.text().trim().to_string();
         if url.is_empty() {
             return;
         }
-        AppState::vpnx(cx).dispatch(VpnxCommand::SetSubscription(url));
+        AppState::vpnx(cx).dispatch(match editing.target {
+            EditTarget::Subscription => VpnxCommand::SetSubscription(url),
+            EditTarget::Overlay => VpnxCommand::AddOverlay(url),
+        });
         self.close_editor(cx);
     }
 
     fn edit(&mut self, cx: &mut Context<Self>, edit: impl FnOnce(&mut InputBuffer)) {
-        if let Some(link) = &mut self.link {
-            edit(link);
+        if let Some(editing) = &mut self.editing {
+            edit(&mut editing.input);
             cx.notify();
         }
     }
@@ -126,30 +147,18 @@ impl VpnxSection {
         setting: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        if let Some(link) = &self.link {
-            return self.render_editor(link, cx);
+        if let Some(editing) = self
+            .editing
+            .as_ref()
+            .filter(|e| e.target == EditTarget::Subscription)
+        {
+            return self.render_editor(editing, cx);
         }
         let theme = cx.theme();
         let sub = &data.subscription;
-        let hover = theme.colors.element_hover;
-        let button = |id: &'static str, label: &'static str, cx: &mut Context<Self>| {
-            div()
-                .id(id)
-                .px(Spacing::Medium.pixels())
-                .py(px(2.))
-                .rounded(Radius::Small.pixels())
-                .border_1()
-                .border_color(cx.theme().colors.border_variant)
-                .text_color(cx.theme().colors.text)
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover))
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _, _, cx| this.open_editor(cx)),
-                )
-                .child(label)
-        };
-
+        let change = cx.listener(|this, _: &MouseDownEvent, _, cx| {
+            this.open_editor(EditTarget::Subscription, cx)
+        });
         let (title, details) = if setting {
             ("Downloading subscription...".to_string(), None)
         } else if !sub.configured {
@@ -199,11 +208,14 @@ impl VpnxSection {
                         el.child(Spinner::new().size(IconSize::XSmall))
                     })
                     .when(!setting, |el| {
-                        el.child(if sub.configured {
-                            button("vpnx-change-link", "Change", cx)
-                        } else {
-                            button("vpnx-add-link", "Add", cx)
-                        })
+                        el.child(
+                            text_button(
+                                "vpnx-change-link",
+                                if sub.configured { "Change" } else { "Add link" },
+                                cx,
+                            )
+                            .on_mouse_down(MouseButton::Left, change),
+                        )
                     }),
             )
             .when_some(sub.error.clone().filter(|_| !setting), |el, err| {
@@ -218,9 +230,17 @@ impl VpnxSection {
             .into_any_element()
     }
 
-    fn render_editor(&self, link: &InputBuffer, cx: &mut Context<Self>) -> AnyElement {
+    fn render_editor(&self, editing: &Editing, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        let line = render_input_line(link, "https://...", cx);
+        let link = &editing.input;
+        let (title, placeholder) = match editing.target {
+            EditTarget::Subscription => ("Subscription link (Ctrl+V to paste)", "https://..."),
+            EditTarget::Overlay => (
+                "Overlay link (Ctrl+V to paste)",
+                "https://raw.githubusercontent.com/...",
+            ),
+        };
+        let line = render_input_line(link, placeholder, cx);
         let can_save = !link.text().trim().is_empty();
         let hover = theme.colors.element_hover;
         let accent = theme.colors.accent;
@@ -277,11 +297,7 @@ impl VpnxSection {
             .flex_col()
             .gap(Spacing::Small.pixels())
             .text_size(TextSize::XSmall.rems())
-            .child(
-                div()
-                    .text_color(text_muted)
-                    .child("Subscription link (Ctrl+V to paste)"),
-            )
+            .child(div().text_color(text_muted).child(title))
             .child(
                 div()
                     .w_full()
@@ -342,6 +358,304 @@ impl VpnxSection {
     }
 }
 
+impl VpnxSection {
+    /// One summary line; subscription and overlays when expanded.
+    fn render_details(
+        &self,
+        data: &VpnxData,
+        pending: &[VpnxCommand],
+        setting: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let sub = &data.subscription;
+        // Nothing to summarize yet, or something is being typed.
+        let open = self.details_open || !sub.configured || self.editing.is_some() || setting;
+        let problem = sub.error.is_some() || data.overlays.iter().any(|o| o.error.is_some());
+
+        let (subscription, overlays) = if open {
+            (
+                Some(self.render_subscription(data, setting, cx)),
+                self.render_overlays(data, pending, cx),
+            )
+        } else {
+            (None, None)
+        };
+        let toggle = cx.listener(|this, _: &MouseDownEvent, _, cx| {
+            this.details_open = !this.details_open;
+            if !this.details_open {
+                this.editing = None;
+            }
+            cx.notify();
+        });
+        let theme = cx.theme();
+        let summary = if sub.configured {
+            let mut parts = vec![sub.name().to_string()];
+            if let Some(short) = short_details(sub) {
+                parts.push(short);
+            }
+            parts.join(" · ")
+        } else {
+            "No subscription".to_string()
+        };
+        let overlays_count = match data.overlays.len() {
+            0 => None,
+            1 => Some("1 overlay".to_string()),
+            n => Some(format!("{n} overlays")),
+        };
+        let hover = theme.colors.element_hover;
+
+        div()
+            .flex()
+            .flex_col()
+            .gap(Spacing::Small.pixels())
+            .pt(Spacing::Small.pixels())
+            .border_t_1()
+            .border_color(theme.colors.border_variant)
+            .text_size(TextSize::XSmall.rems())
+            .child(
+                div()
+                    .id("vpnx-details-toggle")
+                    .flex()
+                    .items_center()
+                    .gap(Spacing::Small.pixels())
+                    .px(Spacing::XSmall.pixels())
+                    .py(px(2.))
+                    .rounded(Radius::Small.pixels())
+                    .cursor_pointer()
+                    .hover(move |s| s.bg(hover))
+                    .on_mouse_down(MouseButton::Left, toggle)
+                    .child(
+                        Icon::new(if open {
+                            IconName::ChevronDown
+                        } else {
+                            IconName::ChevronRight
+                        })
+                        .size(IconSize::XSmall)
+                        .color(Color::Muted),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .overflow_hidden()
+                            .text_color(theme.colors.text)
+                            .child(summary),
+                    )
+                    .when_some(overlays_count.filter(|_| !open), |el, count| {
+                        el.child(div().text_color(theme.colors.text_muted).child(count))
+                    })
+                    .when(problem && !open, |el| {
+                        el.child(
+                            Icon::new(IconName::Warning)
+                                .size(IconSize::XSmall)
+                                .color(Color::Warning),
+                        )
+                    }),
+            )
+            .when_some(subscription, |el, sub| {
+                el.child(div().pl(Spacing::Large.pixels()).child(sub))
+            })
+            .when_some(overlays, |el, overlays| {
+                el.child(
+                    div()
+                        .ml(Spacing::Large.pixels())
+                        .pt(Spacing::Small.pixels())
+                        .border_t_1()
+                        .border_color(theme.colors.border_variant)
+                        .child(overlays),
+                )
+            })
+            .into_any_element()
+    }
+
+    /// Remote overlays with update/remove, and the local overlay.yaml.
+    fn render_overlays(
+        &self,
+        data: &VpnxData,
+        pending: &[VpnxCommand],
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        // Older daemons know nothing about overlays.
+        if data.overlay_path.is_empty() {
+            return None;
+        }
+        let editor = self
+            .editing
+            .as_ref()
+            .filter(|e| e.target == EditTarget::Overlay)
+            .map(|e| self.render_editor(e, cx));
+        let add = cx
+            .listener(|this, _: &MouseDownEvent, _, cx| this.open_editor(EditTarget::Overlay, cx));
+        let cx: &App = cx;
+        let theme = cx.theme();
+        let service = AppState::vpnx(cx).clone();
+        let updating = pending.contains(&VpnxCommand::UpdateOverlays);
+        let adding = pending
+            .iter()
+            .any(|c| matches!(c, VpnxCommand::AddOverlay(_)));
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or_default();
+        let text = theme.colors.text;
+        let muted = theme.colors.text_muted;
+        let warning = theme.colors.status.warning;
+
+        let row = |id: SharedString, title: String, subtitle: AnyElement, action: AnyElement| {
+            div()
+                .id(id)
+                .flex()
+                .items_center()
+                .gap(Spacing::Small.pixels())
+                .child(
+                    div()
+                        .flex_1()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .overflow_hidden()
+                        .child(div().text_color(text).child(title))
+                        .child(subtitle),
+                )
+                .child(action)
+        };
+
+        let remote = data.overlays.iter().enumerate().map(|(i, overlay)| {
+            let subtitle = match (&overlay.error, overlay.updated_at) {
+                (Some(err), _) => div()
+                    .id(SharedString::from(format!("vpnx-overlay-error-{i}")))
+                    .text_color(warning)
+                    .child(format!(
+                        "{} · update failed, using the saved copy",
+                        overlay.source
+                    ))
+                    .tooltip(control_center_tooltip(err.clone()))
+                    .into_any_element(),
+                (None, Some(at)) => div()
+                    .text_color(muted)
+                    .child(format!(
+                        "{} · updated {} ago",
+                        overlay.source,
+                        span(now.saturating_sub(at))
+                    ))
+                    .into_any_element(),
+                (None, None) => div()
+                    .text_color(muted)
+                    .child(format!("{} · not downloaded yet", overlay.source))
+                    .into_any_element(),
+            };
+            let removing = pending.contains(&VpnxCommand::RemoveOverlay(overlay.url.clone()));
+            let action = if removing {
+                Spinner::new().size(IconSize::XSmall).into_any_element()
+            } else {
+                let service = service.clone();
+                let url = overlay.url.clone();
+                text_button(format!("vpnx-overlay-remove-{i}"), "Remove", cx)
+                    .on_mouse_down(MouseButton::Left, move |_, _, _| {
+                        service.dispatch(VpnxCommand::RemoveOverlay(url.clone()))
+                    })
+                    .into_any_element()
+            };
+            row(
+                format!("vpnx-overlay-{i}").into(),
+                overlay.name.clone(),
+                subtitle,
+                action,
+            )
+        });
+
+        let local = {
+            let service = service.clone();
+            row(
+                "vpnx-overlay-local".into(),
+                "Local overlay.yaml".to_string(),
+                div()
+                    .text_color(muted)
+                    .child("on this computer, applied last")
+                    .into_any_element(),
+                text_button("vpnx-overlay-edit", "Edit", cx)
+                    .on_mouse_down(MouseButton::Left, move |_, _, _| {
+                        service.dispatch(VpnxCommand::OpenLocalOverlay)
+                    })
+                    .into_any_element(),
+            )
+        };
+
+        let footer = div()
+            .flex()
+            .justify_end()
+            .gap(Spacing::Small.pixels())
+            .when(editor.is_none(), |el| {
+                el.child(if adding {
+                    Spinner::new().size(IconSize::XSmall).into_any_element()
+                } else {
+                    text_button("vpnx-overlay-add", "Add link", cx)
+                        .on_mouse_down(MouseButton::Left, add)
+                        .into_any_element()
+                })
+            })
+            .child(if updating {
+                Spinner::new().size(IconSize::XSmall).into_any_element()
+            } else {
+                let service = service.clone();
+                text_button("vpnx-overlay-update", "Update all", cx)
+                    .tooltip(control_center_tooltip(
+                        "Download the overlays again and apply overlay.yaml after editing it",
+                    ))
+                    .on_mouse_down(MouseButton::Left, move |_, _, _| {
+                        service.dispatch(VpnxCommand::UpdateOverlays)
+                    })
+                    .into_any_element()
+            });
+
+        Some(
+            div()
+                .flex()
+                .flex_col()
+                .gap(Spacing::Small.pixels())
+                .text_size(TextSize::XSmall.rems())
+                .child(
+                    div()
+                        .flex()
+                        .gap(Spacing::XSmall.pixels())
+                        .child(
+                            div()
+                                .text_color(text)
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .child("Overlays"),
+                        )
+                        .child(
+                            div()
+                                .text_color(muted)
+                                .child("— rules applied over the subscription"),
+                        ),
+                )
+                .children(remote)
+                .child(local)
+                .when_some(editor, |el, editor| el.child(editor))
+                .child(footer)
+                .into_any_element(),
+        )
+    }
+}
+
+/// Small bordered text button; the caller adds the click handler.
+fn text_button(id: impl Into<SharedString>, label: &'static str, cx: &App) -> gpui::Stateful<Div> {
+    let theme = cx.theme();
+    let hover = theme.colors.element_hover;
+    div()
+        .id(id.into())
+        .px(Spacing::Medium.pixels())
+        .py(px(2.))
+        .rounded(Radius::Small.pixels())
+        .bg(theme.colors.element_background)
+        .border_1()
+        .border_color(theme.colors.border)
+        .text_color(theme.colors.text)
+        .cursor_pointer()
+        .hover(move |s| s.bg(hover))
+        .child(label)
+}
+
 impl Render for VpnxSection {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         match self.pending_focus.take() {
@@ -363,7 +677,7 @@ impl Render for VpnxSection {
         let setting = pending
             .iter()
             .any(|c| matches!(c, VpnxCommand::SetSubscription(_)));
-        let subscription = self.render_subscription(&data, setting, cx);
+        let details = self.render_details(&data, &pending, setting, cx);
 
         let cx: &App = cx;
         let header = {
@@ -388,26 +702,60 @@ impl Render for VpnxSection {
         };
 
         list::section(IconName::Globe, "VPNX", header, cx)
-            .child(subscription)
             .child(render_status(&data, busy, cx))
             .child(render_modes(data.mode, busy, &service, cx))
             .when_some(
                 render_tun_hint(&data, &pending, &service, cx),
                 |el, hint| el.child(hint),
             )
-            .when(data.state == VpnxState::Up, |el| {
-                el.children(
-                    data.groups
-                        .iter()
-                        .enumerate()
-                        .map(|(i, group)| render_group(i, group, &data, &service, cx)),
-                )
-            })
+            .child(details)
+            .when(
+                data.state == VpnxState::Up && !data.groups.is_empty(),
+                |el| {
+                    el.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(Spacing::Medium.pixels())
+                            .pt(Spacing::Small.pixels())
+                            .border_t_1()
+                            .border_color(cx.theme().colors.border_variant)
+                            .children(
+                                data.groups
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(i, group)| render_group(i, group, &data, &service, cx)),
+                            ),
+                    )
+                },
+            )
             .when(
                 data.state == VpnxState::Up && data.groups.is_empty(),
                 |el| el.child(list::empty_state("No proxy groups", cx)),
             )
     }
+}
+
+/// "281 GB · 22 days left", for the collapsed summary.
+fn short_details(sub: &SubscriptionInfo) -> Option<String> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default();
+    let mut parts = Vec::new();
+    match sub.limit() {
+        Some(total) => parts.push(format!("{} of {}", size(sub.used()), size(total))),
+        None if sub.used() > 0 => parts.push(size(sub.used())),
+        None => {}
+    }
+    if let Some(expire) = sub.expires() {
+        parts.push(if expire <= now {
+            "expired".to_string()
+        } else {
+            format!("{} left", span(expire - now))
+        });
+    }
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 /// "281 GB used · 22 days left · updated 2 h ago".

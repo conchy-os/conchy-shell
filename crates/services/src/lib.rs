@@ -70,7 +70,8 @@ pub use upower::{
     UPowerSubscriber, WarningLevel,
 };
 pub use vpnx::{
-    ProxyGroup, SubscriptionInfo, VpnxCommand, VpnxData, VpnxMode, VpnxState, VpnxSubscriber,
+    OverlayInfo, ProxyGroup, SubscriptionInfo, VpnxCommand, VpnxData, VpnxMode, VpnxState,
+    VpnxSubscriber,
 };
 pub use wallpaper::{WallpaperCommand, WallpaperData, WallpaperEngine, WallpaperSubscriber};
 pub use watcher::FileWatcher;
