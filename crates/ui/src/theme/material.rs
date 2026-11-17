@@ -11,6 +11,7 @@ use image::GenericImageView;
 use material_colors::color::Rgb;
 use material_colors::image::extract_color;
 use material_colors::scheme::Scheme;
+use material_colors::dynamic_color::Variant;
 use material_colors::theme::ThemeBuilder;
 use serde::{Deserialize, Serialize};
 
@@ -261,12 +262,20 @@ impl WallpaperMaterialPalettes {
     /// Derive Material You dark and light palettes from an image file.
     /// Runs in-process in pure Rust in under 50 milliseconds.
     pub fn from_wallpaper(wallpaper_path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        Self::from_wallpaper_with(wallpaper_path, Variant::TonalSpot)
+    }
+
+    /// Like [`Self::from_wallpaper`], with the given scheme variant.
+    pub fn from_wallpaper_with(
+        wallpaper_path: impl AsRef<Path>,
+        variant: Variant,
+    ) -> anyhow::Result<Self> {
         let path = wallpaper_path.as_ref();
         let img = image::open(path)
             .map_err(|e| anyhow::anyhow!("Failed to open wallpaper {:?}: {e}", path))?;
 
-        // Resize down to 128x128 for instant quantization
-        let resized = img.resize(128, 128, image::imageops::FilterType::Lanczos3);
+        // Shrink to 128x128 for instant quantization; a cheap filter is plenty
+        let resized = img.thumbnail(128, 128);
         let pixels: Vec<Rgb> = resized
             .pixels()
             .map(|(_, _, p)| Rgb::new(p[0], p[1], p[2]))
@@ -277,12 +286,17 @@ impl WallpaperMaterialPalettes {
         }
 
         let source = extract_color(&pixels);
-        Ok(Self::from_source_rgb(source))
+        Ok(Self::from_source_rgb_with(source, variant))
     }
 
     /// Derive palettes directly from a source RGB seed.
     pub fn from_source_rgb(source: Rgb) -> Self {
-        let theme = ThemeBuilder::with_source(source).build();
+        Self::from_source_rgb_with(source, Variant::TonalSpot)
+    }
+
+    /// Derive palettes from a source RGB seed with the given scheme variant.
+    pub fn from_source_rgb_with(source: Rgb, variant: Variant) -> Self {
+        let theme = ThemeBuilder::with_source(source).variant(variant).build();
         Self {
             dark: MaterialPalette::from_m3_scheme(&theme.schemes.dark, Appearance::Dark),
             light: MaterialPalette::from_m3_scheme(&theme.schemes.light, Appearance::Light),
@@ -290,9 +304,42 @@ impl WallpaperMaterialPalettes {
     }
 }
 
+/// The variant a matugen-style scheme name (`scheme-content`, `fruit-salad`,
+/// …) stands for; unknown names get the Material default.
+pub fn variant_from_scheme(name: &str) -> Variant {
+    let name = name.trim().to_ascii_lowercase();
+    match name.strip_prefix("scheme-").unwrap_or(&name) {
+        "monochrome" => Variant::Monochrome,
+        "neutral" => Variant::Neutral,
+        "vibrant" => Variant::Vibrant,
+        "expressive" => Variant::Expressive,
+        "fidelity" => Variant::Fidelity,
+        "content" => Variant::Content,
+        "rainbow" => Variant::Rainbow,
+        "fruit-salad" | "fruit_salad" => Variant::FruitSalad,
+        _ => Variant::TonalSpot,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scheme_names_map_to_variants() {
+        assert!(matches!(variant_from_scheme("scheme-content"), Variant::Content));
+        assert!(matches!(variant_from_scheme("Fruit-Salad"), Variant::FruitSalad));
+        assert!(matches!(variant_from_scheme("scheme-tonal-spot"), Variant::TonalSpot));
+        assert!(matches!(variant_from_scheme("junk"), Variant::TonalSpot));
+    }
+
+    #[test]
+    fn variants_change_the_palette() {
+        let seed = Rgb::new(50, 120, 200);
+        let tonal = WallpaperMaterialPalettes::from_source_rgb(seed);
+        let vibrant = WallpaperMaterialPalettes::from_source_rgb_with(seed, Variant::Vibrant);
+        assert_ne!(tonal.dark.secondary, vibrant.dark.secondary);
+    }
 
     #[test]
     fn seed_color_generates_valid_palettes() {

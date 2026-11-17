@@ -1,11 +1,187 @@
 use gpui::{App, ElementId, FontWeight, SharedString, div, prelude::*, px};
 use ui::{
     ActiveTheme, Color, Icon, IconName, IconSize, Label, LabelCommon, Radius, Spacing, TextSize,
-    builtin_schemes, h_flex, v_flex,
+    Switch, builtin_schemes, h_flex, v_flex,
 };
 
+use super::schema::{ConfigPath, Editable, Field};
+use crate::config::Config;
+use crate::launcher::config::{LauncherConfig, ModulesConfig};
 use crate::launcher::content::Detail;
 use crate::launcher::modules::theme::{apply_palette, apply_theme, palette_is_active};
+use crate::launcher::modules::wallpaper::config::{WallpaperConfig, WallpaperScheme};
+use crate::launcher::modules::wallpaper::{
+    GenerationStatus, generated_palettes, generation_status, palette_chip,
+    regenerate_from_current,
+};
+
+fn wallpaper_path() -> ConfigPath<WallpaperConfig> {
+    ConfigPath::root()
+        .then(
+            "launcher",
+            |c: &Config| &c.launcher,
+            |c: &mut Config| &mut c.launcher,
+        )
+        .then(
+            "modules",
+            |l: &LauncherConfig| &l.modules,
+            |l: &mut LauncherConfig| &mut l.modules,
+        )
+        .then(
+            "wallpaper",
+            |m: &ModulesConfig| &m.wallpaper,
+            |m: &mut ModulesConfig| &mut m.wallpaper,
+        )
+}
+
+fn wallpaper_field(key: &str) -> Option<Field<WallpaperConfig>> {
+    WallpaperConfig::fields().into_iter().find(|f| f.key == key)
+}
+
+/// Material You from the wallpaper: follow switch, scheme variant and the
+/// generated dark and light palettes, ready to apply.
+fn wallpaper_card(cx: &App) -> gpui::AnyElement {
+    let colors = cx.theme().colors();
+    let path = wallpaper_path();
+    let config = path.read(cx).clone();
+
+    let follow = {
+        let path = path.clone();
+        let on = config.auto_theme;
+        Switch::new("wallpaper-follow", on).on_click(move |_, _, cx| {
+            if let Some(field) = wallpaper_field("auto_theme") {
+                path.write(&field, |s| s.auto_theme = !on, cx);
+            }
+            if !on {
+                regenerate_from_current(true, cx);
+            }
+        })
+    };
+
+    let schemes = h_flex()
+        .w_full()
+        .flex_wrap()
+        .gap(px(4.))
+        .children(WallpaperScheme::ALL.into_iter().map(|scheme| {
+            let selected = scheme == config.matugen_scheme;
+            let path = path.clone();
+            div()
+                .id(SharedString::from(format!("wp-scheme-{}", scheme.matugen_type())))
+                .px(Spacing::Medium.pixels())
+                .py(px(4.))
+                .rounded(Radius::Small.pixels())
+                .text_size(TextSize::Small.rems())
+                .cursor_pointer()
+                .when(selected, |this| {
+                    this.bg(colors.element_selected)
+                        .text_color(colors.text_accent)
+                        .font_weight(FontWeight::SEMIBOLD)
+                })
+                .when(!selected, |this| {
+                    this.text_color(colors.text_muted)
+                        .hover(|s| s.bg(colors.element_hover).text_color(colors.text))
+                })
+                .on_click(move |_, _, cx| {
+                    if let Some(field) = wallpaper_field("matugen_scheme") {
+                        path.write(&field, |s| s.matugen_scheme = scheme, cx);
+                    }
+                    let apply = path.read(cx).auto_theme;
+                    regenerate_from_current(apply, cx);
+                })
+                .child(scheme.label())
+        }));
+
+    let status_line = |text: SharedString, color: Color| {
+        Label::new(text).size(TextSize::XSmall).color(color).into_any_element()
+    };
+    let generate_button = |label: &'static str| {
+        div()
+            .id("themes-wallpaper-generate")
+            .cursor_pointer()
+            .text_size(TextSize::Small.rems())
+            .text_color(colors.text_accent)
+            .on_click(|_, _, cx| regenerate_from_current(false, cx))
+            .child(label)
+            .into_any_element()
+    };
+    let generated = match (generated_palettes(cx), generation_status(cx)) {
+        (_, GenerationStatus::Running(name)) => {
+            status_line(format!("Generating from {name}…").into(), Color::Muted)
+        }
+        (_, GenerationStatus::Failed(err)) => h_flex()
+            .w_full()
+            .items_center()
+            .gap(Spacing::Medium.pixels())
+            .child(status_line(err, Color::Error))
+            .child(div().flex_1())
+            .child(generate_button("Retry"))
+            .into_any_element(),
+        (Some((name, palettes)), _) => h_flex()
+            .w_full()
+            .items_center()
+            .gap(Spacing::Medium.pixels())
+            .child(
+                Label::new(SharedString::from(format!("From {name}")))
+                    .size(TextSize::XSmall)
+                    .color(Color::Muted),
+            )
+            .child(div().flex_1())
+            .child(palette_chip(
+                "themes-wallpaper-dark",
+                "Dark",
+                palettes.dark,
+                palettes.material_dark,
+                name.clone(),
+                cx,
+            ))
+            .child(palette_chip(
+                "themes-wallpaper-light",
+                "Light",
+                palettes.light,
+                palettes.material_light,
+                name,
+                cx,
+            ))
+            .into_any_element(),
+        (None, _) => generate_button("Generate from the current wallpaper"),
+    };
+
+    v_flex()
+        .w_full()
+        .p(Spacing::Large.pixels())
+        .rounded(Radius::Large.pixels())
+        .bg(colors.surface_background)
+        .border_1()
+        .border_color(colors.border_variant)
+        .gap(Spacing::Medium.pixels())
+        .child(
+            h_flex()
+                .w_full()
+                .items_center()
+                .justify_between()
+                .gap(Spacing::Medium.pixels())
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .gap(px(2.))
+                        .child(
+                            Label::new("Theme follows wallpaper")
+                                .size(TextSize::Default)
+                                .weight(FontWeight::SEMIBOLD),
+                        )
+                        .child(
+                            Label::new("Material You colours generated from your wallpaper")
+                                .size(TextSize::Small)
+                                .color(Color::Muted),
+                        ),
+                )
+                .child(follow),
+        )
+        .child(schemes)
+        .child(generated)
+        .into_any_element()
+}
 
 pub fn themes_detail(_cx: &App) -> Detail {
     Detail::new().widget(move |cx| {
@@ -339,6 +515,7 @@ pub fn themes_detail(_cx: &App) -> Detail {
             .child(header)
             .child(div().w_full().h(px(1.)).bg(colors.border_variant))
             .child(active_theme_card)
+            .child(wallpaper_card(cx))
             .child(appearance_card)
             .child(
                 v_flex()

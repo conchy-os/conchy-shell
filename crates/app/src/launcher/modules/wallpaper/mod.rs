@@ -1,6 +1,6 @@
 //! Wallpaper module: a grid of thumbnails. Applying one generates a matching
-//! theme with matugen in the background; it waits above the grid until
-//! picked.
+//! Material You theme in the background; with `auto_theme` it becomes the
+//! active theme, otherwise it waits above the grid until picked.
 
 pub mod config;
 
@@ -11,10 +11,11 @@ use gpui::{AnyElement, App, Context, Global, Hsla, SharedString, Window, div, pr
 use services::WallpaperCommand;
 use ui::{
     ActiveTheme, Base16Palette, Color, Icon, IconName, IconSize, Label, LabelCommon,
-    MaterialPalette, Radius, Spacing, TextSize, WallpaperPalettes,
+    MaterialPalette, Radius, Spacing, TextSize, Theme, WallpaperPalettes,
 };
 
-use self::config::WallpaperConfig;
+use self::config::{WallpaperConfig, WallpaperScheme};
+use crate::config::ActiveConfig;
 use crate::launcher::action::{Action, Outcome};
 use crate::launcher::content::{Content, EmptyView, Grid, Item, ItemIcon};
 use crate::launcher::modules::theme::{apply_material, apply_palette, palette_is_active};
@@ -62,6 +63,23 @@ enum Generation {
 
 impl Global for GeneratedTheme {}
 
+/// What the last generation is up to, for the places that offer its themes.
+pub(crate) enum GenerationStatus {
+    Idle,
+    Running(SharedString),
+    Ready,
+    Failed(SharedString),
+}
+
+pub(crate) fn generation_status(cx: &App) -> GenerationStatus {
+    match cx.try_global::<GeneratedTheme>().map(|g| &g.state) {
+        Some(Generation::Running(name)) => GenerationStatus::Running(name.clone()),
+        Some(Generation::Ready(..)) => GenerationStatus::Ready,
+        Some(Generation::Failed(err)) => GenerationStatus::Failed(err.clone()),
+        _ => GenerationStatus::Idle,
+    }
+}
+
 /// The wallpaper the last generated theme came from, with both its palettes.
 pub(crate) fn generated_palettes(cx: &App) -> Option<(SharedString, WallpaperPalettes)> {
     match &cx.try_global::<GeneratedTheme>()?.state {
@@ -96,7 +114,8 @@ pub struct WallpaperModule {
     scanning: bool,
     columns: usize,
     matugen: bool,
-    matugen_scheme: String,
+    matugen_scheme: WallpaperScheme,
+    auto_theme: bool,
 }
 
 impl WallpaperModule {
@@ -126,48 +145,149 @@ impl WallpaperModule {
             scanning: true,
             columns: config.columns.max(1),
             matugen: config.matugen,
-            matugen_scheme: config.matugen_scheme.clone(),
+            matugen_scheme: config.matugen_scheme,
+            auto_theme: config.auto_theme,
         }
     }
 
     fn apply(&self, path: PathBuf, name: SharedString, cx: &mut Context<Self>) {
         AppState::wallpaper(cx).dispatch(WallpaperCommand::SetWallpaper(path.clone()));
-        if self.matugen {
-            generate_theme(path, name, self.matugen_scheme.clone(), cx);
+        if self.matugen || self.auto_theme {
+            generate_theme(path, name, self.matugen_scheme, self.auto_theme, cx);
         }
     }
 }
 
-/// Run matugen off the UI thread; the result is offered, not applied.
-fn generate_theme(path: PathBuf, name: SharedString, scheme: String, cx: &mut App) {
-    let global = cx.global_mut::<GeneratedTheme>();
+/// The name a wallpaper's theme goes by: the file name without extension, as
+/// the picker shows it.
+pub(crate) fn wallpaper_name(path: &Path) -> SharedString {
+    path.file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "wallpaper".into())
+        .into()
+}
+
+/// Make the generated theme the active one, in the light or dark variant
+/// that matches what is active now.
+fn apply_generated(name: &str, palettes: &WallpaperPalettes, cx: &mut App) {
+    let dark = cx.theme().appearance.is_dark();
+    let name: SharedString = generated_theme_name(name).into();
+    let material = if dark {
+        palettes.material_dark
+    } else {
+        palettes.material_light
+    };
+    match material {
+        Some(material) => apply_material(name, material, cx),
+        None => apply_palette(name, if dark { palettes.dark } else { palettes.light }, cx),
+    }
+}
+
+/// Derive the palettes from a wallpaper off the UI thread and offer them in
+/// the wallpaper header and the theme list; with `auto_apply` they also
+/// become the active theme.
+pub(crate) fn generate_theme(
+    path: PathBuf,
+    name: SharedString,
+    scheme: WallpaperScheme,
+    auto_apply: bool,
+    cx: &mut App,
+) {
+    let global = cx.default_global::<GeneratedTheme>();
     global.id += 1;
     global.state = Generation::Running(name.clone());
     let id = global.id;
+    // Open windows don't observe the global; have them show the new state.
+    cx.refresh_windows();
 
     cx.spawn(async move |cx| {
         let result = cx
-            .background_spawn(async move { Base16Palette::generate_from_wallpaper(&path, &scheme) })
+            .background_spawn(async move { Base16Palette::generate_from_wallpaper(&path, scheme.matugen_type()) })
             .await;
         cx.update(|cx| {
-            let global = cx.global_mut::<GeneratedTheme>();
-            if global.id != id {
+            if cx.global::<GeneratedTheme>().id != id {
                 return;
             }
-            global.state = match result {
-                Ok(palettes) => Generation::Ready(name, Box::new(palettes)),
+            let state = match result {
+                Ok(palettes) => {
+                    if auto_apply {
+                        apply_generated(&name, &palettes, cx);
+                    }
+                    Generation::Ready(name, Box::new(palettes))
+                }
                 Err(err) => {
-                    tracing::warn!("Failed to generate matugen theme: {err}");
+                    tracing::warn!("Failed to generate a theme from the wallpaper: {err}");
                     Generation::Failed(err.to_string().into())
                 }
             };
+            cx.global_mut::<GeneratedTheme>().state = state;
+            cx.refresh_windows();
+        });
+    })
+    .detach();
+}
+
+/// Rebuild the generated palettes from the wallpaper that is up, e.g. after
+/// the scheme changed or when none was generated yet; `apply` also makes them
+/// the active theme.
+pub(crate) fn regenerate_from_current(apply: bool, cx: &mut App) {
+    let scheme = cx.config().launcher.modules.wallpaper.matugen_scheme;
+    let global = cx.default_global::<GeneratedTheme>();
+    global.id += 1;
+    global.state = Generation::Running("the current wallpaper".into());
+    cx.refresh_windows();
+    cx.spawn(async move |cx| {
+        let path = cx
+            .background_spawn(async { services::current_wallpaper() })
+            .await;
+        cx.update(|cx| match path {
+            Some(path) => generate_theme(path.clone(), wallpaper_name(&path), scheme, apply, cx),
+            None => {
+                let global = cx.default_global::<GeneratedTheme>();
+                global.id += 1;
+                global.state = Generation::Failed(
+                    "Could not tell which wallpaper is set; pick one with ;wp".into(),
+                );
+                cx.refresh_windows();
+            }
+        });
+    })
+    .detach();
+}
+
+/// At startup, retheme to the wallpaper that is up if `auto_theme` is on.
+/// A theme the user picked by hand is left alone: only the default theme and
+/// themes generated from an earlier wallpaper follow the wallpaper.
+pub(crate) fn sync_theme_with_wallpaper(cx: &mut App) {
+    let config = &cx.config().launcher.modules.wallpaper;
+    if !config.auto_theme {
+        return;
+    }
+    let scheme = config.matugen_scheme;
+
+    cx.spawn(async move |cx| {
+        let Some(path) = cx
+            .background_spawn(async { services::current_wallpaper() })
+            .await
+        else {
+            return;
+        };
+        cx.update(|cx| {
+            let name = wallpaper_name(&path);
+            let theme = cx.theme();
+            let follows_wallpaper =
+                theme.name == Theme::default().name || wallpaper_of_theme_name(&theme.name).is_some();
+            let up_to_date = wallpaper_of_theme_name(&theme.name) == Some(name.as_ref());
+            if follows_wallpaper && !up_to_date {
+                generate_theme(path, name, scheme, true, cx);
+            }
         });
     })
     .detach();
 }
 
 /// A clickable chip previewing one generated palette.
-fn palette_chip(
+pub(crate) fn palette_chip(
     id: &'static str,
     label: &'static str,
     palette: Base16Palette,
@@ -349,7 +469,7 @@ impl LauncherPage for WallpaperModule {
     }
 }
 
-fn expand_tilde(path: &str) -> PathBuf {
+pub(crate) fn expand_tilde(path: &str) -> PathBuf {
     if let Some(rest) = path.strip_prefix("~/")
         && let Ok(home) = std::env::var("HOME")
     {

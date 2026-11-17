@@ -277,7 +277,10 @@ impl Base16Palette {
         let path = wallpaper_path.as_ref();
 
         // 1. In-process pure-Rust Material You extraction (zero external CLI dependencies)
-        if let Ok(m3) = super::material::WallpaperMaterialPalettes::from_wallpaper(path) {
+        let variant = super::material::variant_from_scheme(scheme_type);
+        if let Ok(m3) =
+            super::material::WallpaperMaterialPalettes::from_wallpaper_with(path, variant)
+        {
             return Ok(WallpaperPalettes {
                 dark: m3.dark.into_base16(),
                 light: m3.light.into_base16(),

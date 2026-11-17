@@ -68,5 +68,5 @@ pub use upower::{
     BatteryData, BatteryLevel, BatteryState, ChargeLimit, PowerProfile, UPowerCommand, UPowerData,
     UPowerSubscriber, WarningLevel,
 };
-pub use wallpaper::{WallpaperCommand, WallpaperData, WallpaperEngine, WallpaperSubscriber};
+pub use wallpaper::{current_wallpaper, WallpaperCommand, WallpaperData, WallpaperEngine, WallpaperSubscriber};
 pub use watcher::FileWatcher;

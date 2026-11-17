@@ -91,6 +91,8 @@ async fn main() {
         osd::init(cx);
         launcher::init(cx);
 
+        launcher::modules::wallpaper::sync_theme_with_wallpaper(cx);
+
         // Now that the notification service is up, say what didn't parse.
         config::report_load_errors(cx);
 

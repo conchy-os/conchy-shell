@@ -35,7 +35,7 @@ use crate::launcher::modules::{
     calendar::config::CalendarConfig, clipboard::config::ClipboardConfig,
     help::config::HelpConfig, mpris::config::MprisConfig, services::config::ServicesConfig,
     shell::config::ShellConfig, sysinfo::config::SysInfoConfig, theme::config::ThemesConfig,
-    wallpaper::config::WallpaperConfig, web::config::WebConfig,
+    wallpaper::config::{WallpaperConfig, WallpaperScheme}, web::config::WebConfig,
     workspaces::config::WorkspacesConfig,
 };
 use crate::notification::{NotificationConfig, NotificationPopupPosition};
@@ -878,10 +878,18 @@ impl Editable for WallpaperConfig {
             Field::integer("columns", "Columns", lens!(columns as f64))
                 .range(1.0, 8.0)
                 .describe("Cards per grid row"),
-            Field::toggle("matugen", "Matugen themes", lens!(matugen))
-                .describe("Offer dark and light themes generated from the applied wallpaper"),
-            Field::text("matugen_scheme", "Matugen scheme", lens!(matugen_scheme))
-                .describe("matugen --type, e.g. scheme-tonal-spot or scheme-content"),
+            Field::toggle("matugen", "Wallpaper themes", lens!(matugen))
+                .describe("Offer dark and light Material You themes generated from the wallpaper you set"),
+            Field::toggle("auto_theme", "Theme follows wallpaper", lens!(auto_theme))
+                .describe("Recolour the shell whenever you set a wallpaper, and at startup unless you picked a theme by hand"),
+            Field::choice(
+                "matugen_scheme",
+                "Colour scheme",
+                lens!(matugen_scheme),
+                &WallpaperScheme::ALL,
+                WallpaperScheme::label,
+            )
+            .describe("How strongly the wallpaper's colours show up: Tonal spot is calm, Vibrant and Expressive are bolder, Content and Fidelity stay closest to the image"),
             Field::number("width", "Window width", lens!(width or 600.0))
                 .range(400.0, 2000.0)
                 .unit("px")

@@ -1,9 +1,10 @@
 //! Wallpaper service with pluggable engine support.
 //!
-//! Manages wallpaper setting via external tools. Currently supports `awww`.
-//! Spawns the daemon on startup and provides commands to set wallpapers.
+//! Manages wallpaper setting via external tools: `awww` when it is installed,
+//! else `hyprpaper`. Starts the daemon on startup and provides commands to
+//! set wallpapers.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 
@@ -17,6 +18,23 @@ use crate::lifecycle::{Lifecycle, ManagedService, RunToken};
 pub enum WallpaperEngine {
     #[default]
     Awww,
+    Hyprpaper,
+}
+
+impl WallpaperEngine {
+    /// The engine this machine has: awww if installed, else hyprpaper.
+    pub fn detect() -> Self {
+        if in_path("awww") || !in_path("hyprpaper") {
+            Self::Awww
+        } else {
+            Self::Hyprpaper
+        }
+    }
+}
+
+fn in_path(program: &str) -> bool {
+    std::env::var_os("PATH")
+        .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(program).is_file()))
 }
 
 /// Current wallpaper state.
@@ -71,7 +89,13 @@ impl WallpaperSubscriber {
         match command {
             WallpaperCommand::SetWallpaper(path) => {
                 let shown = path.clone();
-                tokio::task::spawn_blocking(move || set_wallpaper_awww(&shown)).await??;
+                let engine = self.data.lock_ref().engine;
+                tokio::task::spawn_blocking(move || match engine {
+                    WallpaperEngine::Awww => set_wallpaper_awww(&shown),
+                    WallpaperEngine::Hyprpaper => set_wallpaper_hyprpaper(&shown),
+                })
+                .await??;
+                save_current(&path);
                 self.data.lock_mut().current = Some(path);
             }
         }
@@ -102,6 +126,8 @@ impl ManagedService for WallpaperSubscriber {
     /// and keeps the current wallpaper up.
     fn start(&self) {
         let token = self.lifecycle.begin();
+        let engine = WallpaperEngine::detect();
+        self.data.lock_mut().engine = engine;
 
         let subscriber = self.clone();
         self.jobs.run(token.clone(), move |command| {
@@ -109,7 +135,10 @@ impl ManagedService for WallpaperSubscriber {
             async move { subscriber.execute(command).await }
         });
 
-        start_daemon(token);
+        match engine {
+            WallpaperEngine::Awww => start_daemon(token),
+            WallpaperEngine::Hyprpaper => start_hyprpaper(token),
+        }
     }
 }
 
@@ -143,6 +172,46 @@ fn start_daemon(token: RunToken) {
     });
 }
 
+/// hyprpaper is normally started by the session; start it only if it isn't up.
+fn start_hyprpaper(token: RunToken) {
+    thread::spawn(move || {
+        let running = Command::new("pgrep")
+            .args(["-x", "hyprpaper"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if running {
+            token.active();
+            return;
+        }
+        match Command::new("hyprpaper").spawn() {
+            Ok(_) => token.active(),
+            Err(e) => {
+                warn!("Failed to start hyprpaper: {e}");
+                token.error(e.to_string());
+            }
+        }
+    });
+}
+
+/// Set wallpaper through hyprpaper's IPC on every monitor.
+fn set_wallpaper_hyprpaper(path: &Path) -> anyhow::Result<()> {
+    let output = Command::new("hyprctl")
+        .args(["hyprpaper", "wallpaper"])
+        .arg(format!(",{},cover", path.display()))
+        .output()?;
+    let reply = String::from_utf8_lossy(&output.stdout);
+    // Silence and "ok" are both success; hyprpaper words its errors.
+    let reply_ok = matches!(reply.trim(), "" | "ok" | "OK");
+    anyhow::ensure!(
+        output.status.success() && reply_ok,
+        "hyprctl hyprpaper wallpaper: {}",
+        reply.trim()
+    );
+    debug!("Wallpaper set to: {}", path.display());
+    Ok(())
+}
+
 /// Set wallpaper using awww, waiting for it so the child is reaped and a
 /// failure is reported instead of assumed away.
 fn set_wallpaper_awww(path: &std::path::Path) -> anyhow::Result<()> {
@@ -159,4 +228,111 @@ fn set_wallpaper_awww(path: &std::path::Path) -> anyhow::Result<()> {
     anyhow::ensure!(status.success(), "awww img exited with {status}");
     debug!("Wallpaper set to: {}", path.display());
     Ok(())
+}
+
+/// The wallpaper that is up right now: what the awww daemon reports, else the
+/// last one this shell set (awww forgets it when the daemon restarts).
+///
+/// Blocks on a subprocess; call it off the UI thread.
+pub fn current_wallpaper() -> Option<PathBuf> {
+    let queried = match WallpaperEngine::detect() {
+        WallpaperEngine::Awww => query_awww().or_else(query_hyprpaper),
+        WallpaperEngine::Hyprpaper => query_hyprpaper().or_else(query_awww),
+    };
+    queried.or_else(load_current)
+}
+
+fn query_hyprpaper() -> Option<PathBuf> {
+    let output = Command::new("hyprctl")
+        .args(["hyprpaper", "listactive"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    parse_listactive(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// First existing path in `hyprctl hyprpaper listactive`, whose lines read
+/// `eDP-1: /path/a.jpg`.
+fn parse_listactive(text: &str) -> Option<PathBuf> {
+    text.lines().find_map(|line| {
+        let (_, path) = line.split_once(": ")?;
+        let path = PathBuf::from(path.trim());
+        path.is_file().then_some(path)
+    })
+}
+
+fn query_awww() -> Option<PathBuf> {
+    let output = Command::new("awww").arg("query").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    parse_query(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// First image in `awww query` output, which has a line per output like
+/// `: eDP-1: 1920x1080, scale: 1, currently displaying: image: /path/a.png`.
+fn parse_query(text: &str) -> Option<PathBuf> {
+    text.lines().find_map(|line| {
+        let (_, path) = line.split_once("image: ")?;
+        let path = PathBuf::from(path.trim());
+        path.is_file().then_some(path)
+    })
+}
+
+fn state_file() -> Option<PathBuf> {
+    let base = std::env::var_os("XDG_STATE_HOME")
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state"))
+        })?;
+    Some(base.join("conchy/wallpaper"))
+}
+
+fn save_current(path: &Path) {
+    let Some(file) = state_file() else { return };
+    if let Some(dir) = file.parent()
+        && let Err(err) = std::fs::create_dir_all(dir)
+    {
+        warn!("Could not create {}: {err}", dir.display());
+        return;
+    }
+    if let Err(err) = std::fs::write(&file, path.to_string_lossy().as_bytes()) {
+        warn!("Could not remember the wallpaper in {}: {err}", file.display());
+    }
+}
+
+fn load_current() -> Option<PathBuf> {
+    let text = std::fs::read_to_string(state_file()?).ok()?;
+    let path = PathBuf::from(text.trim());
+    path.is_file().then_some(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn query_picks_the_image_path() {
+        let exe = std::env::current_exe().unwrap();
+        let line = format!(": eDP-1: 1920x1080, scale: 1, currently displaying: image: {}", exe.display());
+        assert_eq!(parse_query(&line), Some(exe));
+    }
+
+    #[test]
+    fn listactive_picks_the_first_existing_path() {
+        let exe = std::env::current_exe().unwrap();
+        let text = format!("DP-1: /nope/a.jpg\neDP-1: {}\n", exe.display());
+        assert_eq!(parse_listactive(&text), Some(exe));
+        assert_eq!(parse_listactive("no wallpapers"), None);
+    }
+
+    #[test]
+    fn query_ignores_color_fills_and_missing_files() {
+        assert_eq!(parse_query(": DP-1: 2560x1440, scale: 1, currently displaying: color: 000000"), None);
+        assert_eq!(parse_query(": DP-1: 1x1, scale: 1, currently displaying: image: /nope/x.png"), None);
+        assert_eq!(parse_query(""), None);
+    }
 }
