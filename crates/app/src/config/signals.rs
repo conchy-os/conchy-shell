@@ -38,7 +38,7 @@ impl ConfigSignals {
         cx.global::<Self>()
     }
 
-    pub(super) fn publish(cx: &App) {
+    pub(crate) fn publish(cx: &App) {
         let signals = Self::global(cx);
         signals.bar.set_neq(cx.config().bar.clone());
         signals.dock.set_neq(cx.config().dock.clone());

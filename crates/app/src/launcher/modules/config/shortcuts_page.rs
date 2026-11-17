@@ -342,7 +342,7 @@ enum TapState {
 }
 
 /// `spawn "alacritty"` as a sentence, when it helps; the KDL as it is otherwise.
-fn describe(action: &str) -> String {
+pub(crate) fn describe(action: &str) -> String {
     match CATALOG.iter().find(|(_, kdl, _)| *kdl == action) {
         Some((label, _, _)) => format!("{label} ({action})"),
         None => action.to_string(),

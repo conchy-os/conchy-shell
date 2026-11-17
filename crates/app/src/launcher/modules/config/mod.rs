@@ -21,7 +21,9 @@ pub mod schema;
 pub mod section_page;
 mod sections;
 pub mod select;
+mod shortcuts_detail;
 mod shortcuts_page;
+mod themes_detail;
 mod value_page;
 
 use ui::IconName;

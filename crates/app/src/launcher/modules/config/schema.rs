@@ -292,11 +292,34 @@ impl<S> Editor<S> {
 pub struct Group<S> {
     pub title: &'static str,
     pub fields: Vec<Field<S>>,
+    pub preview: Option<Preview<S>>,
+}
+
+impl<S> Clone for Group<S> {
+    fn clone(&self) -> Self {
+        Self {
+            title: self.title,
+            fields: self.fields.clone(),
+            preview: self.preview.clone(),
+        }
+    }
 }
 
 impl<S> Group<S> {
     pub fn new(title: &'static str, fields: Vec<Field<S>>) -> Self {
-        Self { title, fields }
+        Self {
+            title,
+            fields,
+            preview: None,
+        }
+    }
+
+    pub fn preview(
+        mut self,
+        preview: impl Fn(&ConfigPath<S>, &App) -> AnyElement + 'static,
+    ) -> Self {
+        self.preview = Some(Rc::new(preview));
+        self
     }
 }
 

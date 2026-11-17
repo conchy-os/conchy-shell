@@ -44,7 +44,7 @@ use crate::keybinds::{
 /// Rows to jump on Page Up/Down.
 const ROWS_PER_PAGE: usize = 7;
 /// Share of the width the list keeps beside an item's detail.
-const DETAIL_SPLIT: f32 = 0.40;
+const DETAIL_SPLIT: f32 = 0.30;
 
 #[derive(Clone, Copy)]
 enum Layout {

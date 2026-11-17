@@ -26,7 +26,7 @@ const MAX_FORM_DEPTH: usize = 1;
 
 /// Form labels share one column so the controls line up; the pane is narrow,
 /// so it is tighter than the metadata column.
-const FORM_LABEL_WIDTH: f32 = 96.;
+const FORM_LABEL_WIDTH: f32 = 140.;
 
 pub struct SectionPage<S: Editable> {
     path: ConfigPath<S>,
@@ -464,7 +464,7 @@ pub fn render_form<S: Editable>(
             .iter()
             .filter(|f| !f.editor.is_empty())
             .collect();
-        if fields.is_empty() {
+        if fields.is_empty() && group.preview.is_none() {
             continue;
         }
         // Rows sit closer to each other than groups do; the heading is drawn
@@ -474,6 +474,9 @@ pub fn render_form<S: Editable>(
         let headed_by_bundle = fields.len() == 1 && matches!(fields[0].editor, Editor::Bundle(_));
         if !group.title.is_empty() && !headed_by_bundle {
             block = block.child(form_heading(group.title));
+        }
+        if let Some(preview) = &group.preview {
+            block = block.child(preview(path, cx));
         }
         for field in fields {
             block = block.child(form_row(path, field, section, depth, cx));
@@ -498,9 +501,9 @@ fn labeled_row(label: Label, control: AnyElement) -> AnyElement {
         .gap(Spacing::Medium.pixels())
         .child(
             div()
-                .w(px(FORM_LABEL_WIDTH))
+                .min_w(px(FORM_LABEL_WIDTH))
                 .flex_none()
-                .child(label.truncate()),
+                .child(label),
         )
         .child(h_flex().flex_1().min_w(px(0.)).justify_end().child(control))
         .into_any_element()
@@ -547,7 +550,37 @@ fn form_row<S: Editable>(
                 cx,
             ))
             .into_any_element(),
-        Editor::Toggle(_) | Editor::Choice { .. } | Editor::Number { .. } => {
+        Editor::Toggle(lens) => {
+            let lens = *lens;
+            let path = path.clone();
+            let field = field.clone();
+            let is_on = (lens.get)(section);
+            let id: SharedString = path.key_string(field.key).into();
+            h_flex()
+                .w_full()
+                .items_center()
+                .justify_between()
+                .gap(Spacing::Medium.pixels())
+                .py(px(3.))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .child(label),
+                )
+                .child(
+                    Switch::new(id, is_on).on_click(move |_, _, cx| {
+                        path.write(&field, |s| (lens.set)(s, !(lens.get)(s)), cx);
+                    }),
+                )
+                .into_any_element()
+        }
+        Editor::Choice { commit: Some(_), .. } if field.preview.is_some() => v_flex()
+            .w_full()
+            .gap(Spacing::Small.pixels())
+            .children(field.preview.as_ref().map(|preview| preview(path, cx)))
+            .into_any_element(),
+        Editor::Choice { .. } | Editor::Number { .. } => {
             labeled_row(label, field_widget(path, field, cx))
         }
         // Text and custom fields edit from their own row; a deep nested one
@@ -576,18 +609,11 @@ fn field_widget<S: Editable>(path: &ConfigPath<S>, field: &Field<S>, cx: &App) -
                 .gap(Spacing::Medium.pixels())
                 .child(
                     div()
+                        .flex_1()
+                        .min_w(px(0.))
                         .text_size(TextSize::Small.rems())
-                        .text_color(if is_on {
-                            colors.text
-                        } else {
-                            colors.text_muted
-                        })
-                        .font_weight(if is_on {
-                            FontWeight::MEDIUM
-                        } else {
-                            FontWeight::NORMAL
-                        })
-                        .child(if is_on { "Enabled" } else { "Disabled" }),
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(field.label),
                 )
                 .child(Switch::new(id, is_on).on_click(move |_, _, cx| {
                     path.write(&field, |s| (lens.set)(s, !(lens.get)(s)), cx);

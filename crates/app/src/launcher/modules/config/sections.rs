@@ -32,9 +32,10 @@ use crate::launcher::config::{LauncherConfig, ModulesConfig as LauncherModulesCo
 use crate::launcher::content::Item;
 use crate::launcher::modules::{
     self, apps::config::AppsConfig, calculator::config::CalculatorConfig,
-    clipboard::config::ClipboardConfig, help::config::HelpConfig, mpris::config::MprisConfig,
-    services::config::ServicesConfig, shell::config::ShellConfig, sysinfo::config::SysInfoConfig,
-    theme::config::ThemesConfig, wallpaper::config::WallpaperConfig, web::config::WebConfig,
+    calendar::config::CalendarConfig, clipboard::config::ClipboardConfig,
+    help::config::HelpConfig, mpris::config::MprisConfig, services::config::ServicesConfig,
+    shell::config::ShellConfig, sysinfo::config::SysInfoConfig, theme::config::ThemesConfig,
+    wallpaper::config::WallpaperConfig, web::config::WebConfig,
     workspaces::config::WorkspacesConfig,
 };
 use crate::notification::{NotificationConfig, NotificationPopupPosition};
@@ -51,7 +52,7 @@ impl Editable for Config {
         let prefix = cx.config().launcher.modules.themes.prefix.clone();
         vec![
             Item::new("shortcuts", "Shortcuts")
-                .subtitle("Keyboard shortcuts, and the Super key")
+                .subtitle("Keyboard shortcuts")
                 .icon(IconName::Keyboard)
                 .keywords("shortcuts keybinds hotkeys keys super bindings")
                 .action(
@@ -59,15 +60,17 @@ impl Editable for Config {
                         Outcome::Push(super::shortcuts_page::ShortcutsPage::open(cx))
                     })
                     .icon(IconName::ChevronRight),
-                ),
+                )
+                .detail(super::shortcuts_detail::shortcuts_detail(cx)),
             Item::new("themes", "Themes")
-                .subtitle("Browse and apply desktop themes")
+                .subtitle("Desktop themes and colors")
                 .icon(IconName::Palette)
                 .keywords("theme colors palette")
                 .action(
                     Action::new("Open themes", move |_, _| Outcome::SetQuery(prefix.clone()))
                         .icon(IconName::ChevronRight),
-                ),
+                )
+                .detail(super::themes_detail::themes_detail(cx)),
         ]
     }
 
@@ -80,10 +83,9 @@ impl Editable for Config {
             Group::new(
                 "",
                 vec![
-                    look_field(|c: &Self| &c.bar, |c: &mut Self| &mut c.bar),
                     Field::nested("bar", "Bar", |c: &Self| &c.bar, |c: &mut Self| &mut c.bar)
                         .icon(IconName::Layout)
-                        .describe("Size, position, style and widgets"),
+                        .describe("Position, style and widgets"),
                     Field::nested(
                         "launcher",
                         "Launcher",
@@ -91,7 +93,7 @@ impl Editable for Config {
                         |c: &mut Self| &mut c.launcher,
                     )
                     .icon(IconName::MagnifyingGlass)
-                    .describe("Window geometry and module prefixes"),
+                    .describe("Geometry and prefixes"),
                     Field::nested(
                         "dock",
                         "Dock",
@@ -99,7 +101,7 @@ impl Editable for Config {
                         |c: &mut Self| &mut c.dock,
                     )
                     .icon(IconName::Layers)
-                    .describe("Position, shape, visibility and hover effect"),
+                    .describe("Position and visibility"),
                     Field::nested(
                         "frame",
                         "Frame",
@@ -107,7 +109,7 @@ impl Editable for Config {
                         |c: &mut Self| &mut c.frame,
                     )
                     .icon(IconName::Square)
-                    .describe("A band around the screen the bar and dock can be sides of"),
+                    .describe("Screen frame and borders"),
                     Field::nested(
                         "notification",
                         "Notifications",
@@ -115,7 +117,7 @@ impl Editable for Config {
                         |c: &mut Self| &mut c.notification,
                     )
                     .icon(IconName::Bell)
-                    .describe("Popup placement and sizes"),
+                    .describe("Placement and sizes"),
                     Field::nested(
                         "control_center",
                         "Control center",
@@ -123,7 +125,7 @@ impl Editable for Config {
                         |c: &mut Self| &mut c.control_center,
                     )
                     .icon(IconName::Settings)
-                    .describe("Power action commands"),
+                    .describe("Power commands"),
                     Field::nested(
                         "osd",
                         "On-screen display",
@@ -131,7 +133,7 @@ impl Editable for Config {
                         |c: &mut Self| &mut c.osd,
                     )
                     .icon(IconName::Sliders)
-                    .describe("Where volume and brightness indicators appear"),
+                    .describe("Volume and brightness"),
                     Field::nested(
                         "panels",
                         "Panels",
@@ -139,7 +141,7 @@ impl Editable for Config {
                         |c: &mut Self| &mut c.panels,
                     )
                     .icon(IconName::Layout)
-                    .describe("Behavior of popup panels and menus"),
+                    .describe("Popup panels and menus"),
                 ],
             ),
             Group::new(
@@ -154,45 +156,36 @@ impl Editable for Config {
                         ],
                     )
                     .icon(IconName::Refresh)
-                    .describe(
-                        "Reload configuration when it changes on disk (conchy-config)",
-                    ),
+                    .describe("Reload on file change"),
                 ],
             ),
         ]
     }
 }
 
-/// The Look preset row, for any section `S` that can reach the bar config:
-/// Blocky / Rounded / Floating buttons, "Custom" when none matches, a
-/// miniature of each in the detail pane.
-fn look_field<S: Editable>(
-    get: fn(&S) -> &BarConfig,
-    get_mut: fn(&mut S) -> &mut BarConfig,
-) -> Field<S> {
+/// The Look preset row for the bar:
+/// Blocky / Rounded / Floating preset cards with miniature bar illustrations.
+fn bar_look_field() -> Field<BarConfig> {
     let labels: Vec<&'static str> = Look::ALL.iter().map(|look| look.label()).collect();
     Field::presets(
         "look",
         "Look",
         &labels,
-        move |s: &S| {
-            Look::current(get(s), ui::radius_scale())
+        |s: &BarConfig| {
+            Look::current(s, ui::radius_scale())
                 .and_then(|look| Look::ALL.iter().position(|l| *l == look))
                 .unwrap_or(Look::ALL.len())
         },
-        move |path: &ConfigPath<S>, ix, cx| {
+        |path: &ConfigPath<BarConfig>, ix, cx| {
             if let Some(look) = Look::ALL.get(ix) {
-                apply_look(*look, &path.then("bar", get, get_mut), cx);
+                apply_look(*look, path, cx);
             }
         },
     )
     .icon(IconName::Sparkles)
-    .describe(
-        "Blocky, rounded or floating: one preset for the bar's style, borders, chrome and \
-         corner radius. Widgets and their order are kept",
-    )
-    .preview(move |path: &ConfigPath<S>, cx: &App| {
-        look_preview(&path.then("bar", get, get_mut), cx)
+    .describe("Blocky, rounded or floating: presets for bar style, borders and corner radius")
+    .preview(|path: &ConfigPath<BarConfig>, cx: &App| {
+        look_preview(path, cx)
     })
 }
 
@@ -207,7 +200,7 @@ impl Editable for BarConfig {
 
     fn groups() -> Vec<Group<Self>> {
         vec![
-            Group::new("Look", vec![look_field(|c: &Self| c, |c: &mut Self| c)]),
+            Group::new("Look", vec![bar_look_field()]),
             Group::new(
                 "Widgets",
                 vec![
@@ -258,7 +251,8 @@ impl Editable for BarConfig {
                              matches the space between widgets",
                         ),
                 ],
-            ),
+            )
+            .preview(bar_preview),
             Group::new(
                 "Appearance",
                 vec![
@@ -307,31 +301,34 @@ impl Editable for FrameConfig {
     }
 
     fn fields() -> Vec<Field<Self>> {
-        vec![
-            Field::toggle("enabled", "Enabled", lens!(enabled))
-                .describe(
+        flatten(Self::groups())
+    }
+
+    fn groups() -> Vec<Group<Self>> {
+        vec![Group::new(
+            "",
+            vec![
+                Field::toggle("enabled", "Enabled", lens!(enabled)).describe(
                     "A band around the work area. An attached bar and a taskbar dock \
                      become its sides; a floating bar or dock sits inside it",
+                ),
+                Field::number("thickness", "Thickness", lens!(thickness as f64))
+                    .range(0.0, 32.0)
+                    .unit("px")
+                    .describe("Width of the band on the edges nothing sits on"),
+                Field::number(
+                    "radius",
+                    "Corner radius",
+                    lens!(radius or f64::from(FrameConfig::RADIUS.base())),
                 )
-                .preview(frame_preview),
-            Field::number("thickness", "Thickness", lens!(thickness as f64))
-                .range(0.0, 32.0)
+                .range(0.0, 48.0)
                 .unit("px")
-                .describe("Width of the band on the edges nothing sits on")
-                .preview(frame_preview),
-            Field::number(
-                "radius",
-                "Corner radius",
-                lens!(radius or f64::from(FrameConfig::RADIUS.base())),
-            )
-            .range(0.0, 48.0)
-            .unit("px")
-            .describe(RADIUS_FOLLOWS_THEME)
-            .preview(frame_preview),
-            opacity_field("Opacity", lens!(opacity or 1.0))
-                .describe("Unset, the band matches the bar's background")
-                .preview(frame_preview),
-        ]
+                .describe(RADIUS_FOLLOWS_THEME),
+                opacity_field("Opacity", lens!(opacity or 1.0))
+                    .describe("Unset, the band matches the bar's background"),
+            ],
+        )
+        .preview(frame_preview)]
     }
 }
 
@@ -638,7 +635,8 @@ impl Editable for LauncherConfig {
                     opacity_field("Opacity", lens!(opacity or 1.0))
                         .preview(launcher_preview),
                 ],
-            ),
+            )
+            .preview(launcher_preview),
         ]
     }
 }
@@ -701,6 +699,12 @@ fn module_field(id: &str) -> Option<Field<LauncherModulesConfig>> {
             |m: &mut M| &mut m.config,
         ),
         "help" => Field::nested("help", "Help", |m: &M| &m.help, |m: &mut M| &mut m.help),
+        "calendar" => Field::nested(
+            "calendar",
+            "Calendar",
+            |m: &M| &m.calendar,
+            |m: &mut M| &mut m.calendar,
+        ),
         _ => return None,
     };
     Some(field)
@@ -754,6 +758,7 @@ prefix_only! {
     CalculatorConfig => "Calculator",
     HelpConfig => "Help",
     WebConfig => "Web",
+    CalendarConfig => "Calendar",
 }
 
 impl Editable for ConfigEditorConfig {
@@ -895,18 +900,25 @@ impl Editable for OsdConfig {
     }
 
     fn fields() -> Vec<Field<Self>> {
-        vec![
-            Field::choice(
-                "position",
-                "Position",
-                lens!(position),
-                &OsdPosition::ALL,
-                OsdPosition::label,
-            )
-            .describe("Where volume and brightness indicators appear; click an edge of the preview")
-            .preview(osd_preview),
-            opacity_field("Opacity", lens!(opacity or 1.0)),
-        ]
+        flatten(Self::groups())
+    }
+
+    fn groups() -> Vec<Group<Self>> {
+        vec![Group::new(
+            "",
+            vec![
+                Field::choice(
+                    "position",
+                    "Position",
+                    lens!(position),
+                    &OsdPosition::ALL,
+                    OsdPosition::label,
+                )
+                .describe("Where volume and brightness indicators appear; click an edge of the preview"),
+                opacity_field("Opacity", lens!(opacity or 1.0)),
+            ],
+        )
+        .preview(osd_preview)]
     }
 }
 
@@ -988,7 +1000,8 @@ impl Editable for NotificationConfig {
                     .unit("px")
                     .preview(notification_preview),
                 ],
-            ),
+            )
+            .preview(notification_preview),
             Group::new(
                 "Cards",
                 vec![
@@ -1101,7 +1114,8 @@ impl Editable for DockConfig {
                         .describe("Span the whole screen edge")
                         .preview(dock_preview),
                 ],
-            ),
+            )
+            .preview(dock_preview),
             Group::new(
                 "Sizing & Look",
                 vec![
