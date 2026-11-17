@@ -125,7 +125,29 @@ works as before. In Shortcuts, **Super opens the launcher** turns the bind on an
 | over fullscreen (default) | `allow-inhibiting=false`: also works where a game or VM has grabbed the keyboard |
 | not over fullscreen | `allow-when-fullscreen=false`: Super goes to the fullscreen app |
 
-## 5. Coming from TOML
+## 5. Wallpaper and theme from the wallpaper
+
+`launcher { modules { wallpaper { ... } } }` (the `;wp` module, and the
+Wallpaper settings page):
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `directory` | `~/Pictures/Wallpapers` | Folder the picker lists |
+| `columns` | `3` | Thumbnails per row |
+| `matugen` | `true` | Offer dark and light Material You themes generated from the wallpaper you set |
+| `auto_theme` | `true` | Recolour the shell whenever a wallpaper is set, and at startup. At startup only a default theme or one made from an earlier wallpaper is replaced; a theme you picked by hand is kept |
+| `matugen_scheme` | `"scheme-tonal-spot"` | Material You variant: `scheme-tonal-spot`, `-vibrant`, `-expressive`, `-content`, `-fidelity`, `-neutral`, `-monochrome`, `-rainbow`, `-fruit-salad` |
+
+Colours are extracted in-process (no external tool needed); `matugen` is only a
+fallback for image formats the shell can't decode. The same switch and variant
+picker sit in the Themes pane of `;cfg`.
+
+Wallpapers are set through `awww` when it is installed, otherwise through
+`hyprpaper` (`hyprctl hyprpaper`). The wallpaper currently up is read back from
+the same tool, falling back to the last one this shell set
+(`$XDG_STATE_HOME/conchy/wallpaper`).
+
+## 6. Coming from TOML
 
 The first start after the upgrade carries `shell.toml` / `config.toml` (and
 `theme.toml`, `state.toml`) over to KDL: the old file is renamed `*.toml.migrated`
