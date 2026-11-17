@@ -87,11 +87,8 @@ pub fn render_quick_toggles(
     let vpnx_on = vpnx.state.is_on();
     let vpnx_status = match vpnx.state {
         VpnxState::Up => vpnx
-            .groups
-            .iter()
-            .find(|g| g.is_selectable())
-            .map(|g| g.now.clone())
-            .filter(|now| !now.is_empty())
+            .current_server()
+            .map(str::to_string)
             .or_else(|| vpnx.effective_mode.map(|m| m.label().to_string()))
             .unwrap_or_else(|| "On".to_string()),
         VpnxState::Starting => "Starting...".to_string(),

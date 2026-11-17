@@ -130,6 +130,22 @@ pub struct VpnxData {
     pub mihomo_path: String,
 }
 
+impl VpnxData {
+    /// The server traffic goes through: the choice of the first selector
+    /// group, followed through nested groups (Proxy -> Auto -> node).
+    pub fn current_server(&self) -> Option<&str> {
+        let mut name = self.groups.iter().find(|g| g.is_selectable())?.now.as_str();
+        // Bounded: a config could make groups point at each other.
+        for _ in 0..self.groups.len() {
+            match self.groups.iter().find(|g| g.name == name) {
+                Some(group) if !group.now.is_empty() => name = &group.now,
+                _ => break,
+            }
+        }
+        (!name.is_empty()).then_some(name)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VpnxCommand {
     Up,
@@ -464,6 +480,29 @@ mod tests {
         assert!(groups[0].is_selectable());
         assert!(!groups[1].is_selectable());
         assert_eq!(groups[1].now, "b");
+    }
+
+    #[test]
+    fn current_server_follows_nested_groups() {
+        let group = |name: &str, kind: &str, now: &str| ProxyGroup {
+            name: name.into(),
+            kind: kind.into(),
+            now: now.into(),
+            all: vec![],
+        };
+        let mut data = VpnxData {
+            groups: vec![
+                group("Blocked", "Selector", "Any"),
+                group("Any", "Fallback", "FI"),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(data.current_server(), Some("FI"));
+
+        data.groups = vec![group("A", "Selector", "B"), group("B", "Selector", "A")];
+        assert!(data.current_server().is_some());
+        data.groups.clear();
+        assert_eq!(data.current_server(), None);
     }
 
     #[test]
