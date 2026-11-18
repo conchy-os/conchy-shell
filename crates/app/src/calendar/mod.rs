@@ -224,31 +224,6 @@ impl Render for CalendarPanel {
                     .gap(Spacing::Small.pixels())
                     .child(
                         div()
-                            .id("calendar-today-button")
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .w(px(28.))
-                            .h(px(28.))
-                            .rounded(Radius::Small.pixels())
-                            .bg(colors.ghost_element_background)
-                            .hover(move |s| s.bg(colors.ghost_element_hover))
-                            .active(move |s| s.bg(colors.ghost_element_active))
-                            .cursor_pointer()
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(|this, _, _, cx| {
-                                    this.jump_to_today(cx);
-                                }),
-                            )
-                            .child(
-                                Icon::new(IconName::Calendar)
-                                    .size(IconSize::XSmall)
-                                    .color(Color::Default),
-                            ),
-                    )
-                    .child(
-                        div()
                             .id("calendar-close-button")
                             .flex()
                             .items_center()
@@ -435,33 +410,7 @@ impl Render for CalendarPanel {
                             .text_size(TextSize::Small.rems())
                             .text_color(colors.text_muted)
                             .child(format_subtitle(self.today)),
-                    )
-                    .when(embedded, |el| {
-                        el.child(
-                            div()
-                                .id("calendar-today-button-embedded")
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .w(px(28.))
-                                .h(px(28.))
-                                .rounded(Radius::Small.pixels())
-                                .hover(move |s| s.bg(colors.ghost_element_hover))
-                                .active(move |s| s.bg(colors.ghost_element_active))
-                                .cursor_pointer()
-                                .on_mouse_down(
-                                    MouseButton::Left,
-                                    cx.listener(|this, _, _, cx| {
-                                        this.jump_to_today(cx);
-                                    }),
-                                )
-                                .child(
-                                    Icon::new(IconName::Calendar)
-                                        .size(IconSize::XSmall)
-                                        .color(Color::Default),
-                                ),
-                        )
-                    }),
+                    ),
             )
             .child(nav_bar)
             .child(weekdays_header)

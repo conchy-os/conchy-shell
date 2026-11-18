@@ -74,6 +74,10 @@ impl Clock {
 }
 
 impl BarWidget for Clock {
+    fn is_interactive(&self) -> bool {
+        true
+    }
+
     fn render_vertical(
         &mut self,
         ctx: &BarCtx,
