@@ -24,6 +24,7 @@ mod quick_toggles;
 mod sliders;
 mod tooltip;
 mod vpn;
+mod vpnx;
 mod wifi;
 
 pub use config::{ControlCenterConfig, PowerActionsConfig};
@@ -43,6 +44,7 @@ use crate::state::{AppState, watch, watch_task};
 use crate::windows::ShellWindows;
 
 pub use quick_toggles::ExpandedSection;
+use vpnx::VpnxSection;
 use wifi::WifiSection;
 
 pub const CONTROL_CENTER_PANEL_WIDTH: f32 = 340.0;
@@ -59,6 +61,8 @@ pub struct ControlCenter {
     focus_handle: FocusHandle,
     /// Present while the WiFi section is expanded.
     wifi: Option<Entity<WifiSection>>,
+    /// Present while the VPNX section is expanded.
+    vpnx: Option<Entity<VpnxSection>>,
     /// Signals only the expanded section reads; dropped when it collapses.
     section_watch: Option<Task<()>>,
     /// Take focus back on the next render, e.g. from a closed WiFi prompt.
@@ -83,11 +87,13 @@ impl ControlCenter {
             cx.notify()
         });
         watch(cx, AppState::upower(cx).subscribe(), |_, _, cx| cx.notify());
+        watch(cx, AppState::vpnx(cx).subscribe(), |_, _, cx| cx.notify());
 
         ControlCenter {
             expanded: ExpandedSection::None,
             focus_handle: cx.focus_handle(),
             wifi: None,
+            vpnx: None,
             section_watch: None,
             refocus: false,
         }
@@ -102,10 +108,14 @@ impl ControlCenter {
         };
 
         // Dropping the section drops its prompt, and any focus it held.
-        self.refocus |= self.wifi.is_some();
+        self.refocus |= self.wifi.is_some() || self.vpnx.is_some();
         self.wifi = (self.expanded == ExpandedSection::WiFi).then(|| {
             let parent_focus = self.focus_handle.clone();
             cx.new(|cx| WifiSection::new(parent_focus, cx))
+        });
+        self.vpnx = (self.expanded == ExpandedSection::Vpnx).then(|| {
+            let parent_focus = self.focus_handle.clone();
+            cx.new(|cx| VpnxSection::new(parent_focus, cx))
         });
 
         // Per-row progress comes from the queue, not the item list.
@@ -423,6 +433,9 @@ impl Render for ControlCenter {
                         })
                         .when(expanded == ExpandedSection::Vpn, |el| {
                             el.child(vpn::render_vpn_section(cx))
+                        })
+                        .when(expanded == ExpandedSection::Vpnx, |el| {
+                            el.when_some(self.vpnx.clone(), |el, vpnx| el.child(vpnx))
                         })
                         .when(expanded == ExpandedSection::Bluetooth, |el| {
                             el.child(bluetooth::render_bluetooth_section(cx))

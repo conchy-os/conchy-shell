@@ -25,6 +25,7 @@ pub mod sysinfo;
 pub mod themes;
 pub mod tray;
 pub mod upower;
+pub mod vpnx;
 pub mod wallpaper;
 pub mod watcher;
 
@@ -68,5 +69,11 @@ pub use upower::{
     BatteryData, BatteryLevel, BatteryState, ChargeLimit, PowerProfile, UPowerCommand, UPowerData,
     UPowerSubscriber, WarningLevel,
 };
-pub use wallpaper::{current_wallpaper, WallpaperCommand, WallpaperData, WallpaperEngine, WallpaperSubscriber};
+pub use vpnx::{
+    OverlayInfo, ProxyGroup, SubscriptionInfo, VpnxCommand, VpnxData, VpnxMode, VpnxState,
+    VpnxSubscriber,
+};
+pub use wallpaper::{
+    WallpaperCommand, WallpaperData, WallpaperEngine, WallpaperSubscriber, current_wallpaper,
+};
 pub use watcher::FileWatcher;

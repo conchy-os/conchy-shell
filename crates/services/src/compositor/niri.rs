@@ -18,7 +18,7 @@ use conchy_ipc::{
     Action, Event, Reply, Request, WorkspaceReferenceArg,
     state::{EventStreamState, EventStreamStatePart},
 };
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::lifecycle::RunToken;
 
@@ -199,13 +199,24 @@ fn run_listener(data: &Mutable<CompositorState>, token: &RunToken) -> Result<()>
 
         let event: Event = match serde_json::from_str(&line) {
             Ok(ev) => ev,
-            Err(e) => {
-                // Niri IPC is not version-bound — new fields/variants may appear.
-                // Log and skip unknown events gracefully.
-                debug!("Failed to parse Niri event (IPC version mismatch): {:?}", e);
+            // Niri IPC is not version-bound: an event type we don't know is
+            // safe to skip.
+            Err(e) if e.to_string().starts_with("unknown variant") => {
+                debug!("Skipping unknown Niri event (IPC version mismatch): {e}");
                 continue;
             }
+            // A known event we failed to read leaves the tracked state out of
+            // sync. Reconnect: every connection opens with the full state.
+            Err(e) => anyhow::bail!("unreadable Niri event, resyncing: {e}"),
         };
+
+        // The tracker panics on closing a window it never saw; resync instead.
+        if let Event::WindowClosed { id } = &event
+            && !internal_state.windows.windows.contains_key(id)
+        {
+            warn!("Niri closed unknown window {id}, resyncing");
+            anyhow::bail!("compositor state out of sync");
+        }
 
         internal_state.apply(event);
 
@@ -369,5 +380,19 @@ fn map_state(niri: &EventStreamState) -> CompositorState {
         windows,
         keyboard_layout,
         submap: None,
+    }
+}
+
+#[cfg(test)]
+mod event_parse_tests {
+    use super::*;
+
+    #[test]
+    fn unknown_event_type_is_recognised() {
+        let err = serde_json::from_str::<Event>(r#"{"SomethingNew":{"x":1}}"#).unwrap_err();
+        assert!(err.to_string().starts_with("unknown variant"), "{err}");
+        // A known event with a broken payload is not an "unknown variant".
+        let err = serde_json::from_str::<Event>(r#"{"WindowClosed":{"id":"x"}}"#).unwrap_err();
+        assert!(!err.to_string().starts_with("unknown variant"), "{err}");
     }
 }

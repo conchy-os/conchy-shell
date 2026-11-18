@@ -114,6 +114,7 @@ pub(crate) struct Services {
     pub sysinfo: services::SysInfoSubscriber,
     pub tray: services::TraySubscriber,
     pub upower: services::UPowerSubscriber,
+    pub vpnx: services::VpnxSubscriber,
     pub wallpaper: services::WallpaperSubscriber,
 }
 
@@ -122,7 +123,7 @@ impl Services {
     ///
     /// NOTE: keep in sync with the struct above - a new field is not added
     /// here automatically.
-    pub(crate) fn managed(&self) -> [&dyn ManagedService; 13] {
+    pub(crate) fn managed(&self) -> [&dyn ManagedService; 14] {
         [
             &self.audio,
             &self.network,
@@ -137,6 +138,7 @@ impl Services {
             &self.brightness,
             &self.clipboard,
             &self.compositor,
+            &self.vpnx,
         ]
     }
 }
@@ -162,6 +164,7 @@ pub(crate) async fn init_services() -> anyhow::Result<Services> {
         sysinfo: services::SysInfoSubscriber::new(),
         tray: services::TraySubscriber::new(),
         upower: services::UPowerSubscriber::new(),
+        vpnx: services::VpnxSubscriber::new(),
         wallpaper: services::WallpaperSubscriber::new(),
     })
 }
@@ -238,7 +241,7 @@ impl AppState {
     }
 
     /// Every service, for the launcher's services view.
-    pub fn managed_services(cx: &App) -> [&dyn ManagedService; 13] {
+    pub fn managed_services(cx: &App) -> [&dyn ManagedService; 14] {
         Self::services(cx).managed()
     }
 
@@ -336,6 +339,13 @@ impl AppState {
     #[inline(always)]
     pub fn upower(cx: &App) -> &services::UPowerSubscriber {
         let service = &Self::services(cx).upower;
+        service.ensure_started();
+        service
+    }
+
+    #[inline(always)]
+    pub fn vpnx(cx: &App) -> &services::VpnxSubscriber {
+        let service = &Self::services(cx).vpnx;
         service.ensure_started();
         service
     }

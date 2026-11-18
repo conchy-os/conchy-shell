@@ -13,6 +13,7 @@ itertools.workspace = true
 chrono.workspace = true
 hyprland.workspace = true
 conchy-ipc.workspace = true
+vpnx-client.workspace = true
 tokio.workspace = true
 inotify.workspace = true
 image = { workspace = true, features = ["png", "jpeg", "webp", "gif", "bmp"] }
