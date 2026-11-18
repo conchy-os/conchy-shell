@@ -36,7 +36,6 @@ use crate::launcher::modules::{
     help::config::HelpConfig, mpris::config::MprisConfig, services::config::ServicesConfig,
     shell::config::ShellConfig, sysinfo::config::SysInfoConfig, theme::config::ThemesConfig,
     wallpaper::config::{WallpaperConfig, WallpaperScheme}, web::config::WebConfig,
-    workspaces::config::WorkspacesConfig,
 };
 use crate::notification::{NotificationConfig, NotificationPopupPosition};
 use crate::osd::{OsdConfig, OsdPosition};
@@ -649,12 +648,6 @@ fn module_field(id: &str) -> Option<Field<LauncherModulesConfig>> {
         "apps" => Field::nested("apps", "Apps", |m: &M| &m.apps, |m: &mut M| &mut m.apps),
         "shell" => Field::nested("shell", "Shell", |m: &M| &m.shell, |m: &mut M| &mut m.shell),
         "web" => Field::nested("web", "Web", |m: &M| &m.web, |m: &mut M| &mut m.web),
-        "workspaces" => Field::nested(
-            "workspaces",
-            "Workspaces",
-            |m: &M| &m.workspaces,
-            |m: &mut M| &mut m.workspaces,
-        ),
         "wallpaper" => Field::nested(
             "wallpaper",
             "Wallpaper",
@@ -751,7 +744,6 @@ macro_rules! prefix_only {
 }
 
 prefix_only! {
-    WorkspacesConfig => "Workspaces",
     ServicesConfig => "Services",
     SysInfoConfig => "System info",
     MprisConfig => "Media",

@@ -14,7 +14,6 @@ pub mod sysinfo;
 pub mod theme;
 pub mod wallpaper;
 pub mod web;
-pub mod workspaces;
 
 use super::config::ModulesConfig;
 use super::page::ModuleDescriptor;
@@ -26,7 +25,6 @@ pub fn registry(config: &ModulesConfig) -> Vec<ModuleDescriptor> {
         apps::descriptor(&config.apps),
         shell::descriptor(&config.shell),
         web::descriptor(&config.web),
-        workspaces::descriptor(&config.workspaces),
         wallpaper::descriptor(&config.wallpaper),
         theme::descriptor(&config.themes),
         services::descriptor(&config.services),

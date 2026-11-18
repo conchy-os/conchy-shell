@@ -6,7 +6,6 @@ use super::modules::{
     help::config::HelpConfig, mpris::config::MprisConfig, services::config::ServicesConfig,
     shell::config::ShellConfig, sysinfo::config::SysInfoConfig, theme::config::ThemesConfig,
     wallpaper::config::WallpaperConfig, web::config::WebConfig,
-    workspaces::config::WorkspacesConfig,
 };
 
 /// Launcher window configuration.
@@ -53,7 +52,6 @@ pub struct ModulesConfig {
     pub apps: AppsConfig,
     pub shell: ShellConfig,
     pub web: WebConfig,
-    pub workspaces: WorkspacesConfig,
     pub wallpaper: WallpaperConfig,
     pub themes: ThemesConfig,
     pub services: ServicesConfig,
