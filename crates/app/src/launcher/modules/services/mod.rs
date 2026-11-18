@@ -4,6 +4,7 @@
 //! that service's page: restart, stop/start, and its start mode.
 
 pub mod config;
+mod live;
 
 use std::time::Duration;
 
@@ -54,6 +55,8 @@ struct ServiceInfo {
     mode: ServiceMode,
     memory: usize,
     controllable: bool,
+    /// What the running service reports right now.
+    live: Vec<Metadata>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -134,13 +137,17 @@ impl ServiceAction {
 fn snapshot(cx: &App) -> Vec<ServiceInfo> {
     AppState::managed_services(cx)
         .into_iter()
-        .map(|service| ServiceInfo {
-            name: service.name(),
-            icon: icon_for(service.name()),
-            status: service.status(),
-            mode: service.mode(),
-            memory: service.memory_bytes(),
-            controllable: service.controllable(),
+        .map(|service| {
+            let status = service.status();
+            ServiceInfo {
+                name: service.name(),
+                icon: icon_for(service.name()),
+                live: live::metrics(service.name(), &status, cx),
+                status,
+                mode: service.mode(),
+                memory: service.memory_bytes(),
+                controllable: service.controllable(),
+            }
         })
         .collect()
 }
@@ -356,7 +363,7 @@ fn service_detail(service: &ServiceInfo) -> Detail {
     if let Some(error) = service.status.error_message() {
         markdown.push_str(&format!("\n> {error}\n"));
     }
-    Detail::new()
+    let mut detail = Detail::new()
         .markdown(markdown)
         .metadata(
             Metadata::label("Status", service.status.label())
@@ -368,7 +375,11 @@ fn service_detail(service: &ServiceInfo) -> Detail {
         .metadata(Metadata::label(
             "Controllable",
             if service.controllable { "Yes" } else { "No" },
-        ))
+        ));
+    for entry in &service.live {
+        detail = detail.metadata(entry.clone());
+    }
+    detail
 }
 
 fn summary_card(summary: String, color: Color, error: Option<String>, cx: &App) -> AnyElement {
