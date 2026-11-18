@@ -149,28 +149,6 @@ pub struct StatusColors {
 }
 
 impl StatusColors {
-    /// Pick a status color from a 0-100 usage percentage.
-    pub fn from_percentage(&self, value: u32) -> Hsla {
-        if value >= 90 {
-            self.error
-        } else if value >= 70 {
-            self.warning
-        } else {
-            self.success
-        }
-    }
-
-    /// Pick a status color from a temperature in degrees Celsius.
-    pub fn from_temperature(&self, temp: i32) -> Hsla {
-        if temp >= 85 {
-            self.error
-        } else if temp >= 70 {
-            self.warning
-        } else {
-            self.success
-        }
-    }
-
     /// The attention colour a usage percentage earns, if any: warning from
     /// 70, error from 90, nothing below. For readouts that should stay
     /// neutral until something is actually wrong.

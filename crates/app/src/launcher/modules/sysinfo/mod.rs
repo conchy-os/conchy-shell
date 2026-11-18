@@ -71,7 +71,9 @@ impl LauncherPage for SysInfoModule {
 impl Render for SysInfoModule {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let data = &self.data;
-        let status = &cx.theme().colors().status;
+        let colors = cx.theme().colors();
+        let status = &colors.status;
+        let accent = colors.accent;
 
         let memory_detail = format!(
             "{} used of {}",
@@ -81,7 +83,7 @@ impl Render for SysInfoModule {
         let (temp_value, temp_color, temp_icon) = match data.temperature {
             Some(temp) => (
                 format!("{temp}°C"),
-                Color::Custom(status.from_temperature(temp)),
+                Color::Custom(status.temperature_attention(temp).unwrap_or(accent)),
                 if temp >= 70 {
                     IconName::Flame
                 } else {
@@ -123,7 +125,7 @@ impl Render for SysInfoModule {
                         "Swap",
                         IconName::ArrowDownUp,
                         format!("{}%", data.swap_usage),
-                        Color::Custom(status.from_percentage(data.swap_usage)),
+                        Color::Custom(status.usage_attention(data.swap_usage).unwrap_or(accent)),
                         "Swap memory in use".to_string(),
                         cx,
                     ))
@@ -157,6 +159,15 @@ impl Render for SysInfoModule {
     }
 }
 
+/// Theme accent while a reading is healthy, warning/error once it needs attention.
+fn usage_color(usage: u32, cx: &App) -> Hsla {
+    let colors = cx.theme().colors();
+    colors
+        .status
+        .usage_attention(usage)
+        .unwrap_or(colors.accent)
+}
+
 /// Muted icon-and-title line every card opens with.
 fn card_title(title: &str, icon: IconName) -> impl IntoElement {
     h_flex()
@@ -171,7 +182,7 @@ fn card_title(title: &str, icon: IconName) -> impl IntoElement {
 
 /// A card with a ring gauge beside the title and one detail line.
 fn gauge(title: &str, icon: IconName, usage: u32, detail: String, cx: &App) -> impl IntoElement {
-    let color = cx.theme().colors().status.from_percentage(usage);
+    let color = usage_color(usage, cx);
     h_flex()
         .flex_1()
         .p(Spacing::Large.pixels())
@@ -241,11 +252,7 @@ fn stat(
 }
 
 fn disk_row(disk: &DiskInfo, cx: &App) -> impl IntoElement {
-    let color = cx
-        .theme()
-        .colors()
-        .status
-        .from_percentage(disk.usage_percent);
+    let color = usage_color(disk.usage_percent, cx);
     h_flex()
         .gap(Spacing::Medium.pixels())
         .items_center()
