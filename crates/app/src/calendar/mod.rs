@@ -127,6 +127,9 @@ pub struct CalendarPanel {
     selected_date: NaiveDate,
     displayed_month: NaiveDate,
     focus_handle: FocusHandle,
+    /// Drawn inside another surface (the launcher): no panel chrome, no title
+    /// row, no fixed width; just the month and the agenda.
+    embedded: bool,
 }
 
 impl CalendarPanel {
@@ -139,6 +142,15 @@ impl CalendarPanel {
             selected_date: today,
             displayed_month,
             focus_handle: cx.focus_handle(),
+            embedded: false,
+        }
+    }
+
+    /// The calendar as content of a surface that already frames it.
+    pub fn embedded(cx: &mut Context<Self>) -> Self {
+        Self {
+            embedded: true,
+            ..Self::new(cx)
         }
     }
 
@@ -180,6 +192,7 @@ impl Render for CalendarPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let colors = theme.colors();
+        let embedded = self.embedded;
 
         let header = div()
             .id("calendar-header")
@@ -414,9 +427,41 @@ impl Render for CalendarPanel {
             .gap(Spacing::Small.pixels())
             .child(
                 div()
-                    .text_size(TextSize::Small.rems())
-                    .text_color(colors.text_muted)
-                    .child(format_subtitle(self.today)),
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_size(TextSize::Small.rems())
+                            .text_color(colors.text_muted)
+                            .child(format_subtitle(self.today)),
+                    )
+                    .when(embedded, |el| {
+                        el.child(
+                            div()
+                                .id("calendar-today-button-embedded")
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .w(px(28.))
+                                .h(px(28.))
+                                .rounded(Radius::Small.pixels())
+                                .hover(move |s| s.bg(colors.ghost_element_hover))
+                                .active(move |s| s.bg(colors.ghost_element_active))
+                                .cursor_pointer()
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(|this, _, _, cx| {
+                                        this.jump_to_today(cx);
+                                    }),
+                                )
+                                .child(
+                                    Icon::new(IconName::Calendar)
+                                        .size(IconSize::XSmall)
+                                        .color(Color::Default),
+                                ),
+                        )
+                    }),
             )
             .child(nav_bar)
             .child(weekdays_header)
@@ -460,6 +505,21 @@ impl Render for CalendarPanel {
                     ),
             );
 
+        let body = div()
+            .flex()
+            .gap(Spacing::Medium.pixels())
+            .child(month_card)
+            .child(agenda_card);
+
+        if embedded {
+            // The launcher already is the surface: the cards sit straight in it.
+            return div()
+                .id("calendar-embedded")
+                .w_full()
+                .child(body)
+                .into_any_element();
+        }
+
         div()
             .id("calendar-panel")
             .track_focus(&self.focus_handle)
@@ -474,13 +534,8 @@ impl Render for CalendarPanel {
             .flex_col()
             .gap(Spacing::Medium.pixels())
             .child(header)
-            .child(
-                div()
-                    .flex()
-                    .gap(Spacing::Medium.pixels())
-                    .child(month_card)
-                    .child(agenda_card),
-            )
+            .child(body)
+            .into_any_element()
     }
 }
 

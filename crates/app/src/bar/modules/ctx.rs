@@ -222,11 +222,27 @@ impl BarCtx {
     pub fn new(bar: &BarConfig, theme: &Theme) -> Self {
         let vertical = bar.is_vertical();
         let colors = theme.colors();
-        let segment = SegmentStyle::new(bar, theme);
+        let mut segment = SegmentStyle::new(bar, theme);
         // From the bar, not the segment: a bubbles inset must not shrink the
         // icons and chips, it only takes from the room around them.
         let rhythm = bar.rhythm();
-        let chip_radius = chip_radius(bar, &segment, &rhythm);
+        // Inside a bubble the chip (and so its hover fill) keeps one even gap
+        // to the pill on every side, which makes it a concentric pill itself.
+        // The gap is what the pill leaves around the chip across the bar; the
+        // segment's end padding and the chip's margin collapse into it along
+        // the bar.
+        let bubble_gap = (bar.style == BarStyle::Bubbles && !bar.widget_stretch).then(|| {
+            let chip = rhythm.chip().min(segment.thickness);
+            ((segment.thickness - chip) / 2.).max(px(0.))
+        });
+        let outer_padding = segment.padding;
+        if let Some(gap) = bubble_gap {
+            segment.padding = gap;
+        }
+        let chip_radius = match bubble_gap {
+            Some(gap) => inset_radius(segment.radius, gap),
+            None => chip_radius(bar, &segment, &rhythm),
+        };
         let bare = !bar.widget_background && !bar.widget_border;
         let geometry = |grouped: bool| {
             let mut chip = if bar.widget_stretch {
@@ -236,13 +252,23 @@ impl BarCtx {
             };
             // A chip never outgrows a pill that is inset from the bar.
             chip.thickness = chip.thickness.map(|t| t.min(segment.thickness));
+            let content_edge = chip.padding_main;
+            if let Some(gap) = bubble_gap {
+                // The gap lives in the segment now; give the content back the
+                // room the old padding and margin put before it.
+                chip.padding_main = content_edge + outer_padding + chip.margin - gap;
+                chip.margin = px(0.);
+            }
             if bar.widget_stretch && grouped {
                 // Cells are their own boxes; a flush strip needs no ends.
                 chip.padding_main = px(0.);
             } else if bare {
                 // Nothing draws the chip, so its ends would only read as a
                 // gap: keep a unit, and neighbours sit a breath apart.
-                chip.padding_main = rhythm.unit;
+                chip.padding_main = match bubble_gap {
+                    Some(gap) => rhythm.unit + outer_padding + rhythm.unit - gap,
+                    None => rhythm.unit,
+                };
             }
             chip
         };
@@ -437,7 +463,13 @@ mod tests {
         assert_eq!(bubbles.metrics.cell.height, attached.metrics.cell.height);
         assert_eq!(bubbles.segment.thickness, px(26.));
         assert_eq!(bubbles.chip.single.thickness, Some(px(24.)));
-        assert_eq!(bubbles.chip.single.padding_main, bubbles.rhythm.unit);
+        // 4px of segment padding + 2px of margin + 2px of padding, minus the
+        // 1px gap the segment now keeps around the chip.
+        assert_eq!(bubbles.chip.single.padding_main, px(7.));
+        assert_eq!(bubbles.chip.single.margin, px(0.));
+        assert_eq!(bubbles.segment.padding, px(1.));
+        // Concentric with the pill: the chip is as round as it is tall.
+        assert_eq!(bubbles.chip.single.radius, px(12.));
         assert_eq!(attached.chip.single.padding_main, px(8.));
         // Cells in a pill are pills; at scale 0 they would be square.
         assert_eq!(

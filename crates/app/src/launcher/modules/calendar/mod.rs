@@ -33,7 +33,7 @@ pub struct CalendarModule {
 
 impl CalendarModule {
     fn new(cx: &mut Context<Self>) -> Self {
-        let calendar = cx.new(CalendarPanel::new);
+        let calendar = cx.new(CalendarPanel::embedded);
         Self { calendar }
     }
 }
@@ -56,8 +56,7 @@ impl Render for CalendarModule {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .p(Spacing::Large.pixels())
-            .flex()
-            .justify_center()
+            .w_full()
             .child(self.calendar.clone())
     }
 }
