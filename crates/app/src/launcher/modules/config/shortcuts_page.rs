@@ -199,7 +199,7 @@ impl ShortcutsPage {
                 "Super does something else now: {}",
                 self.shortcuts.tap().map_or("", |b| b.action.as_str())
             ),
-            _ => "Tap Super, on its own, to open the launcher. Holding it and dragging still moves windows".into(),
+            _ => "Tap Super (Alt in a nested window) on its own to open the launcher. Holding it and dragging still moves windows".into(),
         };
         rows.push(
             Item::new("super", "Super opens the launcher")
@@ -219,8 +219,9 @@ impl ShortcutsPage {
                             page.apply_or_notify(
                                 |s| {
                                     if state == TapState::Launcher {
-                                        s.remove(shortcuts::SUPER_KEY);
+                                        s.remove_tap();
                                     } else {
+                                        s.remove_tap();
                                         s.put(Bind::launcher_tap(true));
                                     }
                                     Ok(())
@@ -379,7 +380,7 @@ impl LauncherPage for ShortcutsPage {
             .shortcuts
             .binds
             .iter()
-            .filter(|bind| !(bind.is_tap() && bind.key.eq_ignore_ascii_case(shortcuts::SUPER_KEY)))
+            .filter(|bind| !(bind.is_tap() && shortcuts::Shortcuts::is_tap_key(&bind.key)))
             .map(|bind| self.bind_row(bind, cx))
             .chain(std::iter::once(
                 Item::new("add", "Add a shortcut…")

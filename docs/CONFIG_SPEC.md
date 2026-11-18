@@ -109,12 +109,16 @@ nothing in between. The shell adds one on its first start, unless you already ha
 
 ```kdl
 binds {
-    Super allow-inhibiting=false {
+    Mod allow-inhibiting=false {
         spawn "conchy-shell" "toggle-launcher"
     }
     // ...your other binds
 }
 ```
+
+The key is written `Mod`, not `Super`: on a real screen `Mod` is Super, in a nested window
+it is Alt (the host keeps Super), so one bind works in both. An older `Super` tap is
+rewritten to `Mod` on start.
 
 Super+click, Super+drag and Super+any key are not taps, so moving windows with Super held
 works as before. In Shortcuts, **Super opens the launcher** turns the bind on and off, and

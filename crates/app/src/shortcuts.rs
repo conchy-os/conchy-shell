@@ -18,8 +18,13 @@ use kdl::{KdlDocument, KdlNode, KdlValue};
 
 use crate::config::{config_dir, write_atomic};
 
-/// The tap of the Super key.
-pub const SUPER_KEY: &str = "Super";
+/// The key that opens the launcher: a tap of `Mod`. On a real screen `Mod` is Super; in a
+/// nested window it is Alt, because the host compositor keeps Super for itself. A literal
+/// `Super` tap would never fire there.
+pub const SUPER_KEY: &str = "Mod";
+/// What this key was called before it became `Mod`. Still understood, and moved to
+/// `Mod` on start.
+const LEGACY_KEY: &str = "Super";
 /// What the Super tap runs.
 pub const LAUNCHER_ACTION: &str = r#"spawn "conchy-shell" "toggle-launcher""#;
 
@@ -287,6 +292,22 @@ impl Shortcuts {
         self.binds
             .iter()
             .find(|bind| same_key(&bind.key, SUPER_KEY))
+            .or_else(|| {
+                self.binds
+                    .iter()
+                    .find(|bind| same_key(&bind.key, LEGACY_KEY))
+            })
+    }
+
+    /// Drop the launcher tap, whichever way it is spelled.
+    pub fn remove_tap(&mut self) {
+        self.remove(SUPER_KEY);
+        self.remove(LEGACY_KEY);
+    }
+
+    /// Whether `bind` is the launcher tap's key.
+    pub fn is_tap_key(key: &str) -> bool {
+        same_key(key, SUPER_KEY) || same_key(key, LEGACY_KEY)
     }
 
     /// Add `bind`, or replace the one on the same key.
@@ -435,7 +456,10 @@ pub fn wm_has_includes(store: &Store) -> bool {
 /// `shortcuts.kdl`, no `wm.kdl`, or a `wm.kdl` with includes (which this could not
 /// copy whole).
 pub fn ensure_launcher_tap(store: &Store) -> anyhow::Result<bool> {
-    if store.shortcuts_path().exists() || !store.wm_path().exists() || wm_has_includes(store) {
+    if store.shortcuts_path().exists() {
+        return migrate_legacy_tap(store);
+    }
+    if !store.wm_path().exists() || wm_has_includes(store) {
         return Ok(false);
     }
     let mut shortcuts = store.load()?;
@@ -443,8 +467,26 @@ pub fn ensure_launcher_tap(store: &Store) -> anyhow::Result<bool> {
         return Ok(false);
     }
     shortcuts.put(Bind::launcher_tap(true));
-    // An older conchy-wm does not know a Super tap, and a config it rejects is worse
-    // than no Super key.
+    // An older conchy-wm does not know a tap, and a config it rejects is worse than no
+    // Super key.
+    validate_with_wm(store, &shortcuts).map_err(|reason| anyhow!("conchy-wm: {reason}"))?;
+    store.save(&shortcuts)?;
+    Ok(true)
+}
+
+/// An earlier version wrote the launcher tap as `Super`, which never fires in a nested
+/// window. Write it as `Mod` instead, keeping the bind's other properties.
+fn migrate_legacy_tap(store: &Store) -> anyhow::Result<bool> {
+    let mut shortcuts = store.load()?;
+    if !shortcuts.owned || shortcuts.find(SUPER_KEY).is_some() {
+        return Ok(false);
+    }
+    let Some(slot) = shortcuts.binds.iter_mut().find(|bind| {
+        bind.is_tap() && same_key(&bind.key, LEGACY_KEY) && bind.action == LAUNCHER_ACTION
+    }) else {
+        return Ok(false);
+    };
+    slot.key = SUPER_KEY.to_string();
     validate_with_wm(store, &shortcuts).map_err(|reason| anyhow!("conchy-wm: {reason}"))?;
     store.save(&shortcuts)?;
     Ok(true)
@@ -566,7 +608,7 @@ binds {
 
         let text = fs::read_to_string(store.shortcuts_path()).unwrap();
         assert!(text.contains("Mod+Return"), "{text}");
-        assert!(text.contains(r#"Super allow-inhibiting=false"#), "{text}");
+        assert!(text.contains(r#"Mod allow-inhibiting=false"#), "{text}");
         assert!(
             text.contains(r#"spawn "conchy-shell" "toggle-launcher""#),
             "{text}"
@@ -662,10 +704,27 @@ binds {
         // Second start: nothing to do. A user's own choice stays.
         assert!(!ensure_launcher_tap(&store).unwrap());
         let mut shortcuts = store.load().unwrap();
-        shortcuts.remove("Super");
+        shortcuts.remove_tap();
         store.save(&shortcuts).unwrap();
         assert!(!ensure_launcher_tap(&store).unwrap());
         assert!(store.load().unwrap().tap().is_none());
+    }
+
+    #[test]
+    fn a_legacy_super_tap_becomes_mod() {
+        let (_dir, store) = store_with(WM);
+        let mut shortcuts = store.load().unwrap();
+        let mut legacy = Bind::launcher_tap(false);
+        legacy.key = "Super".into();
+        shortcuts.put(legacy);
+        store.save(&shortcuts).unwrap();
+
+        assert!(ensure_launcher_tap(&store).unwrap());
+        let text = fs::read_to_string(store.shortcuts_path()).unwrap();
+        assert!(text.contains("Mod allow-when-fullscreen=false"), "{text}");
+        assert!(!text.contains("Super "), "{text}");
+        // Done once.
+        assert!(!ensure_launcher_tap(&store).unwrap());
     }
 
     #[test]
