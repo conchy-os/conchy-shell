@@ -26,6 +26,7 @@ mod keybinds;
 pub mod launcher;
 pub mod notification;
 pub mod osd;
+mod portal_host;
 pub mod shortcuts;
 pub mod state;
 mod windows;
@@ -62,10 +63,20 @@ async fn main() {
         Err(err) => tracing::warn!("Could not set up the Super launcher shortcut: {err:#}"),
     }
 
+    // Dev only: just the portal host, to try the xdg-desktop-portal-conchy dialogs inside
+    // another session. No compositor connection or other services are set up.
+    let portal_only = std::env::var_os("CONCHY_SHELL_PORTAL_ONLY").is_some();
+
     // Initialize services (requires async)
-    let services = state::init_services()
-        .await
-        .expect("Failed to initialize services");
+    let services = if portal_only {
+        None
+    } else {
+        Some(
+            state::init_services()
+                .await
+                .expect("Failed to initialize services"),
+        )
+    };
 
     // Create and run the GPUI application
     // gpui ships a no-op client, so `img(url)` (album art) needs a real one.
@@ -79,7 +90,13 @@ async fn main() {
         // Registers the TextField / Menu keybindings the component set needs.
         ui::init(cx);
         windows::ShellWindows::init(cx);
-        state::AppState::init(services, cx);
+        if portal_only {
+            portal_host::init(cx);
+            return;
+        }
+        if let Some(services) = services {
+            state::AppState::init(services, cx);
+        }
 
         // Register keybindings
         keybinds::register(cx);
@@ -90,6 +107,7 @@ async fn main() {
         notification::init(cx);
         osd::init(cx);
         launcher::init(cx);
+        portal_host::init(cx);
 
         launcher::modules::wallpaper::sync_theme_with_wallpaper(cx);
 

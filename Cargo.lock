@@ -1108,6 +1108,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "conchy-portal-proto"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "zvariant",
+]
+
+[[package]]
 name = "conchy-shell"
 version = "0.1.0"
 dependencies = [
@@ -1116,6 +1124,7 @@ dependencies = [
  "chrono",
  "conchy-config",
  "conchy-ipc",
+ "conchy-portal-proto",
  "futures",
  "futures-signals",
  "futures-util",

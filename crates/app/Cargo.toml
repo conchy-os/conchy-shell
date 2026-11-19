@@ -20,6 +20,8 @@ assets.workspace = true
 services.workspace = true
 conchy-ipc.workspace = true
 conchy-config.workspace = true
+# Типы протокола демон портала ↔ хост UI (общий крейт с xdg-desktop-portal-conchy).
+conchy-portal-proto = { path = "../../../conchy-portal/crates/proto" }
 zbus.workspace = true
 futures.workspace = true
 anyhow.workspace = true
