@@ -28,9 +28,32 @@ pub struct ShellHost {
     tx: mpsc::UnboundedSender<HostEvent>,
 }
 
+/// Only the portal daemon may drive the dialogs: the caller must own the daemon's well-known
+/// name. Otherwise any process in the session could pop up a "permission" prompt in the name
+/// of another app, or dismiss a real one.
+async fn from_daemon(conn: &zbus::Connection, header: &zbus::message::Header<'_>) -> bool {
+    let Some(sender) = header.sender() else { return false };
+    let Ok(bus) = zbus::fdo::DBusProxy::new(conn).await else { return false };
+    let Ok(name) = zbus::names::BusName::try_from(conchy_portal_proto::DAEMON_BUS_NAME) else {
+        return false;
+    };
+    bus.get_name_owner(name)
+        .await
+        .is_ok_and(|owner| owner.as_str() == sender.as_str())
+}
+
 #[interface(name = "org.conchy.Portal.ShellHost")]
 impl ShellHost {
-    async fn access(&self, id: String, req: AccessRequest) -> (u32, AccessResult) {
+    async fn access(
+        &self,
+        id: String,
+        req: AccessRequest,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+    ) -> (u32, AccessResult) {
+        if !from_daemon(conn, &header).await {
+            return (response::OTHER, AccessResult::default());
+        }
         let (reply, rx) = oneshot::channel();
         let event = HostEvent::Access { id, req: Box::new(req), reply };
         if self.tx.unbounded_send(event).is_err() {
@@ -40,7 +63,16 @@ impl ShellHost {
             .unwrap_or((response::OTHER, AccessResult::default()))
     }
 
-    async fn pick_cast_sources(&self, id: String, req: CastPickRequest) -> (u32, CastPickResult) {
+    async fn pick_cast_sources(
+        &self,
+        id: String,
+        req: CastPickRequest,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+    ) -> (u32, CastPickResult) {
+        if !from_daemon(conn, &header).await {
+            return (response::OTHER, CastPickResult::default());
+        }
         let (reply, rx) = oneshot::channel();
         let event = HostEvent::PickCast { id, req: Box::new(req), reply };
         if self.tx.unbounded_send(event).is_err() {
@@ -50,8 +82,15 @@ impl ShellHost {
             .unwrap_or((response::OTHER, CastPickResult::default()))
     }
 
-    async fn cancel(&self, id: String) {
-        let _ = self.tx.unbounded_send(HostEvent::Cancel { id });
+    async fn cancel(
+        &self,
+        id: String,
+        #[zbus(connection)] conn: &zbus::Connection,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+    ) {
+        if from_daemon(conn, &header).await {
+            let _ = self.tx.unbounded_send(HostEvent::Cancel { id });
+        }
     }
 }
 
