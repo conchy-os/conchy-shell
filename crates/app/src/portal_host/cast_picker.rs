@@ -316,10 +316,10 @@ impl CastPicker {
         match ev.keystroke.key.as_str() {
             "escape" => return self.finish(false, cx),
             "enter" => {
-                if self.selected.is_empty() {
-                    if let Some((key, ..)) = rows.get(self.cursor) {
-                        self.toggle(key.clone());
-                    }
+                if self.selected.is_empty()
+                    && let Some((key, ..)) = rows.get(self.cursor)
+                {
+                    self.toggle(key.clone());
                 }
                 return self.finish(true, cx);
             }
