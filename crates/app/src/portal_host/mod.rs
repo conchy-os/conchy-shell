@@ -6,6 +6,7 @@
 //! a crash here makes it answer `response = 2` (permission **not** granted).
 
 mod access;
+mod cast_picker;
 mod dbus;
 
 use futures::StreamExt;

@@ -27,10 +27,29 @@ use crate::state::{AppState, display_extent};
 
 type Reply = oneshot::Sender<(u32, AccessResult)>;
 
-struct Pending {
-    id: String,
-    req: AccessRequest,
-    reply: Reply,
+/// A dialog waiting for its turn: only one overlay owns the keyboard at a time.
+pub(super) enum Pending {
+    Access { id: String, req: AccessRequest, reply: Reply },
+    Cast(super::cast_picker::CastPending),
+}
+
+impl Pending {
+    fn id(&self) -> &str {
+        match self {
+            Self::Access { id, .. } => id,
+            Self::Cast(c) => &c.id,
+        }
+    }
+
+    /// Answer "cancelled" without ever showing the dialog.
+    fn refuse(self) {
+        match self {
+            Self::Access { reply, .. } => {
+                let _ = reply.send((response::CANCELLED, AccessResult::default()));
+            }
+            Self::Cast(c) => c.refuse(),
+        }
+    }
 }
 
 struct Current {
@@ -50,13 +69,22 @@ impl Global for AccessQueue {}
 pub fn handle(event: HostEvent, cx: &mut App) {
     match event {
         HostEvent::Access { id, req, reply } => {
-            cx.default_global::<AccessQueue>()
-                .pending
-                .push_back(Pending { id, req: *req, reply });
-            pump(cx);
+            enqueue(Pending::Access { id, req: *req, reply }, cx);
         }
+        HostEvent::PickCast { id, req, reply } => super::cast_picker::request(id, *req, reply, cx),
         HostEvent::Cancel { id } => cancel(&id, cx),
     }
+}
+
+pub(super) fn enqueue(dialog: Pending, cx: &mut App) {
+    cx.default_global::<AccessQueue>().pending.push_back(dialog);
+    pump(cx);
+}
+
+/// A dialog window went away: open the next queued one.
+pub(super) fn dialog_closed(cx: &mut App) {
+    cx.default_global::<AccessQueue>().current = None;
+    cx.defer(pump);
 }
 
 /// Show the next queued dialog if none is open.
@@ -68,7 +96,7 @@ fn pump(cx: &mut App) {
     let Some(next) = queue.pending.pop_front() else {
         return;
     };
-    let id = next.id.clone();
+    let id = next.id().to_string();
     match open_dialog(next, cx) {
         Some(handle) => cx.default_global::<AccessQueue>().current = Some(Current { id, handle }),
         // The window could not be created: refuse rather than hang the app waiting.
@@ -78,9 +106,9 @@ fn pump(cx: &mut App) {
 
 fn cancel(id: &str, cx: &mut App) {
     let queue = cx.default_global::<AccessQueue>();
-    if let Some(pos) = queue.pending.iter().position(|p| p.id == id) {
+    if let Some(pos) = queue.pending.iter().position(|p| p.id() == id) {
         if let Some(p) = queue.pending.remove(pos) {
-            let _ = p.reply.send((response::CANCELLED, AccessResult::default()));
+            p.refuse();
         }
         return;
     }
@@ -93,7 +121,8 @@ fn cancel(id: &str, cx: &mut App) {
     }
 }
 
-fn open_dialog(next: Pending, cx: &mut App) -> Option<AnyWindowHandle> {
+/// Window options of a full-output overlay with exclusive keyboard focus.
+pub(super) fn overlay_options(namespace: &str, app_id: &str, cx: &App) -> WindowOptions {
     // Without the shell state (dev mode `CONCHY_SHELL_PORTAL_ONLY`) fall back to gpui's display.
     let size = if cx.has_global::<AppState>() {
         display_extent(None, cx)
@@ -102,16 +131,16 @@ fn open_dialog(next: Pending, cx: &mut App) -> Option<AnyWindowHandle> {
             .map(|d| d.bounds().size)
             .unwrap_or_else(|| gpui::size(px(1920.), px(1080.)))
     };
-    let options = WindowOptions {
+    WindowOptions {
         titlebar: None,
         window_bounds: Some(WindowBounds::Windowed(Bounds {
             origin: point(px(0.), px(0.)),
             size,
         })),
-        app_id: Some("conchy-shell-portal-access".to_string()),
+        app_id: Some(app_id.to_string()),
         window_background: WindowBackgroundAppearance::Transparent,
         kind: WindowKind::LayerShell(LayerShellOptions {
-            namespace: "portal-access".to_string(),
+            namespace: namespace.to_string(),
             layer: Layer::Overlay,
             anchor: Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
             // Cover the whole output, bars included.
@@ -121,17 +150,25 @@ fn open_dialog(next: Pending, cx: &mut App) -> Option<AnyWindowHandle> {
         }),
         focus: true,
         ..Default::default()
-    };
+    }
+}
+
+fn open_dialog(next: Pending, cx: &mut App) -> Option<AnyWindowHandle> {
     let started = std::time::Instant::now();
-    let Pending { id, req, reply } = next;
-    let handle = cx
-        .open_window(options, move |window, cx| {
-            window.set_rem_size(cx.theme().font_size);
-            let handle = window.window_handle();
-            cx.new(|cx| AccessDialog::new(id, req, reply, handle, started, window, cx))
-        })
-        .ok()?;
-    Some(handle.into())
+    match next {
+        Pending::Access { id, req, reply } => {
+            let options = overlay_options("portal-access", "conchy-shell-portal-access", cx);
+            let handle = cx
+                .open_window(options, move |window, cx| {
+                    window.set_rem_size(cx.theme().font_size);
+                    let handle = window.window_handle();
+                    cx.new(|cx| AccessDialog::new(id, req, reply, handle, started, window, cx))
+                })
+                .ok()?;
+            Some(handle.into())
+        }
+        Pending::Cast(c) => super::cast_picker::open(c, started, cx),
+    }
 }
 
 /// The app's display name from its `.desktop` file, else its raw app id.
@@ -179,9 +216,7 @@ impl AccessDialog {
         // answer and the next queued dialog opens.
         cx.on_release(|this, cx| {
             this.answer(response::CANCELLED, false);
-            let queue = cx.default_global::<AccessQueue>();
-            queue.current = None;
-            cx.defer(pump);
+            dialog_closed(cx);
         })
         .detach();
         let choices = req
