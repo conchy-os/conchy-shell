@@ -21,7 +21,7 @@ pub fn init(cx: &mut App) {
     });
     cx.spawn(async move |cx| {
         while let Some(event) = rx.next().await {
-            let _ = cx.update(|cx| access::handle(event, cx));
+            cx.update(|cx| access::handle(event, cx));
         }
     })
     .detach();
