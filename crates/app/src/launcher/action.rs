@@ -15,6 +15,9 @@ use super::page::{DetailPage, LauncherPage, Page};
 pub enum Outcome {
     Close,
     Stay,
+    /// Move the keyboard into the selected item's [`Detail::form`](super::content::Detail::form);
+    /// Esc moves it back to the list.
+    FocusDetail,
     /// Show `page` on top; Esc or Backspace on an empty search comes back.
     Push(Page),
     /// `Push`, with the search starting as `input`, selected, so typing replaces it.
@@ -22,7 +25,6 @@ pub enum Outcome {
     Pop,
     /// `Pop`, this many times.
     PopMany(usize),
-    PopToRoot,
     /// Replace the whole input, prefix included. Leaves pushed pages first.
     SetQuery(String),
 }

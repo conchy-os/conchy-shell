@@ -15,21 +15,22 @@ pub mod row;
 use std::ops::Range;
 
 use gpui::{
-    AnyElement, App, Bounds, ClickEvent, Context, ElementId, EntityId, FocusHandle, Focusable,
+    AnyElement, App, Bounds, ClickEvent, Context, EntityId, FocusHandle, Focusable,
     MouseButton, Pixels, Point, ScrollHandle, SharedString, Size, Subscription, Window,
     WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div, layer_shell::*,
     prelude::*, px, relative, size,
 };
 use ui::patterns::{LauncherFrame, footer_hints};
 use ui::{
-    ActiveTheme, Breadcrumb, BreadcrumbItem, Clickable, Color, Icon, IconSize, InputBuffer, Label,
-    LabelCommon, Radius, ScrollStrategy, Scrollbar, Spacing, TextSize, ThumbnailCache, VirtualList,
+    ActiveTheme, Color, Icon, IconSize, InputBuffer, Label, LabelCommon, Radius,
+    ScrollStrategy, Scrollbar, Spacing, TextSize, ThumbnailCache, VirtualList,
     VirtualListScrollHandle, render_input_line,
 };
 
 use self::action::{Action, ActionPanel, Outcome};
 use self::content::{
-    Chrome, Collection, Content, Custom, Detail, Dropdown, EmptyView, GridLayout, Item, ListLayout,
+    Chrome, Collection, Content, Control, Custom, Detail, Dropdown, EmptyView, Form, GridLayout,
+    Item, ListLayout,
 };
 use self::matcher::{Ranked, Ranker};
 use self::page::{ModuleDescriptor, ModuleMeta, Page};
@@ -126,7 +127,17 @@ struct Pushed {
     _observe: Subscription,
     input: String,
     selected: Option<SharedString>,
-    title: SharedString,
+    /// The control that had the keyboard in the detail form.
+    detail_focus: Option<usize>,
+}
+
+/// The keyboard is in the selected item's [`Form`]: arrows move between its
+/// controls instead of between the list's items.
+struct DetailFocus {
+    index: usize,
+    /// The form's controls; empty until the first [`Launcher::refresh`]
+    /// after a pop, which asks the form for them.
+    controls: Vec<Control>,
 }
 
 #[derive(Default)]
@@ -158,6 +169,9 @@ pub struct Launcher {
     /// The row each entry is drawn in.
     entry_rows: Vec<usize>,
     selected: usize,
+    detail_focus: Option<DetailFocus>,
+    /// Scroll the form to its focused control on the next frame.
+    reveal_focus: bool,
     /// The page notified, or a search it filters itself changed.
     dirty: bool,
     /// The next rebuild starts at the top instead of keeping the selection.
@@ -196,6 +210,8 @@ impl Launcher {
             rows: Vec::new(),
             entry_rows: Vec::new(),
             selected: 0,
+            detail_focus: None,
+            reveal_focus: false,
             dirty: true,
             reset_selection: true,
             restore: None,
@@ -264,6 +280,7 @@ impl Launcher {
             self.route = route;
             if module_changed {
                 self.build_root(cx);
+                self.detail_focus = None;
                 self.clear_body();
                 self.invalidate(true, cx);
                 return;
@@ -334,6 +351,47 @@ impl Launcher {
                 self.scroll_to_selected();
             }
         }
+        self.sync_detail_focus(cx);
+    }
+
+    /// The selected item's form, if it has one.
+    fn selected_form(&self) -> Option<content::FormBuilder> {
+        self.selected_item()?.detail.as_ref()?.form.clone()
+    }
+
+    /// The form's controls, in drawing order.
+    fn form_controls(&self, cx: &App) -> Vec<Control> {
+        let Some(build) = self.selected_form() else {
+            return Vec::new();
+        };
+        let mut form = Form::new(None);
+        build(&mut form, cx);
+        form.controls
+    }
+
+    /// Move the keyboard into the selected item's form; false if it has none.
+    fn focus_detail(&mut self, cx: &mut Context<Self>) -> bool {
+        let controls = self.form_controls(cx);
+        if controls.is_empty() {
+            return false;
+        }
+        self.detail_focus = Some(DetailFocus { index: 0, controls });
+        self.reveal_focus = true;
+        cx.notify();
+        true
+    }
+
+    /// Ask the form for its controls again, after the page changed, and drop
+    /// the focus if the form is gone.
+    fn sync_detail_focus(&mut self, cx: &App) {
+        let Some(index) = self.detail_focus.as_ref().map(|focus| focus.index) else {
+            return;
+        };
+        let controls = self.form_controls(cx);
+        self.detail_focus = (!controls.is_empty()).then(|| DetailFocus {
+            index: index.min(controls.len() - 1),
+            controls,
+        });
     }
 
     /// Rank every section's items against the query and lay them out in
@@ -388,6 +446,7 @@ impl Launcher {
         self.selected = 0;
         self.list.scroll_to_item(0, ScrollStrategy::Top);
         self.body_scroll.set_offset(gpui::point(px(0.), px(0.)));
+        self.detail_scroll.set_offset(gpui::point(px(0.), px(0.)));
     }
 
     fn item(&self, entry: &Entry) -> Option<&Item> {
@@ -403,8 +462,12 @@ impl Launcher {
         self.item(self.entries.get(self.selected)?)
     }
 
-    /// The selected item's actions, or the view's when it has none.
+    /// The focused control's actions, else the selected item's, or the
+    /// view's when it has none.
     fn current_actions(&self) -> Option<&ActionPanel> {
+        if let Some(focus) = &self.detail_focus {
+            return focus.controls.get(focus.index).map(|control| &control.actions);
+        }
         self.selected_item()
             .map(|item| &item.actions)
             .filter(|actions| !actions.is_empty())
@@ -432,6 +495,9 @@ impl Launcher {
         match outcome {
             Outcome::Close => close(window, cx),
             Outcome::Stay => cx.notify(),
+            Outcome::FocusDetail => {
+                self.focus_detail(cx);
+            }
             Outcome::Push(page) => self.push(page, None, cx),
             Outcome::PushWithInput(page, input) => self.push(page, Some(input), cx),
             Outcome::Pop => self.pop(cx),
@@ -440,7 +506,6 @@ impl Launcher {
                     self.pop(cx);
                 }
             }
-            Outcome::PopToRoot => self.pop_to_root(cx),
             Outcome::SetQuery(text) => {
                 self.pop_to_root(cx);
                 self.input.set_text(text);
@@ -451,17 +516,12 @@ impl Launcher {
 
     fn push(&mut self, page: Page, input: Option<String>, cx: &mut Context<Self>) {
         let observe = page.observe(cx);
-        let title: SharedString = self
-            .body
-            .as_ref()
-            .and_then(|b| b.chrome().title.clone())
-            .unwrap_or_else(|| self.metas[self.route.module].name.into());
         self.stack.push(Pushed {
             page,
             _observe: observe,
             input: self.input.text().to_string(),
             selected: self.selected_item().map(|item| item.id.clone()),
-            title,
+            detail_focus: self.detail_focus.take().map(|focus| focus.index),
         });
         let text = input.unwrap_or_default();
         self.input.set_text(text.clone());
@@ -485,20 +545,15 @@ impl Launcher {
         }
     }
 
-    fn pop_to_depth(&mut self, depth: usize, cx: &mut Context<Self>) {
-        if depth == 0 {
-            self.pop_to_root(cx);
-            return;
-        }
-        while self.stack.len() > depth {
-            self.pop(cx);
-        }
-    }
-
     fn restore_below(&mut self, popped: Pushed, cx: &mut Context<Self>) {
         self.input.set_text(popped.input.clone());
         self.routed_input = popped.input;
         self.restore = popped.selected;
+        self.reveal_focus = popped.detail_focus.is_some();
+        self.detail_focus = popped.detail_focus.map(|index| DetailFocus {
+            index,
+            controls: Vec::new(),
+        });
         self.clear_body();
         self.invalidate(false, cx);
     }
@@ -507,6 +562,9 @@ impl Launcher {
         self.refresh(cx);
         if self.menu.is_some() {
             return self.navigate_menu(key, window, cx);
+        }
+        if self.detail_focus.is_some() {
+            return self.navigate_detail(key, window, cx);
         }
 
         let grid = self
@@ -531,28 +589,10 @@ impl Launcher {
             NavKey::Right if grid => {
                 self.selected = (self.selected + 1).min(count.saturating_sub(1));
             }
-            NavKey::Left if self.input.is_empty() => {
-                if let Some(actions) = self.current_actions()
-                    && let Some(secondary) = actions.get(1)
-                    && (secondary.title == "Step back" || secondary.title == "Previous option")
-                {
-                    let action = secondary.clone();
-                    self.run(&action, window, cx);
-                    return;
-                }
-                self.input.move_left(false);
-            }
-            NavKey::Right if self.input.is_empty() => {
-                if let Some(actions) = self.current_actions()
-                    && let Some(secondary) = actions.get(1)
-                    && (secondary.title == "Step back" || secondary.title == "Previous option")
-                    && let Some(primary) = actions.get(0)
-                {
-                    let action = primary.clone();
-                    self.run(&action, window, cx);
-                    return;
-                }
-                self.input.move_right(false);
+            // An empty search has no cursor to move: → goes into the form.
+            NavKey::Right if self.input.is_empty() && self.selected_form().is_some() => {
+                self.focus_detail(cx);
+                return;
             }
             NavKey::Left => self.input.move_left(false),
             NavKey::Right => self.input.move_right(false),
@@ -563,7 +603,42 @@ impl Launcher {
             NavKey::Up => self.move_row(false),
             NavKey::Down => self.move_row(true),
         }
+        if matches!(key, NavKey::Up | NavKey::Down) {
+            self.detail_scroll.set_offset(gpui::point(px(0.), px(0.)));
+        }
         self.scroll_to_selected();
+        cx.notify();
+    }
+
+    /// Keys while the keyboard is in a form: ↑ ↓ between controls, ← →
+    /// step the control, Enter and the rest run its actions.
+    fn navigate_detail(&mut self, key: NavKey, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(focus) = &mut self.detail_focus else {
+            return;
+        };
+        let count = focus.controls.len();
+        match key {
+            NavKey::Enter => return self.activate(0, window, cx),
+            _ if count == 0 => {}
+            NavKey::Up => focus.index = (focus.index + count - 1) % count,
+            NavKey::Down => focus.index = (focus.index + 1) % count,
+            NavKey::Left | NavKey::Right => {
+                let step = focus.controls[focus.index].step.as_ref();
+                match (step, key) {
+                    (Some((back, _)), NavKey::Left) => {
+                        let action = back.clone();
+                        return self.run(&action, window, cx);
+                    }
+                    (Some((_, forward)), _) => {
+                        let action = forward.clone();
+                        return self.run(&action, window, cx);
+                    }
+                    (None, NavKey::Left) => self.detail_focus = None,
+                    (None, _) => {}
+                }
+            }
+        }
+        self.reveal_focus = true;
         cx.notify();
     }
 
@@ -605,6 +680,7 @@ impl Launcher {
         } else {
             self.selected.saturating_sub(step)
         };
+        self.detail_scroll.set_offset(gpui::point(px(0.), px(0.)));
         self.scroll_to_selected();
         cx.notify();
     }
@@ -622,6 +698,8 @@ impl Launcher {
         if self.menu.is_some() {
             return;
         }
+        // Typing is for the search; the form has no text of its own.
+        self.detail_focus = None;
         edit(&mut self.input);
         self.sync(cx);
         cx.notify();
@@ -656,7 +734,7 @@ impl Launcher {
         if modules::config::select::close(cx) {
             return;
         }
-        if self.menu.take().is_some() {
+        if self.menu.take().is_some() || self.detail_focus.take().is_some() {
             cx.notify();
         } else if !self.input.is_empty() {
             self.edit(cx, InputBuffer::clear);
@@ -667,8 +745,16 @@ impl Launcher {
         }
     }
 
+    /// Whether Tab and the right click open the actions menu here.
+    fn menu_enabled(&self) -> bool {
+        self.body.as_ref().is_none_or(|body| !body.chrome().no_menu)
+    }
+
     fn toggle_menu(&mut self, cx: &mut Context<Self>) {
         self.refresh(cx);
+        if !self.menu_enabled() {
+            return;
+        }
         self.menu = match self.menu {
             Some(_) => None,
             None => self
@@ -767,6 +853,9 @@ impl Launcher {
 
     /// Bare prefixes at the root; where you are once a page is pushed.
     fn footer_left(&self) -> String {
+        if self.detail_focus.is_some() {
+            return "↑ ↓ to move between settings".to_string();
+        }
         if !self.stack.is_empty() {
             return "Esc to go back".to_string();
         }
@@ -779,7 +868,7 @@ impl Launcher {
     }
 
     fn footer_right(&self) -> Vec<(SharedString, SharedString)> {
-        let back: SharedString = if self.stack.is_empty() {
+        let back: SharedString = if self.stack.is_empty() && self.detail_focus.is_none() {
             "Close".into()
         } else {
             "Back".into()
@@ -792,18 +881,37 @@ impl Launcher {
         }
         let mut hints: Vec<(SharedString, SharedString)> = Vec::new();
         if let Some(actions) = self.current_actions() {
-            hints.extend(
-                actions
-                    .iter()
-                    .zip(["Enter", "Shift Enter"])
-                    .map(|(action, key)| (action.title.clone(), key.into())),
-            );
-            if actions.iter().nth(1).is_some() {
-                hints.push(("Actions".into(), "Tab".into()));
+            if self.menu_enabled() {
+                hints.extend(
+                    actions
+                        .iter()
+                        .zip(["Enter", "Shift Enter"])
+                        .map(|(action, key)| (action.title.clone(), key.into())),
+                );
+                if actions.iter().nth(1).is_some() {
+                    hints.push(("Actions".into(), "Tab".into()));
+                }
+            } else {
+                hints.extend(actions.iter().enumerate().filter_map(|(ix, action)| {
+                    let key = if ix == 0 {
+                        Some("Enter".into())
+                    } else {
+                        action.shortcut_label()
+                    };
+                    Some((action.title.clone(), key?))
+                }));
             }
         }
         if self.input.is_empty() && self.body.as_ref().and_then(Body::dropdown).is_some() {
             hints.push(("Filter".into(), "← →".into()));
+        }
+        if let Some(focus) = &self.detail_focus
+            && focus
+                .controls
+                .get(focus.index)
+                .is_some_and(|control| control.step.is_some())
+        {
+            hints.push(("Adjust".into(), "← →".into()));
         }
         hints.push((back, "Esc".into()));
         hints
@@ -875,7 +983,11 @@ impl Launcher {
                 .flex_col()
                 .justify_center()
                 .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                    if this.selected != entry_ix {
+                        this.detail_scroll.set_offset(gpui::point(px(0.), px(0.)));
+                    }
                     this.selected = entry_ix;
+                    this.detail_focus = None;
                     // A list with a detail pane is a master list: a click
                     // shows the item's pane, as selecting with the arrows
                     // does, and only a double click runs its action. A
@@ -890,6 +1002,7 @@ impl Launcher {
                     MouseButton::Right,
                     cx.listener(move |this, _, _, cx| {
                         this.selected = entry_ix;
+                        this.detail_focus = None;
                         this.menu = None;
                         this.toggle_menu(cx);
                     }),
@@ -975,10 +1088,20 @@ impl Launcher {
                         .child(list)
                         .into_any_element();
                 };
-                let detail = self
-                    .selected_item()
-                    .and_then(|item| item.detail.as_ref())
-                    .map(|detail| detail::render_detail(detail, cx));
+                let selected_detail = self.selected_item().and_then(|item| item.detail.as_ref());
+                let form = selected_detail.and_then(|detail| detail.form.as_ref()).map(|build| {
+                    let mut form = Form::new(self.detail_focus.as_ref().map(|focus| focus.index));
+                    build(&mut form, cx);
+                    // Scrolls in this frame's prepaint, once the rows have bounds.
+                    if self.reveal_focus && let Some(row) = form.focused_row {
+                        self.detail_scroll.scroll_to_item(row);
+                    }
+                    form.rows
+                });
+                let detail = match form {
+                    Some(_) => None,
+                    None => selected_detail.map(|detail| detail::render_detail(detail, cx)),
+                };
                 div()
                     .flex_1()
                     .overflow_hidden()
@@ -1009,7 +1132,13 @@ impl Launcher {
                                     .overflow_hidden()
                                     .overflow_y_scroll()
                                     .track_scroll(&self.detail_scroll)
-                                    .children(detail),
+                                    // A form's rows are the scroll container's own
+                                    // children, which is what scrolling to one needs.
+                                    .when(form.is_some(), |el| {
+                                        el.flex().flex_col().p(Spacing::XLarge.pixels())
+                                    })
+                                    .children(detail)
+                                    .children(form.into_iter().flatten()),
                             )
                             // Overlaid on the pane's padding like the list's
                             // bar, so content never shifts when it appears;
@@ -1153,56 +1282,6 @@ impl Launcher {
         let config = &Config::global(cx).launcher;
         launcher_target_size(&self.route, &self.metas, config)
     }
-
-    fn render_breadcrumbs(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if self.stack.is_empty() {
-            return None;
-        }
-
-        let mut breadcrumb = Breadcrumb::new();
-        let entity = cx.entity().clone();
-
-        for (depth, pushed) in self.stack.iter().enumerate() {
-            let title = pushed.title.clone();
-            let mut item = BreadcrumbItem::new(
-                ElementId::NamedInteger("breadcrumb".into(), depth as u64),
-                title,
-            );
-            if depth == 0 {
-                item = item.icon(self.metas[self.route.module].icon);
-            }
-            let entity = entity.clone();
-            item = item.on_click(move |_, _window, cx| {
-                entity.update(cx, |this, cx| {
-                    this.pop_to_depth(depth, cx);
-                });
-            });
-            breadcrumb = breadcrumb.child(item);
-        }
-
-        let current_title = self
-            .body
-            .as_ref()
-            .and_then(|b| b.chrome().title.clone())
-            .unwrap_or_else(|| self.metas[self.route.module].name.into());
-
-        breadcrumb = breadcrumb.child(
-            BreadcrumbItem::new(
-                ElementId::NamedInteger("breadcrumb".into(), self.stack.len() as u64),
-                current_title,
-            )
-            .current(true),
-        );
-
-        Some(
-            div()
-                .w_full()
-                .px(Spacing::XLarge.pixels())
-                .py(Spacing::Small.pixels())
-                .child(breadcrumb)
-                .into_any_element(),
-        )
-    }
 }
 
 pub fn launcher_target_size(
@@ -1282,6 +1361,7 @@ impl Render for Launcher {
             None => None,
         };
         let body = self.render_body(cx);
+        self.reveal_focus = false;
         let menu = self.render_menu(cx);
 
         div()
@@ -1293,7 +1373,7 @@ impl Render for Launcher {
                 this.navigate(NavKey::Enter, window, cx);
             }))
             .on_action(cx.listener(|this, _: &SecondaryConfirm, window, cx| {
-                if this.menu.is_none() {
+                if this.menu.is_none() && this.menu_enabled() {
                     this.activate(1, window, cx);
                 }
             }))
@@ -1364,7 +1444,6 @@ impl Render for Launcher {
                     .loading(loading)
                     .hints(self.footer_left())
                     .actions(footer_hints(self.footer_right(), cx))
-                    .breadcrumbs(self.render_breadcrumbs(cx))
                     .children(header)
                     .children(dropdown)
                     .child(body),

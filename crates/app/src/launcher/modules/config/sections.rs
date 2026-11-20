@@ -21,15 +21,12 @@ use crate::bar::modules::{
     KeyboardLayoutConfig, MprisConfig as BarMprisConfig, SysInfoConfig as BarSysInfoConfig,
     TrayConfig, WorkspacesConfig as BarWorkspacesConfig,
 };
-use crate::config::ActiveConfig;
 use crate::config::{Config, FrameConfig};
 use crate::control_center::ControlCenterConfig;
 use crate::dock::config::{
     DockAlign, DockConfig, DockHoverEffect, DockMonitors, DockStyle, DockVisibility,
 };
-use crate::launcher::action::{Action, Outcome};
 use crate::launcher::config::{LauncherConfig, ModulesConfig as LauncherModulesConfig};
-use crate::launcher::content::Item;
 use crate::launcher::modules::{
     self, apps::config::AppsConfig, calculator::config::CalculatorConfig,
     calendar::config::CalendarConfig, clipboard::config::ClipboardConfig,
@@ -44,33 +41,6 @@ use crate::windows::PanelsConfig;
 impl Editable for Config {
     fn title() -> &'static str {
         "Config"
-    }
-
-    /// Links to settings that live outside `shell.kdl`.
-    fn shortcuts(cx: &App) -> Vec<Item> {
-        let prefix = cx.config().launcher.modules.themes.prefix.clone();
-        vec![
-            Item::new("shortcuts", "Shortcuts")
-                .subtitle("Keyboard shortcuts")
-                .icon(IconName::Keyboard)
-                .keywords("shortcuts keybinds hotkeys keys super bindings")
-                .action(
-                    Action::new("Open shortcuts", |_, cx| {
-                        Outcome::Push(super::shortcuts_page::ShortcutsPage::open(cx))
-                    })
-                    .icon(IconName::ChevronRight),
-                )
-                .detail(super::shortcuts_detail::shortcuts_detail(cx)),
-            Item::new("themes", "Themes")
-                .subtitle("Desktop themes and colors")
-                .icon(IconName::Palette)
-                .keywords("theme colors palette")
-                .action(
-                    Action::new("Open themes", move |_, _| Outcome::SetQuery(prefix.clone()))
-                        .icon(IconName::ChevronRight),
-                )
-                .detail(super::themes_detail::themes_detail(cx)),
-        ]
     }
 
     fn fields() -> Vec<Field<Self>> {

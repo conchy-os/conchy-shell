@@ -5,7 +5,7 @@ use gpui::Context;
 use ui::IconName;
 
 use super::schema::{ConfigPath, Editable, Editor, Field};
-use super::section_page::watch_revision;
+use super::config_page::watch_revision;
 use crate::launcher::action::{Action, ActionPanel, Outcome};
 use crate::launcher::content::{Content, EmptyView, Item, List};
 use crate::launcher::page::LauncherPage;

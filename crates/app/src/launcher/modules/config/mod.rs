@@ -1,15 +1,17 @@
 //! Config module - edit `shell.kdl` from the launcher.
 //!
-//! `;cfg` lists the config sections; each field is a row whose Enter action
-//! toggles, picks from a list or edits the value in the search line. Edits
-//! apply at once and are written to the file a moment later.
+//! `;cfg` lists the config sections with the selected one's form beside
+//! them. Enter or → moves the keyboard into the form, where each setting is
+//! toggled, stepped or edited in the search line. Edits apply at once and are
+//! written to the file a moment later.
 
 mod bar_preview;
-mod choice_page;
+mod config_page;
 // Every launcher module keeps its settings in `config.rs`, this one included.
 #[allow(clippy::module_inception)]
 pub mod config;
 mod dock_preview;
+mod form;
 mod frame_preview;
 mod launcher_preview;
 mod layout_page;
@@ -18,7 +20,6 @@ mod notification_preview;
 mod osd_preview;
 mod preview;
 pub mod schema;
-pub mod section_page;
 mod sections;
 pub mod select;
 mod shortcuts_detail;
@@ -29,9 +30,7 @@ mod value_page;
 use ui::IconName;
 
 use self::config::ConfigEditorConfig;
-use self::schema::ConfigPath;
-use self::section_page::SectionPage;
-use crate::config::Config;
+use self::config_page::ConfigPage;
 use crate::launcher::page::{ModuleDescriptor, ModuleMeta};
 
 pub fn descriptor(config: &ConfigEditorConfig) -> ModuleDescriptor {
@@ -45,6 +44,6 @@ pub fn descriptor(config: &ConfigEditorConfig) -> ModuleDescriptor {
             default: false,
             in_help: true,
         },
-        |cx| SectionPage::<Config>::new(ConfigPath::root(), cx),
+        ConfigPage::new,
     )
 }

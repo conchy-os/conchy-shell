@@ -1,6 +1,5 @@
-//! How a config struct describes itself to the editor: a title, its
-//! [`Field`]s with their serde keys (optionally in [`Group`]s), and
-//! optionally a page of its own.
+//! How a config struct describes itself to the editor: a title and its
+//! [`Field`]s with their serde keys (optionally in [`Group`]s).
 //!
 //! A [`ConfigPath`] ties a section to its place in the live [`Config`] and in
 //! `shell.kdl`, so a page deep in the tree can read and write without
@@ -8,16 +7,15 @@
 
 use std::rc::Rc;
 
-use gpui::{AnyElement, App, AppContext};
+use gpui::{AnyElement, App};
 use serde::Serialize;
 use toml_edit::ser::ValueSerializer;
 use ui::IconName;
 
-use super::section_page::{SectionPage, hoisted_item, primary_action, render_form};
+use super::form::add_groups;
 use crate::config::Config;
 use crate::config::store::{self, Edit};
-use crate::launcher::action::Action;
-use crate::launcher::content::Item;
+use crate::launcher::content::Form;
 use crate::launcher::page::Page;
 
 pub trait Editable: Serialize + Default + Clone + 'static {
@@ -30,17 +28,6 @@ pub trait Editable: Serialize + Default + Clone + 'static {
     /// overrides this builds `fields()` by flattening it.
     fn groups() -> Vec<Group<Self>> {
         vec![Group::new("", Self::fields())]
-    }
-
-    /// A page that replaces the generic field list; `None` gets
-    /// [`SectionPage`].
-    fn page(_path: ConfigPath<Self>, _cx: &mut App) -> Option<Page> {
-        None
-    }
-
-    /// Rows that are not fields, listed last: shortcuts to related pages.
-    fn shortcuts(_cx: &App) -> Vec<Item> {
-        Vec::new()
     }
 }
 
@@ -148,23 +135,17 @@ pub struct ChoiceOption<S> {
     pub value: toml_edit::Value,
 }
 
-/// Opens a page for a nested or custom field.
+/// Opens the page of a custom field.
 pub type Open<S> = Rc<dyn Fn(ConfigPath<S>, &mut App) -> Page>;
 
 /// Applies a preset: the chosen option's index, with the section's path.
 pub type Commit<S> = Rc<dyn Fn(&ConfigPath<S>, usize, &mut App)>;
 
-/// Builds the row for a child with a single field, titled after its parent.
-pub type Hoist<S> = Rc<dyn Fn(&Field<S>, &ConfigPath<S>, &App) -> Item>;
-
-/// Every child field's primary action, for the parent row's menu.
-pub type Quick<S> = Rc<dyn Fn(&ConfigPath<S>) -> Vec<Action>>;
-
 /// A picture of what a field (or bundle) controls, drawn above its controls.
 pub type Preview<S> = Rc<dyn Fn(&ConfigPath<S>, &App) -> AnyElement>;
 
-/// Draws a child struct's fields inline, `depth` levels down.
-pub type Form<S> = Rc<dyn Fn(&ConfigPath<S>, usize, &App) -> AnyElement>;
+/// Adds a child struct's fields to a form, `depth` levels down.
+pub type Inline<S> = Rc<dyn Fn(&mut Form, &ConfigPath<S>, usize, &App)>;
 
 pub enum Editor<S> {
     Toggle(Lens<S, bool>),
@@ -187,16 +168,12 @@ pub enum Editor<S> {
         /// through this instead of one key through the field's lens.
         commit: Option<Commit<S>>,
     },
-    /// A child struct: its page on Enter, its form in the detail pane, and
-    /// its fields' actions in the menu, so one row edits the whole child.
+    /// A child struct: its fields sit in the form under its own heading.
     Nested {
-        open: Open<S>,
         reset: Rc<dyn Fn(&mut S)>,
-        form: Form<S>,
-        quick: Quick<S>,
+        inline: Inline<S>,
         summary: Rc<dyn Fn(&S) -> String>,
         modified: Rc<dyn Fn(&S) -> bool>,
-        hoist: Option<Hoist<S>>,
         /// How many settings the child has; none means nothing to show.
         count: usize,
     },
@@ -241,22 +218,16 @@ impl<S> Clone for Editor<S> {
                 commit: commit.clone(),
             },
             Editor::Nested {
-                open,
                 reset,
-                form,
-                quick,
+                inline,
                 summary,
                 modified,
-                hoist,
                 count,
             } => Editor::Nested {
-                open: open.clone(),
                 reset: reset.clone(),
-                form: form.clone(),
-                quick: quick.clone(),
+                inline: inline.clone(),
                 summary: summary.clone(),
                 modified: modified.clone(),
-                hoist: hoist.clone(),
                 count: *count,
             },
             Editor::Custom { open } => Editor::Custom { open: open.clone() },
@@ -500,41 +471,25 @@ impl<S: Editable> Field<S> {
         get_mut: fn(&mut S) -> &mut C,
     ) -> Self {
         let child = move |path: &ConfigPath<S>| path.then(key, get, get_mut);
-        let open: Open<S> =
-            Rc::new(move |path: ConfigPath<S>, cx: &mut App| open_section(child(&path), cx));
         let reset = Rc::new(move |s: &mut S| *get_mut(s) = C::default());
-        let form: Form<S> = Rc::new(move |path: &ConfigPath<S>, depth: usize, cx: &App| {
-            render_form(&child(path), &C::groups(), depth, cx)
-        });
-        let quick = Rc::new(move |path: &ConfigPath<S>| {
-            let child = child(path);
-            C::fields()
-                .iter()
-                .filter(|field| !field.editor.is_empty())
-                .map(|field| primary_action(&child, field, true))
-                .collect()
-        });
+        let inline: Inline<S> = Rc::new(
+            move |form: &mut Form, path: &ConfigPath<S>, depth: usize, cx: &App| {
+                add_groups(form, &child(path), &C::groups(), depth, cx);
+            },
+        );
         let summary = Rc::new(move |s: &S| summarize(&C::fields(), get(s)));
         let modified = Rc::new(move |s: &S| {
             let child = get(s);
             C::fields().iter().any(|field| field.is_modified(child))
         });
-        let hoist: Option<Hoist<S>> = (C::fields().len() == 1).then(|| {
-            Rc::new(move |parent: &Field<S>, path: &ConfigPath<S>, cx: &App| {
-                hoisted_item::<C>(parent, &child(path), cx)
-            }) as Hoist<S>
-        });
         Self::new(
             key,
             label,
             Editor::Nested {
-                open,
                 reset,
-                form,
-                quick,
+                inline,
                 summary,
                 modified,
-                hoist,
                 count: C::fields().len(),
             },
         )
@@ -708,11 +663,6 @@ fn summarize<C: Editable>(fields: &[Field<C>], child: &C) -> String {
         return format!("{} settings", fields.len());
     }
     values.join(" · ")
-}
-
-/// `C::page` if it has one, else the generic field list.
-pub fn open_section<C: Editable>(path: ConfigPath<C>, cx: &mut App) -> Page {
-    C::page(path.clone(), cx).unwrap_or_else(|| Page::new(cx.new(|cx| SectionPage::new(path, cx))))
 }
 
 type Get<S> = Rc<dyn Fn(&Config) -> &S>;

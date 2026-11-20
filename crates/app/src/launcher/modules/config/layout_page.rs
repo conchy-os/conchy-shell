@@ -1,14 +1,15 @@
 //! Arrange the bar: the three slots as sections, each widget a row that can
 //! move, change slot or go; a trailing row per slot adds one.
 
-use gpui::{AnyElement, App, AppContext, Context, SharedString, Window, div, prelude::*, px};
+use gpui::{AnyElement, App, AppContext, Context, Div, SharedString, Window, div, prelude::*, px};
 use ui::{
     ActiveTheme, ButtonCommon, ButtonStyle, Clickable, Color, Disableable, Icon, IconButton,
-    IconName, IconSize, Label, LabelCommon, Spacing, TextSize, Tooltip, h_flex, v_flex,
+    IconName, IconSize, Label, LabelCommon, Radius, Spacing, TextSize, Tooltip, h_flex, v_flex,
 };
 
 use super::schema::{ConfigPath, to_value};
-use super::section_page::{form_heading, header_card, watch_revision};
+use super::config_page::watch_revision;
+use super::form::form_heading;
 use crate::bar::config::{BarConfig, BarItem};
 use crate::bar::modules::{self as widgets, BarWidgetMeta};
 use crate::launcher::action::{Action, ActionPanel, Outcome};
@@ -420,6 +421,20 @@ fn layout_row(
                 .child(button("remove", IconName::Trash, "Remove".into()).on_click(remove)),
         )
         .into_any_element()
+}
+
+/// A page header card with the launcher's card chrome; `body` sets its own
+/// colours over the default surface.
+fn header_card(body: Div) -> Div {
+    div()
+        .px(Spacing::Medium.pixels())
+        .pt(Spacing::XSmall.pixels())
+        .child(
+            body.px(Spacing::Large.pixels())
+                .py(Spacing::Medium.pixels())
+                .rounded(Radius::Large.pixels())
+                .border_1(),
+        )
 }
 
 impl LauncherPage for LayoutPage {

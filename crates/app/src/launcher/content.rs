@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::SystemTime;
 
-use gpui::{AnyElement, AnyView, App, Context, Hsla, SharedString, Window};
+use gpui::{AnyElement, AnyView, App, Context, Hsla, IntoElement, SharedString, Window, div, prelude::*};
 use ui::{Color, IconName, IconSource};
 
 use super::action::{Action, ActionPanel};
@@ -50,6 +50,8 @@ pub(super) struct Chrome {
     pub title: Option<SharedString>,
     pub placeholder: Option<SharedString>,
     pub loading: bool,
+    /// Tab and the right click do not open the actions menu.
+    pub no_menu: bool,
     /// Run when no item is selected, or the view has none.
     pub actions: ActionPanel,
 }
@@ -74,6 +76,14 @@ macro_rules! chrome_builders {
 
         pub fn actions(mut self, actions: ActionPanel) -> Self {
             self.chrome.actions = actions;
+            self
+        }
+
+        /// Without the actions menu only the first action has a key of its
+        /// own (Enter); the others run from their shortcuts, which the
+        /// footer lists.
+        pub fn menu(mut self, menu: bool) -> Self {
+            self.chrome.no_menu = !menu;
             self
         }
     };
@@ -507,6 +517,82 @@ impl DropdownItem {
 /// Builds a [`Detail`]'s mouse widget from the current app state.
 pub type DetailWidget = Rc<dyn Fn(&App) -> AnyElement>;
 
+/// Fills a [`Form`] from the current app state.
+pub type FormBuilder = Rc<dyn Fn(&mut Form, &App)>;
+
+/// What the keyboard can do on one control of a [`Form`]: Enter runs the
+/// first action, Shift+Enter the second, Tab opens them all.
+#[derive(Clone)]
+pub struct Control {
+    pub(super) actions: ActionPanel,
+    pub(super) step: Option<(Action, Action)>,
+}
+
+impl Control {
+    pub fn new(actions: ActionPanel) -> Self {
+        Self {
+            actions,
+            step: None,
+        }
+    }
+
+    /// ← runs `back` and → runs `forward`. Without it ← leaves the form.
+    pub fn step(mut self, back: Action, forward: Action) -> Self {
+        self.step = Some((back, forward));
+        self
+    }
+}
+
+/// A detail pane of stacked rows, some of them controls the keyboard can
+/// move between. The page adds rows and controls in drawing order, so a
+/// control's index is the same whether the form is drawn or only asked for
+/// its controls.
+pub struct Form {
+    focus: Option<usize>,
+    pub(super) rows: Vec<AnyElement>,
+    pub(super) controls: Vec<Control>,
+    /// The row of the focused control, to scroll to.
+    pub(super) focused_row: Option<usize>,
+}
+
+impl Form {
+    pub(super) fn new(focus: Option<usize>) -> Self {
+        Self {
+            focus,
+            rows: Vec::new(),
+            controls: Vec::new(),
+            focused_row: None,
+        }
+    }
+
+    /// A row nothing can be done on: a heading, a preview.
+    pub fn row(&mut self, row: impl IntoElement) {
+        self.rows.push(Self::slot(row));
+    }
+
+    /// A row with a control. `draw` is told whether the control has the
+    /// keyboard focus.
+    pub fn control(&mut self, control: Control, draw: impl FnOnce(bool) -> AnyElement) {
+        let focused = self.focus == Some(self.controls.len());
+        if focused {
+            self.focused_row = Some(self.rows.len());
+        }
+        self.controls.push(control);
+        self.rows.push(Self::slot(draw(focused)));
+    }
+
+    /// Rows stack in a scrolling column, where a row that may shrink would
+    /// be squeezed instead of scrolled.
+    fn slot(row: impl IntoElement) -> AnyElement {
+        div().w_full().flex_none().child(row).into_any_element()
+    }
+
+    /// Nothing added yet.
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+}
+
 /// Markdown above a key-value list. The markdown is a block subset:
 /// headings, paragraphs, `-` lists, `>` quotes, fenced code and
 /// `![alt](path)` images on their own line.
@@ -516,6 +602,7 @@ pub struct Detail {
     pub(super) markdown: SharedString,
     pub(super) metadata: Vec<Metadata>,
     pub(super) widget: Option<DetailWidget>,
+    pub(super) form: Option<FormBuilder>,
 }
 
 impl Detail {
@@ -539,6 +626,14 @@ impl Detail {
     /// work here; focusable ones do not, the launcher keeps focus.
     pub fn widget(mut self, build: impl Fn(&App) -> AnyElement + 'static) -> Self {
         self.widget = Some(Rc::new(build));
+        self
+    }
+
+    /// A form instead of the markdown, metadata and widget. An item's action
+    /// returns [`Outcome::FocusDetail`](super::action::Outcome::FocusDetail)
+    /// to move the keyboard into it, and → does the same on an empty search.
+    pub fn form(mut self, build: impl Fn(&mut Form, &App) + 'static) -> Self {
+        self.form = Some(Rc::new(build));
         self
     }
 }
@@ -629,4 +724,47 @@ impl Custom {
     }
 
     chrome_builders!();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn control() -> Control {
+        Control::new(ActionPanel::new())
+    }
+
+    /// A control is told whether it is the focused one by its position
+    /// among the controls, not among the rows.
+    #[test]
+    fn focus_counts_controls_not_rows() {
+        let mut seen = Vec::new();
+        let mut form = Form::new(Some(1));
+        form.row(div());
+        form.control(control(), |focused| {
+            seen.push(focused);
+            div().into_any_element()
+        });
+        form.row(div());
+        form.row(div());
+        form.control(control(), |focused| {
+            seen.push(focused);
+            div().into_any_element()
+        });
+
+        assert_eq!(seen, [false, true]);
+        assert_eq!(form.controls.len(), 2);
+        assert_eq!(form.rows.len(), 5);
+        assert_eq!(form.focused_row, Some(4));
+    }
+
+    #[test]
+    fn nothing_is_focused_without_a_focus() {
+        let mut form = Form::new(None);
+        form.control(control(), |focused| {
+            assert!(!focused);
+            div().into_any_element()
+        });
+        assert_eq!(form.focused_row, None);
+    }
 }
