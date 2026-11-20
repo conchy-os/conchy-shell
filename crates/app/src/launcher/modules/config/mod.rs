@@ -4,16 +4,24 @@
 //! toggles, picks from a list or edits the value in the search line. Edits
 //! apply at once and are written to the file a moment later.
 
+mod about_detail;
+pub mod about_page;
 mod bar_preview;
+mod bluetooth_detail;
+pub mod bluetooth_page;
 mod choice_page;
 // Every launcher module keeps its settings in `config.rs`, this one included.
 #[allow(clippy::module_inception)]
 pub mod config;
+mod displays_detail;
+pub mod displays_page;
 mod dock_preview;
 mod frame_preview;
 mod launcher_preview;
 mod layout_page;
 mod look_preset;
+mod network_detail;
+pub mod network_page;
 mod notification_preview;
 mod osd_preview;
 mod preview;
@@ -23,6 +31,8 @@ mod sections;
 pub mod select;
 mod shortcuts_detail;
 mod shortcuts_page;
+mod sound_detail;
+pub mod sound_page;
 mod themes_detail;
 mod value_page;
 

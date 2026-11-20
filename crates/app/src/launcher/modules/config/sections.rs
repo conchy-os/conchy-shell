@@ -29,7 +29,7 @@ use crate::dock::config::{
 };
 use crate::launcher::action::{Action, Outcome};
 use crate::launcher::config::{LauncherConfig, ModulesConfig as LauncherModulesConfig};
-use crate::launcher::content::Item;
+use crate::launcher::content::{Item, Section};
 use crate::launcher::modules::{
     self, apps::config::AppsConfig, calculator::config::CalculatorConfig,
     calendar::config::CalendarConfig, clipboard::config::ClipboardConfig,
@@ -44,6 +44,67 @@ use crate::windows::PanelsConfig;
 impl Editable for Config {
     fn title() -> &'static str {
         "Config"
+    }
+
+    /// System & Hardware settings sections.
+    fn extra_sections(cx: &App) -> Vec<Section> {
+        vec![Section::new("System").items(vec![
+            Item::new("network", "Network & Wi-Fi")
+                .subtitle("Wi-Fi, Ethernet, and IP configuration")
+                .icon(IconName::Wifi)
+                .keywords("wifi network internet ethernet ip dns address wlan ssid")
+                .action(
+                    Action::new("Open Network Settings", |_, cx| {
+                        Outcome::Push(super::network_page::NetworkPage::open(cx))
+                    })
+                    .icon(IconName::ChevronRight),
+                )
+                .detail(super::network_detail::network_detail(cx)),
+            Item::new("bluetooth", "Bluetooth")
+                .subtitle("Devices, pairing, and adapter settings")
+                .icon(IconName::Bluetooth)
+                .keywords("bluetooth bt pairing devices headphones audio wireless")
+                .action(
+                    Action::new("Open Bluetooth Settings", |_, cx| {
+                        Outcome::Push(super::bluetooth_page::BluetoothPage::open(cx))
+                    })
+                    .icon(IconName::ChevronRight),
+                )
+                .detail(super::bluetooth_detail::bluetooth_detail(cx)),
+            Item::new("displays", "Displays & Monitors")
+                .subtitle("Resolution, scale, arrangement, and refresh rate")
+                .icon(IconName::ScreenShare)
+                .keywords("display monitor screen resolution scale hz refresh vrr outputs")
+                .action(
+                    Action::new("Open Displays Settings", |_, cx| {
+                        Outcome::Push(super::displays_page::DisplaysPage::open(cx))
+                    })
+                    .icon(IconName::ChevronRight),
+                )
+                .detail(super::displays_detail::displays_detail(cx)),
+            Item::new("sound", "Sound & Audio")
+                .subtitle("Output volume, microphone, and audio devices")
+                .icon(IconName::Volume)
+                .keywords("sound audio volume speakers headphones mic microphone mute")
+                .action(
+                    Action::new("Open Sound Settings", |_, cx| {
+                        Outcome::Push(super::sound_page::SoundPage::open(cx))
+                    })
+                    .icon(IconName::ChevronRight),
+                )
+                .detail(super::sound_detail::sound_detail(cx)),
+            Item::new("about", "About System")
+                .subtitle("System specifications, OS, and hardware details")
+                .icon(IconName::Info)
+                .keywords("about system info specs hardware cpu ram memory kernel os")
+                .action(
+                    Action::new("Open System Info", |_, cx| {
+                        Outcome::Push(super::about_page::AboutPage::open(cx))
+                    })
+                    .icon(IconName::ChevronRight),
+                )
+                .detail(super::about_detail::about_detail(cx)),
+        ])]
     }
 
     /// Links to settings that live outside `shell.kdl`.
@@ -80,7 +141,7 @@ impl Editable for Config {
     fn groups() -> Vec<Group<Self>> {
         vec![
             Group::new(
-                "",
+                "Desktop Shell",
                 vec![
                     Field::nested("bar", "Bar", |c: &Self| &c.bar, |c: &mut Self| &mut c.bar)
                         .icon(IconName::Layout)

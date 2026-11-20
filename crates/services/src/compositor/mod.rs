@@ -18,8 +18,8 @@ use tracing::info;
 use crate::jobs::JobQueue;
 use crate::lifecycle::{Lifecycle, ManagedService, ServiceMode};
 pub use types::{
-    ActiveWindow, CompositorBackend, CompositorCommand, CompositorState, Monitor, Window,
-    WindowGeometry, Workspace,
+    ActiveWindow, CompositorBackend, CompositorCommand, CompositorState, Monitor, OutputMode,
+    Window, WindowGeometry, Workspace,
 };
 
 /// Event-driven compositor subscriber.

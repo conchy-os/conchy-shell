@@ -71,6 +71,9 @@ impl<S: Editable> LauncherPage for SectionPage<S> {
             .click_selects(true)
             .title(self.title)
             .placeholder("Search settings…");
+        for section in S::extra_sections(cx) {
+            list = list.section(section);
+        }
         for group in &self.groups {
             let mut items = group
                 .fields

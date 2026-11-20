@@ -86,6 +86,51 @@ pub fn execute_command(cmd: CompositorCommand) -> Result<()> {
             Action::ToggleWindowMinimized { id }
         }
         CompositorCommand::ToggleOverview => Action::ToggleOverview {},
+        CompositorCommand::SetOutputMode {
+            output,
+            width,
+            height,
+            refresh_rate,
+        } => {
+            let mode = conchy_ipc::ModeToSet::Specific(conchy_ipc::ConfiguredMode {
+                width,
+                height,
+                refresh: Some(refresh_rate),
+            });
+            return send_output_action(output, conchy_ipc::OutputAction::Mode { mode });
+        }
+        CompositorCommand::SetOutputScale { output, scale } => {
+            let scale = conchy_ipc::ScaleToSet::Specific(scale);
+            return send_output_action(output, conchy_ipc::OutputAction::Scale { scale });
+        }
+        CompositorCommand::SetOutputTransform { output, transform } => {
+            let t = match transform {
+                1 => conchy_ipc::Transform::_90,
+                2 => conchy_ipc::Transform::_180,
+                3 => conchy_ipc::Transform::_270,
+                _ => conchy_ipc::Transform::Normal,
+            };
+            return send_output_action(output, conchy_ipc::OutputAction::Transform { transform: t });
+        }
+        CompositorCommand::SetOutputPosition { output, x, y } => {
+            let position = conchy_ipc::PositionToSet::Specific(conchy_ipc::ConfiguredPosition { x, y });
+            return send_output_action(output, conchy_ipc::OutputAction::Position { position });
+        }
+        CompositorCommand::SetOutputVrr { output, enabled } => {
+            let vrr = conchy_ipc::VrrToSet {
+                vrr: enabled,
+                on_demand: false,
+            };
+            return send_output_action(output, conchy_ipc::OutputAction::Vrr { vrr });
+        }
+        CompositorCommand::SetOutputPower { output, on } => {
+            let action = if on {
+                conchy_ipc::OutputAction::On
+            } else {
+                conchy_ipc::OutputAction::Off
+            };
+            return send_output_action(output, action);
+        }
         CompositorCommand::Custom(action, args) => {
             if action == "spawn" {
                 Action::Spawn {
@@ -236,11 +281,11 @@ fn connect() -> Result<UnixStream> {
     UnixStream::connect(socket_path).context("Failed to connect to Conchy WM socket")
 }
 
-/// Send a single action to Conchy WM / Niri and read the reply.
-fn send_action(action: Action) -> Result<()> {
+/// Send a request to Conchy WM / Niri and read the reply.
+fn send_request(request: Request) -> Result<Reply> {
     let mut stream = connect()?;
 
-    let mut json = serde_json::to_string(&Request::Action(action))?;
+    let mut json = serde_json::to_string(&request)?;
     json.push('\n');
     stream.write_all(json.as_bytes())?;
     stream.flush()?;
@@ -250,7 +295,21 @@ fn send_action(action: Action) -> Result<()> {
     reader.read_line(&mut response_line)?;
 
     let reply: Reply = serde_json::from_str(&response_line)?;
-    reply.map_err(|e| anyhow!("Conchy WM error: {}", e)).map(|_| ())
+    Ok(reply)
+}
+
+/// Send a single action to Conchy WM / Niri and read the reply.
+fn send_action(action: Action) -> Result<()> {
+    send_request(Request::Action(action))?
+        .map_err(|e| anyhow!("Conchy WM error: {}", e))
+        .map(|_| ())
+}
+
+/// Send an output configuration action to Conchy WM.
+fn send_output_action(output: String, action: conchy_ipc::OutputAction) -> Result<()> {
+    send_request(Request::Output { output, action })?
+        .map_err(|e| anyhow!("Conchy WM error: {}", e))
+        .map(|_| ())
 }
 
 /// Map niri's internal EventStreamState to our generic CompositorState.

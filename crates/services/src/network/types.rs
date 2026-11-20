@@ -104,6 +104,14 @@ pub struct AccessPoint {
     pub state: DeviceState,
     /// Whether the network is open (no security).
     pub public: bool,
+    /// Security mode label (e.g. "WPA2", "WPA3", "Open").
+    pub security: String,
+    /// Frequency in MHz.
+    pub frequency: u32,
+    /// BSSID hardware MAC address.
+    pub hw_address: String,
+    /// Maximum bitrate in kbps.
+    pub max_bitrate: u32,
     /// Whether a connection attempt is in progress.
     pub working: bool,
     /// Whether we have a saved connection profile for this network.
@@ -114,12 +122,46 @@ pub struct AccessPoint {
     pub device_path: ObjectPath<'static>,
 }
 
+impl AccessPoint {
+    /// Wi-Fi frequency band label ("2.4 GHz", "5 GHz", "6 GHz").
+    pub fn band(&self) -> &'static str {
+        if self.frequency >= 5925 {
+            "6 GHz"
+        } else if self.frequency >= 4900 {
+            "5 GHz"
+        } else if self.frequency > 0 {
+            "2.4 GHz"
+        } else {
+            ""
+        }
+    }
+
+    /// Wi-Fi channel number derived from frequency.
+    pub fn channel(&self) -> u32 {
+        if self.frequency >= 2412 && self.frequency <= 2484 {
+            if self.frequency == 2484 { 14 } else { (self.frequency - 2407) / 5 }
+        } else if self.frequency >= 5170 && self.frequency <= 5825 {
+            (self.frequency - 5000) / 5
+        } else if self.frequency >= 5955 && self.frequency <= 7115 {
+            (self.frequency - 5950) / 5
+        } else {
+            0
+        }
+    }
+}
+
 /// Information about an active network connection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActiveConnectionInfo {
     Wired {
         name: String,
         speed: u32,
+        interface: String,
+        hw_address: Option<String>,
+        ipv4_address: Option<String>,
+        ipv4_gateway: Option<String>,
+        dns_servers: Vec<String>,
+        ipv6_address: Option<String>,
     },
     WiFi {
         id: String,
@@ -127,6 +169,17 @@ pub enum ActiveConnectionInfo {
         strength: u8,
         device: String,
         object_path: OwnedObjectPath,
+        interface: String,
+        hw_address: Option<String>,
+        ipv4_address: Option<String>,
+        ipv4_gateway: Option<String>,
+        dns_servers: Vec<String>,
+        ipv6_address: Option<String>,
+        bssid: Option<String>,
+        frequency: Option<u32>,
+        channel: Option<u32>,
+        bitrate: Option<u32>,
+        security: Option<String>,
     },
     Vpn {
         name: String,
@@ -141,6 +194,54 @@ impl ActiveConnectionInfo {
             Self::Wired { name, .. } => name,
             Self::WiFi { name, .. } => name,
             Self::Vpn { name, .. } => name,
+        }
+    }
+
+    pub fn ipv4_address(&self) -> Option<&str> {
+        match self {
+            Self::Wired { ipv4_address, .. } => ipv4_address.as_deref(),
+            Self::WiFi { ipv4_address, .. } => ipv4_address.as_deref(),
+            Self::Vpn { .. } => None,
+        }
+    }
+
+    pub fn ipv4_gateway(&self) -> Option<&str> {
+        match self {
+            Self::Wired { ipv4_gateway, .. } => ipv4_gateway.as_deref(),
+            Self::WiFi { ipv4_gateway, .. } => ipv4_gateway.as_deref(),
+            Self::Vpn { .. } => None,
+        }
+    }
+
+    pub fn dns_servers(&self) -> &[String] {
+        match self {
+            Self::Wired { dns_servers, .. } => dns_servers.as_slice(),
+            Self::WiFi { dns_servers, .. } => dns_servers.as_slice(),
+            Self::Vpn { .. } => &[],
+        }
+    }
+
+    pub fn ipv6_address(&self) -> Option<&str> {
+        match self {
+            Self::Wired { ipv6_address, .. } => ipv6_address.as_deref(),
+            Self::WiFi { ipv6_address, .. } => ipv6_address.as_deref(),
+            Self::Vpn { .. } => None,
+        }
+    }
+
+    pub fn interface(&self) -> Option<&str> {
+        match self {
+            Self::Wired { interface, .. } => Some(interface),
+            Self::WiFi { interface, .. } => Some(interface),
+            Self::Vpn { .. } => None,
+        }
+    }
+
+    pub fn hw_address(&self) -> Option<&str> {
+        match self {
+            Self::Wired { hw_address, .. } => hw_address.as_deref(),
+            Self::WiFi { hw_address, .. } => hw_address.as_deref(),
+            Self::Vpn { .. } => None,
         }
     }
 }

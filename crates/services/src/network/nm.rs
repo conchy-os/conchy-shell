@@ -35,6 +35,104 @@ impl<'a> Deref for NetworkManager<'a> {
     }
 }
 
+fn security_string(flags: u32, wpa_flags: u32, rsn_flags: u32) -> String {
+    if rsn_flags & 0x400 != 0 || rsn_flags & 0x200 != 0 {
+        "WPA3".to_string()
+    } else if rsn_flags != 0 {
+        "WPA2".to_string()
+    } else if wpa_flags != 0 {
+        "WPA".to_string()
+    } else if flags & 1 != 0 {
+        "WEP".to_string()
+    } else {
+        "Open".to_string()
+    }
+}
+
+async fn fetch_ip4_details(
+    conn: &zbus::Connection,
+    ip4_path: &OwnedObjectPath,
+) -> (Option<String>, Option<String>, Vec<String>) {
+    if ip4_path.as_str() == "/" {
+        return (None, None, Vec::new());
+    }
+    let Ok(builder) = super::dbus::ip_config::Ip4ConfigProxy::builder(conn).path(ip4_path) else {
+        return (None, None, Vec::new());
+    };
+    let Ok(proxy) = builder.build().await else {
+        return (None, None, Vec::new());
+    };
+
+    let gateway = proxy.gateway().await.ok().filter(|s| !s.is_empty());
+
+    let mut address = None;
+    if let Ok(addrs) = proxy.address_data().await {
+        if let Some(first) = addrs.first() {
+            let addr_str = first
+                .get("address")
+                .and_then(|v| String::try_from(v.clone()).ok());
+            let prefix = first
+                .get("prefix")
+                .and_then(|v| u32::try_from(v.clone()).ok());
+            if let Some(a) = addr_str {
+                address = Some(if let Some(p) = prefix {
+                    format!("{a}/{p}")
+                } else {
+                    a
+                });
+            }
+        }
+    }
+
+    let mut dns = Vec::new();
+    if let Ok(dns_data) = proxy.nameserver_data().await {
+        for d in dns_data {
+            if let Some(a) = d
+                .get("address")
+                .and_then(|v| String::try_from(v.clone()).ok())
+            {
+                if !dns.contains(&a) {
+                    dns.push(a);
+                }
+            }
+        }
+    }
+
+    (address, gateway, dns)
+}
+
+async fn fetch_ip6_address(conn: &zbus::Connection, ip6_path: &OwnedObjectPath) -> Option<String> {
+    if ip6_path.as_str() == "/" {
+        return None;
+    }
+    let Ok(builder) = super::dbus::ip_config::Ip6ConfigProxy::builder(conn).path(ip6_path) else {
+        return None;
+    };
+    let Ok(proxy) = builder.build().await else {
+        return None;
+    };
+
+    if let Ok(addrs) = proxy.address_data().await {
+        if let Some(first) = addrs.first() {
+            let addr_str = first
+                .get("address")
+                .and_then(|v| String::try_from(v.clone()).ok());
+            let prefix = first
+                .get("prefix")
+                .and_then(|v| u32::try_from(v.clone()).ok());
+            if let Some(a) = addr_str {
+                return Some(if let Some(p) = prefix {
+                    format!("{a}/{p}")
+                } else {
+                    a
+                });
+            }
+        }
+    }
+
+    None
+}
+
 impl<'a> NetworkManager<'a> {
     /// Create a new NetworkManager wrapper.
     pub async fn new(connection: &'a zbus::Connection) -> zbus::Result<NetworkManager<'a>> {
@@ -71,6 +169,20 @@ impl<'a> NetworkManager<'a> {
                     .build()
                     .await?;
 
+                let ip4_path = connection
+                    .ip4_config()
+                    .await
+                    .unwrap_or_else(|_| OwnedObjectPath::default());
+                let ip6_path = connection
+                    .ip6_config()
+                    .await
+                    .unwrap_or_else(|_| OwnedObjectPath::default());
+
+                let (ipv4_address, ipv4_gateway, dns_servers) =
+                    fetch_ip4_details(self.inner().connection(), &ip4_path).await;
+                let ipv6_address = fetch_ip6_address(self.inner().connection(), &ip6_path).await;
+                let hw_address = device_proxy.hw_address().await.ok();
+
                 match device_proxy.device_type().await.map(DeviceType::from).ok() {
                     Some(DeviceType::Ethernet) => {
                         let wired_device = WiredDeviceProxy::builder(self.inner().connection())
@@ -78,9 +190,21 @@ impl<'a> NetworkManager<'a> {
                             .build()
                             .await?;
 
+                        let interface = device_proxy
+                            .interface()
+                            .await
+                            .unwrap_or_else(|_| "eth0".to_string());
+                        let speed = wired_device.speed().await.unwrap_or(0);
+
                         info.push(ActiveConnectionInfo::Wired {
                             name: name.clone(),
-                            speed: wired_device.speed().await?,
+                            speed,
+                            interface,
+                            hw_address,
+                            ipv4_address,
+                            ipv4_gateway,
+                            dns_servers,
+                            ipv6_address,
                         });
                     }
                     Some(DeviceType::Wifi) => {
@@ -90,20 +214,86 @@ impl<'a> NetworkManager<'a> {
                                 .build()
                                 .await?;
 
-                        if let Ok(access_point) = wireless_device.active_access_point().await {
-                            let ap_proxy = AccessPointProxy::builder(self.inner().connection())
-                                .path(access_point)?
-                                .build()
-                                .await?;
+                        let interface = device_proxy
+                            .interface()
+                            .await
+                            .unwrap_or_else(|_| "wlan0".to_string());
 
-                            info.push(ActiveConnectionInfo::WiFi {
-                                id: name.clone(),
-                                name: String::from_utf8_lossy(&ap_proxy.ssid().await?).into_owned(),
-                                strength: ap_proxy.strength().await.unwrap_or_default(),
-                                device: device_proxy.inner().path().to_string(),
-                                object_path: object_path.clone(),
-                            });
+                        let mut bssid = None;
+                        let mut frequency = None;
+                        let mut channel = None;
+                        let mut bitrate = None;
+                        let mut security = None;
+                        let mut strength = 0;
+                        let mut ap_name = name.clone();
+
+                        if let Ok(access_point) = wireless_device.active_access_point().await {
+                            let ap_res = match AccessPointProxy::builder(self.inner().connection())
+                                .path(access_point)
+                            {
+                                Ok(builder) => builder.build().await.ok(),
+                                Err(_) => None,
+                            };
+                            if let Some(ap_proxy) = ap_res {
+                                if let Ok(ssid_bytes) = ap_proxy.ssid().await {
+                                    let s = String::from_utf8_lossy(&ssid_bytes).into_owned();
+                                    if !s.is_empty() {
+                                        ap_name = s;
+                                    }
+                                }
+                                strength = ap_proxy.strength().await.unwrap_or_default();
+                                let f = ap_proxy.frequency().await.unwrap_or_default();
+                                if f > 0 {
+                                    frequency = Some(f);
+                                    let ch = if f >= 2412 && f <= 2484 {
+                                        if f == 2484 {
+                                            14
+                                        } else {
+                                            (f - 2407) / 5
+                                        }
+                                    } else if f >= 5170 && f <= 5825 {
+                                        (f - 5000) / 5
+                                    } else if f >= 5955 && f <= 7115 {
+                                        (f - 5950) / 5
+                                    } else {
+                                        0
+                                    };
+                                    if ch > 0 {
+                                        channel = Some(ch);
+                                    }
+                                }
+                                bssid = ap_proxy.hw_address().await.ok();
+                                let fl = ap_proxy.flags().await.unwrap_or_default();
+                                let wfl = ap_proxy.wpa_flags().await.unwrap_or_default();
+                                let rfl = ap_proxy.rsn_flags().await.unwrap_or_default();
+                                security = Some(security_string(fl, wfl, rfl));
+                            }
                         }
+
+                        if let Ok(br) = wireless_device.bitrate().await {
+                            if br > 0 {
+                                bitrate = Some(br);
+                            }
+                        }
+
+                        info.push(ActiveConnectionInfo::WiFi {
+                            id: name.clone(),
+                            name: ap_name,
+                            strength,
+                            device: device_proxy.inner().path().to_string(),
+                            object_path: object_path.clone(),
+                            interface,
+                            hw_address,
+                            ipv4_address,
+                            ipv4_gateway,
+                            dns_servers,
+                            ipv6_address,
+                            bssid,
+                            frequency,
+                            channel,
+                            bitrate,
+                            security,
+                        });
                     }
                     Some(DeviceType::WireGuard) => {
                         info.push(ActiveConnectionInfo::Vpn {
@@ -473,7 +663,14 @@ impl<'a> NetworkManager<'a> {
                     continue;
                 }
 
-                let public = ap_proxy.flags().await.unwrap_or_default() == 0;
+                let flags = ap_proxy.flags().await.unwrap_or_default();
+                let wpa_flags = ap_proxy.wpa_flags().await.unwrap_or_default();
+                let rsn_flags = ap_proxy.rsn_flags().await.unwrap_or_default();
+                let security = security_string(flags, wpa_flags, rsn_flags);
+                let public = flags == 0 && wpa_flags == 0 && rsn_flags == 0;
+                let frequency = ap_proxy.frequency().await.unwrap_or_default();
+                let hw_address = ap_proxy.hw_address().await.unwrap_or_default();
+                let max_bitrate = ap_proxy.max_bitrate().await.unwrap_or_default();
                 let strength = ap_proxy.strength().await?;
 
                 // Keep the strongest signal for each SSID
@@ -492,6 +689,10 @@ impl<'a> NetworkManager<'a> {
                         strength,
                         state,
                         public,
+                        security,
+                        frequency,
+                        hw_address,
+                        max_bitrate,
                         working: false,
                         known,
                         path: ap_proxy.inner().path().to_owned(),

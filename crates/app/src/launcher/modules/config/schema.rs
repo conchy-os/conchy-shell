@@ -17,7 +17,7 @@ use super::section_page::{SectionPage, hoisted_item, primary_action, render_form
 use crate::config::Config;
 use crate::config::store::{self, Edit};
 use crate::launcher::action::Action;
-use crate::launcher::content::Item;
+use crate::launcher::content::{Item, Section};
 use crate::launcher::page::Page;
 
 pub trait Editable: Serialize + Default + Clone + 'static {
@@ -40,6 +40,11 @@ pub trait Editable: Serialize + Default + Clone + 'static {
 
     /// Rows that are not fields, listed last: shortcuts to related pages.
     fn shortcuts(_cx: &App) -> Vec<Item> {
+        Vec::new()
+    }
+
+    /// Extra sections (e.g. System & Hardware) shown before fields.
+    fn extra_sections(_cx: &App) -> Vec<Section> {
         Vec::new()
     }
 }

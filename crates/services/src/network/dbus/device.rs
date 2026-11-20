@@ -59,6 +59,14 @@ pub trait Device {
     #[zbus(property)]
     fn mtu(&self) -> zbus::Result<u32>;
 
+    /// Ip4Config property.
+    #[zbus(property)]
+    fn ip4_config(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
+
+    /// Ip6Config property.
+    #[zbus(property)]
+    fn ip6_config(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
+
     /// State property.
     #[zbus(property)]
     fn state(&self) -> zbus::Result<u32>;
