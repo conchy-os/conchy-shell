@@ -65,21 +65,26 @@ impl BluetoothSubscriber {
         }
 
         match command {
+            BluetoothCommand::SetPowered(powered) => {
+                debug!("Setting Bluetooth powered: {powered}");
+                set_bluetooth_power(powered).await?;
+            }
             BluetoothCommand::Toggle => {
-                let state = bluetooth.state().await?;
-                match state {
-                    BluetoothState::Active => {
-                        debug!("Turning Bluetooth off");
-                        bluetooth.set_powered(false).await?;
-                    }
-                    BluetoothState::Inactive => {
-                        debug!("Turning Bluetooth on");
-                        bluetooth.set_powered(true).await?;
-                    }
-                    BluetoothState::Unavailable => {
-                        warn!("Cannot toggle Bluetooth: no adapter available");
-                    }
-                }
+                let current_active = {
+                    let data = self.data.lock_ref();
+                    data.state == BluetoothState::Active
+                };
+                let target = !current_active;
+                debug!("Toggling Bluetooth: {} -> {}", current_active, target);
+                set_bluetooth_power(target).await?;
+            }
+            BluetoothCommand::SetDiscoverable(discoverable) => {
+                debug!("Setting Bluetooth discoverable: {discoverable}");
+                bluetooth.set_discoverable(discoverable).await?;
+            }
+            BluetoothCommand::SetTrusted(device_path, trusted) => {
+                debug!("Setting Bluetooth device {device_path:?} trusted: {trusted}");
+                bluetooth.set_trusted(&device_path, trusted).await?;
             }
             BluetoothCommand::StartDiscovery => {
                 debug!("Starting Bluetooth discovery");
@@ -129,6 +134,84 @@ impl BluetoothSubscriber {
     }
 }
 
+/// Unblock RFKill for bluetooth devices directly via `/dev/rfkill` or `rfkill` CLI.
+fn unblock_rfkill_bluetooth() {
+    #[repr(C)]
+    struct RfkillEvent {
+        idx: u32,
+        type_: u8,
+        op: u8,
+        soft: u8,
+        hard: u8,
+    }
+
+    const RFKILL_TYPE_BLUETOOTH: u8 = 2;
+    const RFKILL_OP_CHANGE_ALL: u8 = 3;
+
+    let event = RfkillEvent {
+        idx: 0,
+        type_: RFKILL_TYPE_BLUETOOTH,
+        op: RFKILL_OP_CHANGE_ALL,
+        soft: 0,
+        hard: 0,
+    };
+
+    let mut written = false;
+    if let Ok(mut f) = std::fs::OpenOptions::new().write(true).open("/dev/rfkill") {
+        let slice = unsafe {
+            std::slice::from_raw_parts(
+                &event as *const _ as *const u8,
+                std::mem::size_of::<RfkillEvent>(),
+            )
+        };
+        use std::io::Write as _;
+        if f.write_all(slice).is_ok() {
+            written = true;
+        }
+    }
+
+    if !written {
+        let _ = std::process::Command::new("rfkill")
+            .args(["unblock", "bluetooth"])
+            .output();
+    }
+}
+
+/// Reliably set Bluetooth power state with rfkill unblocking and hardware wake retry loop.
+async fn set_bluetooth_power(target_powered: bool) -> anyhow::Result<()> {
+    if target_powered {
+        // 1. Unblock rfkill first
+        unblock_rfkill_bluetooth();
+
+        // 2. Hardware may need 100-300ms to exit low-power state. Retry setting powered:
+        let conn = crate::bus::system().await?;
+        let mut last_err = None;
+        for attempt in 0..15 {
+            if let Ok(bt) = BluetoothDbus::new(&conn).await {
+                match bt.set_powered(true).await {
+                    Ok(()) => {
+                        debug!("Bluetooth powered on successfully on attempt {}", attempt + 1);
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        last_err = Some(e);
+                    }
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        if let Some(e) = last_err {
+            warn!("Failed to power on Bluetooth adapter after retries: {e}");
+        }
+    } else {
+        let conn = crate::bus::system().await?;
+        if let Ok(bt) = BluetoothDbus::new(&conn).await {
+            let _ = bt.set_powered(false).await;
+        }
+    }
+    Ok(())
+}
+
 /// Whether any Bluetooth radio is soft-blocked, read from sysfs instead of
 /// forking `rfkill` on every BlueZ signal.
 fn check_rfkill_soft_block() -> bool {
@@ -155,11 +238,15 @@ async fn fetch_bluetooth_data(conn: &zbus::Connection) -> anyhow::Result<Bluetoo
         state => state,
     };
 
+    let (adapter_name, adapter_address, discoverable) = bluetooth.adapter_details().await;
     let devices = bluetooth.devices().await?;
     let discovering = bluetooth.discovering().await.unwrap_or(false);
 
     Ok(BluetoothData {
         state,
+        adapter_name,
+        adapter_address,
+        discoverable,
         devices,
         discovering,
     })
@@ -177,11 +264,17 @@ impl ManagedService for BluetoothSubscriber {
     fn memory_bytes(&self) -> usize {
         let data = self.data.lock_ref();
         size_of::<BluetoothData>()
+            + data.adapter_name.len()
+            + data.adapter_address.len()
             + data
                 .devices
                 .iter()
                 .map(|device| {
-                    size_of::<BluetoothDevice>() + device.name.len() + device.path.as_str().len()
+                    size_of::<BluetoothDevice>()
+                        + device.name.len()
+                        + device.address.len()
+                        + device.path.as_str().len()
+                        + device.icon.as_ref().map(|s| s.len()).unwrap_or(0)
                 })
                 .sum::<usize>()
     }

@@ -32,13 +32,14 @@ pub mod watcher;
 pub use applications::{Application, ApplicationsService};
 pub use audio::{AudioCommand, AudioData, AudioSubscriber};
 pub use bluetooth::{
-    BluetoothCommand, BluetoothData, BluetoothDevice, BluetoothState, BluetoothSubscriber,
+    BluetoothCommand, BluetoothData, BluetoothDevice, BluetoothDeviceType, BluetoothState,
+    BluetoothSubscriber,
 };
 pub use brightness::{BrightnessCommand, BrightnessData, BrightnessSubscriber};
 pub use clipboard::{ClipContent, ClipEntry, ClipboardCommand, ClipboardData, ClipboardSubscriber};
 pub use compositor::{
     ActiveWindow, CompositorBackend, CompositorCommand, CompositorState, CompositorSubscriber,
-    Monitor, Window, WindowGeometry, Workspace,
+    Monitor, OutputMode, Window, WindowGeometry, Workspace,
 };
 pub use core::ServiceCore;
 pub use jobs::JobQueue;

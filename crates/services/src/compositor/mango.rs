@@ -112,8 +112,15 @@ pub fn execute_command(cmd: CompositorCommand) -> Result<()> {
                 format!("dispatch {},{}", action, args)
             }
         }
-        CompositorCommand::ToggleMinimizeWindow(_) | CompositorCommand::ToggleOverview => {
-            anyhow::bail!("ToggleMinimizeWindow / ToggleOverview not supported on Mango");
+        CompositorCommand::ToggleMinimizeWindow(_)
+        | CompositorCommand::ToggleOverview
+        | CompositorCommand::SetOutputMode { .. }
+        | CompositorCommand::SetOutputScale { .. }
+        | CompositorCommand::SetOutputTransform { .. }
+        | CompositorCommand::SetOutputPosition { .. }
+        | CompositorCommand::SetOutputVrr { .. }
+        | CompositorCommand::SetOutputPower { .. } => {
+            anyhow::bail!("Command not supported on Mango backend");
         }
     };
 
@@ -184,6 +191,7 @@ fn build_monitors(monitors: &[Value]) -> (Vec<Workspace>, Vec<Monitor>, Option<i
             x: m["x"].as_i64().unwrap_or(0) as i32,
             y: m["y"].as_i64().unwrap_or(0) as i32,
             scale: m["scale"].as_f64().unwrap_or(1.0) as f32,
+            ..Default::default()
         });
     }
 

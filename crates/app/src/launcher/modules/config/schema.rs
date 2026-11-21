@@ -15,7 +15,7 @@ use ui::IconName;
 use super::form::add_groups;
 use crate::config::Config;
 use crate::config::store::{self, Edit};
-use crate::launcher::content::Form;
+use crate::launcher::content::{Form, Section};
 use crate::launcher::page::Page;
 
 pub trait Editable: Serialize + Default + Clone + 'static {
@@ -28,6 +28,11 @@ pub trait Editable: Serialize + Default + Clone + 'static {
     /// overrides this builds `fields()` by flattening it.
     fn groups() -> Vec<Group<Self>> {
         vec![Group::new("", Self::fields())]
+    }
+
+    /// Extra sections, listed before the fields (e.g. System & Hardware).
+    fn extra_sections(_cx: &App) -> Vec<Section> {
+        Vec::new()
     }
 }
 

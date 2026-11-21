@@ -225,12 +225,27 @@ fn render_battery_indicator(index: usize, level: u8, cx: &App) -> impl IntoEleme
 
 /// Get appropriate icon for device type
 fn get_device_icon(device: &BluetoothDevice) -> IconName {
-    // Check device class/type from icon or name hints
+    match device.device_type {
+        services::BluetoothDeviceType::AudioHeadset
+        | services::BluetoothDeviceType::AudioHeadphones => return IconName::Headphones,
+        services::BluetoothDeviceType::AudioSpeaker => return IconName::Volume,
+        services::BluetoothDeviceType::Keyboard => return IconName::Keyboard,
+        services::BluetoothDeviceType::Mouse => return IconName::Mouse,
+        services::BluetoothDeviceType::Gamepad => return IconName::Gamepad,
+        services::BluetoothDeviceType::Phone => return IconName::Phone,
+        services::BluetoothDeviceType::Computer => return IconName::ScreenShare,
+        _ => {}
+    }
+
     let name_lower = device.name.to_lowercase();
 
     if name_lower.contains("airpod")
         || name_lower.contains("headphone")
         || name_lower.contains("buds")
+        || name_lower.contains("major")
+        || name_lower.contains("marshall")
+        || name_lower.contains("sony")
+        || name_lower.contains("bose")
     {
         IconName::Headphones
     } else if name_lower.contains("mouse") {
@@ -256,31 +271,50 @@ fn get_device_icon(device: &BluetoothDevice) -> IconName {
 }
 
 /// Get tooltip label for device icon based on device type.
-fn get_device_icon_tooltip(device: &BluetoothDevice) -> &'static str {
-    let name_lower = device.name.to_lowercase();
+fn get_device_icon_tooltip(device: &BluetoothDevice) -> String {
+    let type_name = match device.device_type {
+        services::BluetoothDeviceType::AudioHeadset
+        | services::BluetoothDeviceType::AudioHeadphones => "Headphones",
+        services::BluetoothDeviceType::AudioSpeaker => "Speaker",
+        services::BluetoothDeviceType::Keyboard => "Keyboard",
+        services::BluetoothDeviceType::Mouse => "Mouse",
+        services::BluetoothDeviceType::Gamepad => "Gamepad",
+        services::BluetoothDeviceType::Phone => "Phone",
+        services::BluetoothDeviceType::Computer => "Computer",
+        _ => {
+            let name_lower = device.name.to_lowercase();
+            if name_lower.contains("airpod")
+                || name_lower.contains("headphone")
+                || name_lower.contains("buds")
+                || name_lower.contains("major")
+                || name_lower.contains("marshall")
+            {
+                "Headphones"
+            } else if name_lower.contains("mouse") {
+                "Mouse"
+            } else if name_lower.contains("keyboard") {
+                "Keyboard"
+            } else if name_lower.contains("speaker") || name_lower.contains("soundbar") {
+                "Speaker"
+            } else if name_lower.contains("phone")
+                || name_lower.contains("iphone")
+                || name_lower.contains("android")
+            {
+                "Phone"
+            } else if name_lower.contains("watch") {
+                "Watch"
+            } else if name_lower.contains("controller") || name_lower.contains("gamepad") {
+                "Gamepad"
+            } else {
+                "Bluetooth Device"
+            }
+        }
+    };
 
-    if name_lower.contains("airpod")
-        || name_lower.contains("headphone")
-        || name_lower.contains("buds")
-    {
-        "Headphones"
-    } else if name_lower.contains("mouse") {
-        "Mouse"
-    } else if name_lower.contains("keyboard") {
-        "Keyboard"
-    } else if name_lower.contains("speaker") || name_lower.contains("soundbar") {
-        "Speaker"
-    } else if name_lower.contains("phone")
-        || name_lower.contains("iphone")
-        || name_lower.contains("android")
-    {
-        "Phone"
-    } else if name_lower.contains("watch") {
-        "Watch"
-    } else if name_lower.contains("controller") || name_lower.contains("gamepad") {
-        "Gamepad"
+    if device.address.is_empty() {
+        type_name.to_string()
     } else {
-        "Bluetooth device"
+        format!("{type_name} • {}", device.address)
     }
 }
 

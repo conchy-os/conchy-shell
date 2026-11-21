@@ -295,6 +295,30 @@ impl WifiSection {
             move |_: &mut App| service.dispatch(NetworkCommand::Forget(ssid.clone()))
         };
 
+        let band = ap.band();
+        let signal_tooltip = if band.is_empty() {
+            format!(
+                "Signal: {}% • {}",
+                ap.strength,
+                if ap.security.is_empty() {
+                    if ap.public { "Open" } else { "Secured" }
+                } else {
+                    &ap.security
+                }
+            )
+        } else {
+            format!(
+                "Signal: {}% • {} • {}",
+                ap.strength,
+                band,
+                if ap.security.is_empty() {
+                    if ap.public { "Open" } else { "Secured" }
+                } else {
+                    &ap.security
+                }
+            )
+        };
+
         list::row(format!("wifi-{index}"), connected, cx)
             .when(!connected && !connecting, |el| {
                 let ap = ap.clone();
@@ -309,7 +333,7 @@ impl WifiSection {
                 format!("wifi-signal-{index}"),
                 icons::wifi_signal_icon(ap.strength),
                 connected,
-                format!("Signal strength: {}%", ap.strength),
+                signal_tooltip,
                 cx,
             ))
             .child(list::row_label(ap.ssid.clone(), cx))
@@ -319,6 +343,14 @@ impl WifiSection {
                     IconName::Check,
                     status_success,
                     "Saved network",
+                ))
+            })
+            .when(!band.is_empty(), |el| {
+                el.child(list::badge(
+                    format!("wifi-band-{index}"),
+                    IconName::Wifi,
+                    text_muted,
+                    band,
                 ))
             })
             .when(secured, |el| {

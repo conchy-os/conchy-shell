@@ -49,6 +49,9 @@ impl LauncherPage for ConfigPage {
             .title(Config::title())
             .menu(false)
             .placeholder("Search settings…");
+        for section in Config::extra_sections(cx) {
+            list = list.section(section);
+        }
         for group in &self.groups {
             let mut items = group
                 .fields

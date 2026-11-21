@@ -21,6 +21,20 @@ pub struct Workspace {
     pub has_urgent: bool,
 }
 
+/// An output video mode (resolution and refresh rate).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct OutputMode {
+    pub width: u32,
+    pub height: u32,
+    pub refresh_rate: f64,
+}
+
+impl OutputMode {
+    pub fn label(&self) -> String {
+        format!("{}x{} @ {:.1} Hz", self.width, self.height, self.refresh_rate)
+    }
+}
+
 /// A monitor/output managed by the compositor.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Monitor {
@@ -28,6 +42,12 @@ pub struct Monitor {
     pub id: i128,
     /// Monitor name (e.g., "eDP-1", "HDMI-A-1").
     pub name: String,
+    /// Manufacturer name.
+    pub make: String,
+    /// Model name.
+    pub model: String,
+    /// Serial number if available.
+    pub serial: Option<String>,
     /// ID of the currently active workspace on this monitor.
     pub active_workspace_id: i32,
     /// ID of the special workspace on this monitor (if any).
@@ -36,12 +56,26 @@ pub struct Monitor {
     pub width: u32,
     /// Height in pixels.
     pub height: u32,
+    /// Refresh rate in Hz.
+    pub refresh_rate: f64,
     /// X position in the layout.
     pub x: i32,
     /// Y position in the layout.
     pub y: i32,
     /// Scale factor.
     pub scale: f32,
+    /// Rotation transform (0 = Normal, 1 = 90 deg, 2 = 180 deg, 3 = 270 deg).
+    pub transform: u16,
+    /// Available display modes.
+    pub available_modes: Vec<OutputMode>,
+    /// Whether VRR is supported.
+    pub vrr_supported: bool,
+    /// Whether VRR is enabled.
+    pub vrr_enabled: bool,
+    /// Whether this monitor currently has focus.
+    pub is_focused: bool,
+    /// Whether this monitor is disabled.
+    pub is_disabled: bool,
 }
 
 /// Information about the currently focused window.
@@ -204,6 +238,39 @@ pub enum CompositorCommand {
     ToggleMinimizeWindow(Option<String>),
     /// Toggle Overview mode (Conchy WM).
     ToggleOverview,
+    /// Set an output mode (resolution and refresh rate).
+    SetOutputMode {
+        output: String,
+        width: u16,
+        height: u16,
+        refresh_rate: f64,
+    },
+    /// Set an output scale factor.
+    SetOutputScale {
+        output: String,
+        scale: f64,
+    },
+    /// Set an output transform / rotation (0 = 0°, 1 = 90°, 2 = 180°, 3 = 270°).
+    SetOutputTransform {
+        output: String,
+        transform: u16,
+    },
+    /// Set an output position.
+    SetOutputPosition {
+        output: String,
+        x: i32,
+        y: i32,
+    },
+    /// Set an output VRR (variable refresh rate).
+    SetOutputVrr {
+        output: String,
+        enabled: bool,
+    },
+    /// Set an output power on/off.
+    SetOutputPower {
+        output: String,
+        on: bool,
+    },
     /// Custom dispatcher command (dispatcher name, arguments).
     Custom(String, String),
 }

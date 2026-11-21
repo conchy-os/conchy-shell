@@ -133,6 +133,48 @@ pub fn execute_command(cmd: CompositorCommand) -> Result<()> {
         CompositorCommand::Custom(dispatcher, args) => {
             Dispatch::call(DispatchType::Custom(&dispatcher, &args))?;
         }
+        CompositorCommand::SetOutputMode {
+            output,
+            width,
+            height,
+            refresh_rate,
+        } => {
+            let cmd = format!("keyword monitor {output},{width}x{height}@{refresh_rate},auto,1");
+            let _ = std::process::Command::new("hyprctl")
+                .args(["--batch", &cmd])
+                .output();
+        }
+        CompositorCommand::SetOutputScale { output, scale } => {
+            let cmd = format!("keyword monitor {output},preferred,auto,{scale}");
+            let _ = std::process::Command::new("hyprctl")
+                .args(["--batch", &cmd])
+                .output();
+        }
+        CompositorCommand::SetOutputTransform { output, transform } => {
+            let cmd = format!("keyword monitor {output},transform,{transform}");
+            let _ = std::process::Command::new("hyprctl")
+                .args(["--batch", &cmd])
+                .output();
+        }
+        CompositorCommand::SetOutputPosition { output, x, y } => {
+            let cmd = format!("keyword monitor {output},preferred,{x}x{y},1");
+            let _ = std::process::Command::new("hyprctl")
+                .args(["--batch", &cmd])
+                .output();
+        }
+        CompositorCommand::SetOutputVrr { output, enabled } => {
+            let val = if enabled { "1" } else { "0" };
+            let cmd = format!("keyword monitor {output},vrr,{val}");
+            let _ = std::process::Command::new("hyprctl")
+                .args(["--batch", &cmd])
+                .output();
+        }
+        CompositorCommand::SetOutputPower { output, on } => {
+            let val = if on { "on" } else { "off" };
+            let _ = std::process::Command::new("hyprctl")
+                .args(["dispatch", "dpms", val, &output])
+                .output();
+        }
         CompositorCommand::ToggleMinimizeWindow(_) | CompositorCommand::ToggleOverview => {
             anyhow::bail!("ToggleMinimizeWindow / ToggleOverview not supported on Hyprland");
         }
@@ -170,6 +212,12 @@ pub fn fetch_full_state() -> Result<CompositorState> {
             x: m.x,
             y: m.y,
             scale: m.scale,
+            refresh_rate: m.refresh_rate as f64,
+            transform: m.transform as u16,
+            vrr_enabled: m.vrr,
+            is_focused: m.focused,
+            is_disabled: m.disabled,
+            ..Default::default()
         })
         .collect();
 
