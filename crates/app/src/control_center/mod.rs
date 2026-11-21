@@ -38,8 +38,6 @@ use services::{ChargeLimit, UPowerCommand};
 use ui::patterns::PanelSurface;
 use ui::{ActiveTheme, Color, Icon, IconName, IconSize, Radius, Spacing, TextSize};
 
-use crate::config::ActiveConfig;
-use crate::launcher;
 use crate::state::{AppState, watch, watch_task};
 use crate::windows::ShellWindows;
 
@@ -346,30 +344,6 @@ impl Render for ControlCenter {
                     )
                     .child(
                         div()
-                            .id("config-button")
-                            .flex_none()
-                            .w(px(36.))
-                            .h(px(36.))
-                            .rounded(Radius::Full.pixels())
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .border_1()
-                            .border_color(border_subtle)
-                            .bg(interactive_default)
-                            .cursor_pointer()
-                            .hover(move |s| s.bg(interactive_hover))
-                            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                                open_config_editor(cx);
-                            })
-                            .child(
-                                Icon::new(IconName::Sliders)
-                                    .size(IconSize::Small)
-                                    .color(Color::Default),
-                            ),
-                    )
-                    .child(
-                        div()
                             .id("power-button")
                             .flex_none()
                             .w(px(36.))
@@ -446,13 +420,6 @@ impl Render for ControlCenter {
                 )
             })
     }
-}
-
-/// Swap the panel for the launcher on the config editor's page.
-fn open_config_editor(cx: &mut App) {
-    let prefix = cx.config().launcher.modules.config.prefix.clone();
-    ShellWindows::close_panel(cx);
-    launcher::toggle(Some(prefix), cx);
 }
 
 /// Toggle the control center panel on the active output.
