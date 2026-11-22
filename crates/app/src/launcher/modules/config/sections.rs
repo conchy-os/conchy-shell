@@ -92,6 +92,17 @@ impl Editable for Config {
                     .icon(IconName::ChevronRight),
                 )
                 .detail(super::sound_detail::sound_detail(cx)),
+            Item::new("default-apps", "Default applications")
+                .subtitle("Which program opens links, folders, images and other files")
+                .icon(IconName::ExternalLink)
+                .keywords("default applications apps mime mimeapps xdg-open browser email file manager associations open with handler")
+                .action(
+                    Action::new("Open Default Applications", |_, cx| {
+                        Outcome::Push(super::default_apps_page::DefaultAppsPage::open(cx))
+                    })
+                    .icon(IconName::ChevronRight),
+                )
+                .detail(super::default_apps_detail::default_apps_detail(cx)),
             Item::new("about", "About System")
                 .subtitle("System specifications, OS, and hardware details")
                 .icon(IconName::Info)

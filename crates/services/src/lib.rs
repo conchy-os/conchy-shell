@@ -13,6 +13,7 @@ pub mod compositor;
 pub mod core;
 pub mod jobs;
 pub mod lifecycle;
+pub mod mimeapps;
 pub mod mpris;
 pub mod network;
 #[allow(clippy::too_many_arguments)]

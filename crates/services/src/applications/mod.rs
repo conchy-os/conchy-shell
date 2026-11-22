@@ -189,7 +189,7 @@ fn scan_applications() -> Vec<Application> {
 }
 
 /// Get XDG application directories in priority order.
-fn get_application_dirs() -> Vec<PathBuf> {
+pub(crate) fn get_application_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 
     // User-specific directory (higher priority)
