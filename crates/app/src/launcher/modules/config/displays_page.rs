@@ -46,7 +46,7 @@ fn title_of(m: &Monitor) -> String {
     }
 }
 
-/// The sections of the displays and of the saved setups. Without displays to
+/// The sections of the displays, and the row of the saved setups. Without displays to
 /// show, one row says why.
 pub fn sections(model: &Entity<DisplayModel>, cx: &App) -> Vec<Section> {
     let m = model.read(cx);
@@ -141,15 +141,30 @@ pub fn sections(model: &Entity<DisplayModel>, cx: &App) -> Vec<Section> {
                 })),
         );
     }
-    vec![
-        Section::new("Displays").items(items),
-        Section::new("Display profiles").items(profile_items(model, &monitors, cx)),
-    ]
+    items.push(profiles_item(model, monitors));
+    vec![Section::new("Displays").items(items)]
 }
 
-fn profile_items(model: &Entity<DisplayModel>, monitors: &[Monitor], cx: &App) -> Vec<Item> {
+/// The row of the saved setups; its form saves the current one and lists the rest.
+fn profiles_item(model: &Entity<DisplayModel>, monitors: Vec<Monitor>) -> Item {
+    let model = model.clone();
+    Item::new("display-profiles", "Display profiles")
+        .icon(IconName::Layers)
+        .subtitle("Save a setup of all displays and put it back later")
+        .keywords("profile save preset layout setup displays")
+        .actions(super::system::edit())
+        .detail(Detail::new().form(move |form, cx| profiles_form(form, &model, &monitors, cx)))
+}
+
+fn profiles_form(form: &mut Form, model: &Entity<DisplayModel>, monitors: &[Monitor], cx: &App) {
     let m = model.read(cx);
-    let mut items = Vec::new();
+    rows::title(
+        form,
+        "Display profiles",
+        "A profile remembers every display's mode, scale, rotation and position, and which \
+         monitors were connected. It is applied by itself when exactly those monitors are \
+         connected again, in whichever port, and when the shell starts.",
+    );
 
     let next_name = {
         let mut n = m.profiles.len() + 1;
@@ -159,67 +174,49 @@ fn profile_items(model: &Entity<DisplayModel>, monitors: &[Monitor], cx: &App) -
         format!("Setup {n}")
     };
     let save_model = model.clone();
-    items.push(
-        Item::new("save-profile", "Save current setup as a profile…")
-            .icon(IconName::Save)
-            .subtitle("Remember these displays, their modes, scales and arrangement")
-            .keywords("profile save preset layout")
-            .actions(ActionPanel::new().action(
-                Action::new("Save profile…", move |_, cx| {
-                    let model = save_model.clone();
-                    PromptPage::ask(
-                        cx,
-                        "Save display profile",
-                        "Name this setup…",
-                        "Save as",
-                        next_name.clone(),
-                        move |name| {
-                            if name.len() > 60 {
-                                Err("Keep the name under 60 characters".into())
-                            } else {
-                                Ok(())
-                            }
-                        },
-                        move |name, cx| {
-                            model.update(cx, |m, cx| m.save_profile(&name, cx));
-                            Outcome::Pop
-                        },
-                    )
-                })
-                .icon(IconName::Plus),
-            ))
-            .detail(Detail::new().markdown(
-                "# Profiles\n\nA profile remembers every display's mode, scale, rotation and position, \
-                 and which monitors were connected.\n\n\
-                 Profiles are applied automatically when exactly those monitors are connected again, \
-                 in whichever port, and when the shell starts. Turn that off per profile.",
-            )),
+    rows::action(
+        form,
+        "Save current setup as a profile…",
+        "Remember these displays, their modes, scales and arrangement",
+        move |_, cx| {
+            let model = save_model.clone();
+            PromptPage::ask(
+                cx,
+                "Save display profile",
+                "Name this setup…",
+                "Save as",
+                next_name.clone(),
+                move |name| {
+                    if name.len() > 60 {
+                        Err("Keep the name under 60 characters".into())
+                    } else {
+                        Ok(())
+                    }
+                },
+                move |name, cx| {
+                    model.update(cx, |m, cx| m.save_profile(&name, cx));
+                    Outcome::Pop
+                },
+            )
+        },
+        cx,
     );
 
+    if m.profiles.is_empty() {
+        rows::note(form, "No profiles saved yet.", Color::Muted);
+        return;
+    }
+    rows::heading(form, "Saved");
     for profile in &m.profiles {
         let name = profile.name.clone();
         let fits = profile.fits(monitors);
         let applied = fits && profile.is_applied(monitors);
-        let mut item = Item::new(format!("profile-{name}"), name.clone())
-            .icon(IconName::Layers)
-            .subtitle(format!(
-                "{} display{}{}",
-                profile.outputs.len(),
-                if profile.outputs.len() == 1 { "" } else { "s" },
-                if profile.auto { " • applied automatically" } else { "" }
-            ))
-            .keywords(format!("profile {name}"));
-        if applied {
-            item = item.accessory(Accessory::tag("Active").color(Color::Success));
-        } else if !fits {
-            item = item.accessory(Accessory::tag("other displays").color(Color::Muted));
-        }
 
-        let mut actions = ActionPanel::new();
+        let mut actions = Vec::new();
         if fits {
             let (model, name) = (model.clone(), name.clone());
-            actions = actions.action(
-                Action::new("Apply profile", move |_, cx| {
+            actions.push(
+                Action::new("Apply", move |_, cx| {
                     model.update(cx, |m, cx| m.apply_profile(&name, cx));
                     Outcome::Stay
                 })
@@ -228,7 +225,7 @@ fn profile_items(model: &Entity<DisplayModel>, monitors: &[Monitor], cx: &App) -
         }
         {
             let (model, name, auto) = (model.clone(), name.clone(), profile.auto);
-            actions = actions.action(
+            actions.push(
                 Action::new(
                     if auto { "Stop applying automatically" } else { "Apply automatically" },
                     move |_, cx| {
@@ -241,52 +238,53 @@ fn profile_items(model: &Entity<DisplayModel>, monitors: &[Monitor], cx: &App) -
         }
         {
             let (model, name) = (model.clone(), name.clone());
-            actions = actions.action(
+            actions.push(
                 Action::new("Update with the current setup", move |_, cx| {
                     model.update(cx, |m, cx| m.save_profile(&name, cx));
                     Outcome::Stay
                 })
-                .icon(IconName::Save),
+                .icon(IconName::Save)
+                .shortcut("ctrl-u"),
             );
         }
         {
             let (model, name) = (model.clone(), name.clone());
-            actions = actions.action(
-                Action::new("Delete profile", move |_, cx| {
+            actions.push(
+                Action::new("Delete", move |_, cx| {
                     model.update(cx, |m, cx| m.delete_profile(&name, cx));
                     Outcome::Stay
                 })
                 .icon(IconName::Trash)
-                .destructive(),
+                .destructive()
+                .shortcut("ctrl-d"),
             );
         }
 
-        let mut text = format!("# {name}\n\n");
-        for o in &profile.outputs {
-            let c = &o.config;
-            if c.enabled {
-                text.push_str(&format!(
-                    "- **{}** ({}) — {}, {:.2}×, {}, at {}, {}\n",
-                    c.output,
-                    o.identity,
-                    c.mode
-                        .as_ref()
-                        .map_or("preferred mode".to_string(), |m| m.label()),
-                    c.scale,
-                    rotation_label(c.transform),
-                    format_args!("{}×{}", c.x, c.y),
-                    if c.vrr { "VRR on" } else { "VRR off" },
-                ));
-            } else {
-                text.push_str(&format!("- **{}** ({}) — off\n", c.output, o.identity));
-            }
-        }
-        if !fits {
-            text.push_str("\nThe monitors connected now are not the ones this profile was made for.");
-        }
-        items.push(item.actions(actions).detail(Detail::new().markdown(text)));
+        let outputs: Vec<&str> = profile.outputs.iter().map(|o| o.config.output.as_str()).collect();
+        let tag = if applied {
+            Some(("Active".into(), Color::Success))
+        } else if !fits {
+            Some(("other displays".into(), Color::Muted))
+        } else {
+            None
+        };
+        rows::entry(
+            form,
+            rows::Entry {
+                icon: IconName::Layers,
+                title: name.into(),
+                subtitle: format!(
+                    "{}{}",
+                    outputs.join(", "),
+                    if profile.auto { " • applied automatically" } else { "" }
+                )
+                .into(),
+                tag,
+            },
+            actions,
+            cx,
+        );
     }
-    items
 }
 
 // -- one display ---------------------------------------------------------------
