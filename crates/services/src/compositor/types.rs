@@ -33,6 +33,64 @@ impl OutputMode {
     pub fn label(&self) -> String {
         format!("{}x{} @ {:.1} Hz", self.width, self.height, self.refresh_rate)
     }
+
+    /// `2880x1800@59.99Hz`, as Hyprland lists modes.
+    pub fn parse(text: &str) -> Option<Self> {
+        let text = text.trim().trim_end_matches("Hz");
+        let (size, rate) = text.split_once('@')?;
+        let (w, h) = size.split_once('x')?;
+        Some(Self {
+            width: w.trim().parse().ok()?,
+            height: h.trim().parse().ok()?,
+            refresh_rate: rate.trim().parse().ok()?,
+        })
+    }
+
+    /// The same mode, within the rounding compositors report refresh rates with.
+    pub fn same_as(&self, other: &Self) -> bool {
+        self.width == other.width
+            && self.height == other.height
+            && (self.refresh_rate - other.refresh_rate).abs() < 0.05
+    }
+}
+
+/// Everything the compositor needs to set up one output. Applying it sets all
+/// of it at once, which is one mode change and not one per setting.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutputConfig {
+    pub output: String,
+    /// `false` turns the output off; the rest is then what it comes back with.
+    pub enabled: bool,
+    /// `None` is the output's preferred mode.
+    pub mode: Option<OutputMode>,
+    pub scale: f64,
+    /// 0 = normal, 1 = 90°, 2 = 180°, 3 = 270°.
+    pub transform: u16,
+    pub x: i32,
+    pub y: i32,
+    pub vrr: bool,
+}
+
+impl OutputConfig {
+    /// The output as it is now.
+    pub fn from_monitor(m: &Monitor) -> Self {
+        let mode = OutputMode {
+            width: m.width,
+            height: m.height,
+            refresh_rate: m.refresh_rate,
+        };
+        let mode = (m.width > 0 && m.height > 0).then_some(mode);
+        Self {
+            output: m.name.clone(),
+            enabled: !m.is_disabled,
+            mode,
+            scale: if m.scale > 0.0 { f64::from(m.scale) } else { 1.0 },
+            transform: m.transform,
+            x: m.x,
+            y: m.y,
+            vrr: m.vrr_enabled,
+        }
+    }
 }
 
 /// A monitor/output managed by the compositor.
@@ -76,6 +134,50 @@ pub struct Monitor {
     pub is_focused: bool,
     /// Whether this monitor is disabled.
     pub is_disabled: bool,
+}
+
+impl Monitor {
+    /// A short identity of the physical monitor, stable across the port it is
+    /// plugged into: make, model and serial; the connector name when it
+    /// reports none of them.
+    pub fn identity(&self) -> String {
+        let serial = self.serial.as_deref().unwrap_or("");
+        if self.make.is_empty() && self.model.is_empty() && serial.is_empty() {
+            self.name.clone()
+        } else {
+            format!("{} {} {}", self.make, self.model, serial)
+                .trim()
+                .to_string()
+        }
+    }
+
+    /// The resolutions the output offers, largest first.
+    pub fn resolutions(&self) -> Vec<(u32, u32)> {
+        let mut sizes: Vec<(u32, u32)> = Vec::new();
+        for mode in &self.available_modes {
+            if !sizes.contains(&(mode.width, mode.height)) {
+                sizes.push((mode.width, mode.height));
+            }
+        }
+        sizes.sort_by_key(|&(w, h)| std::cmp::Reverse(u64::from(w) * u64::from(h)));
+        sizes
+    }
+
+    /// The refresh rates the output offers at one resolution, highest first.
+    pub fn refresh_rates(&self, width: u32, height: u32) -> Vec<f64> {
+        let mut rates: Vec<f64> = Vec::new();
+        for mode in self
+            .available_modes
+            .iter()
+            .filter(|m| m.width == width && m.height == height)
+        {
+            if !rates.iter().any(|r| (r - mode.refresh_rate).abs() < 0.05) {
+                rates.push(mode.refresh_rate);
+            }
+        }
+        rates.sort_by(|a, b| b.total_cmp(a));
+        rates
+    }
 }
 
 /// Information about the currently focused window.
@@ -271,6 +373,9 @@ pub enum CompositorCommand {
         output: String,
         on: bool,
     },
+    /// Set up an output completely: mode, scale, rotation, position, VRR and
+    /// whether it is on. One change for the display, not one per field.
+    ApplyOutput(OutputConfig),
     /// Custom dispatcher command (dispatcher name, arguments).
     Custom(String, String),
 }
@@ -278,6 +383,73 @@ pub enum CompositorCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn monitor_with_modes(modes: &[&str]) -> Monitor {
+        Monitor {
+            name: "DP-1".into(),
+            available_modes: modes.iter().filter_map(|m| OutputMode::parse(m)).collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn modes_parse_the_way_hyprland_lists_them() {
+        let m = OutputMode::parse("2880x1800@59.99Hz").unwrap();
+        assert_eq!((m.width, m.height), (2880, 1800));
+        assert!((m.refresh_rate - 59.99).abs() < 1e-9);
+        assert!(OutputMode::parse("nonsense").is_none());
+    }
+
+    #[test]
+    fn resolutions_and_rates_are_grouped_and_ordered() {
+        let m = monitor_with_modes(&[
+            "1920x1080@60.00Hz",
+            "3840x2160@60.00Hz",
+            "1920x1080@144.00Hz",
+            "1920x1080@60.00Hz",
+            "3840x2160@30.00Hz",
+        ]);
+        assert_eq!(m.resolutions(), vec![(3840, 2160), (1920, 1080)]);
+        assert_eq!(m.refresh_rates(1920, 1080), vec![144.0, 60.0]);
+        assert_eq!(m.refresh_rates(3840, 2160), vec![60.0, 30.0]);
+        assert!(m.refresh_rates(800, 600).is_empty());
+    }
+
+    #[test]
+    fn a_monitor_is_known_by_what_it_is_not_where_it_is_plugged() {
+        let mut m = Monitor {
+            name: "HDMI-A-1".into(),
+            make: "Dell".into(),
+            model: "U2720Q".into(),
+            serial: Some("ABC".into()),
+            ..Default::default()
+        };
+        assert_eq!(m.identity(), "Dell U2720Q ABC");
+        m.make.clear();
+        m.model.clear();
+        m.serial = None;
+        assert_eq!(m.identity(), "HDMI-A-1");
+    }
+
+    #[test]
+    fn an_output_config_starts_as_the_output_is() {
+        let m = Monitor {
+            name: "eDP-1".into(),
+            width: 2880,
+            height: 1800,
+            refresh_rate: 59.99,
+            scale: 2.0,
+            transform: 1,
+            x: 10,
+            y: 20,
+            vrr_enabled: true,
+            ..Default::default()
+        };
+        let c = OutputConfig::from_monitor(&m);
+        assert!(c.enabled && c.vrr);
+        assert_eq!((c.scale, c.transform, c.x, c.y), (2.0, 1, 10, 20));
+        assert_eq!(c.mode.unwrap().width, 2880);
+    }
 
     fn window(id: &str, app_id: &str, pid: Option<u32>) -> Window {
         Window {

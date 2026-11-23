@@ -119,7 +119,8 @@ pub fn execute_command(cmd: CompositorCommand) -> Result<()> {
         | CompositorCommand::SetOutputTransform { .. }
         | CompositorCommand::SetOutputPosition { .. }
         | CompositorCommand::SetOutputVrr { .. }
-        | CompositorCommand::SetOutputPower { .. } => {
+        | CompositorCommand::SetOutputPower { .. }
+        | CompositorCommand::ApplyOutput(_) => {
             anyhow::bail!("Command not supported on Mango backend");
         }
     };

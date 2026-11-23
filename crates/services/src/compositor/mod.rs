@@ -9,6 +9,7 @@
 pub mod hyprland;
 pub mod mango;
 pub mod niri;
+pub mod outputs;
 pub mod types;
 
 use anyhow::Result;
@@ -18,8 +19,8 @@ use tracing::info;
 use crate::jobs::JobQueue;
 use crate::lifecycle::{Lifecycle, ManagedService, ServiceMode};
 pub use types::{
-    ActiveWindow, CompositorBackend, CompositorCommand, CompositorState, Monitor, OutputMode,
-    Window, WindowGeometry, Workspace,
+    ActiveWindow, CompositorBackend, CompositorCommand, CompositorState, Monitor, OutputConfig,
+    OutputMode, Window, WindowGeometry, Workspace,
 };
 
 /// Event-driven compositor subscriber.
@@ -102,6 +103,14 @@ impl CompositorSubscriber {
     /// Queue a compositor command. Failures are logged.
     pub fn dispatch(&self, command: CompositorCommand) {
         self.jobs.send(command);
+    }
+
+    /// Queue a compositor command and wait for how it went.
+    pub fn request(
+        &self,
+        command: CompositorCommand,
+    ) -> impl std::future::Future<Output = Result<()>> + use<> {
+        self.jobs.request(command)
     }
 
     /// Force a full state refresh.

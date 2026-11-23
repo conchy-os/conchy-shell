@@ -131,6 +131,9 @@ pub fn execute_command(cmd: CompositorCommand) -> Result<()> {
             };
             return send_output_action(output, action);
         }
+        CompositorCommand::ApplyOutput(config) => {
+            return super::outputs::apply_conchy(&config);
+        }
         CompositorCommand::Custom(action, args) => {
             if action == "spawn" {
                 Action::Spawn {
@@ -298,6 +301,14 @@ fn send_request(request: Request) -> Result<Reply> {
     Ok(reply)
 }
 
+/// Every output with its modes, as the compositor reports them.
+pub(super) fn fetch_outputs() -> Result<HashMap<String, conchy_ipc::Output>> {
+    match send_request(Request::Outputs)?.map_err(|e| anyhow!("Conchy WM error: {}", e))? {
+        conchy_ipc::Response::Outputs(outputs) => Ok(outputs),
+        other => Err(anyhow!("unexpected reply to Outputs: {other:?}")),
+    }
+}
+
 /// Send a single action to Conchy WM / Niri and read the reply.
 fn send_action(action: Action) -> Result<()> {
     send_request(Request::Action(action))?
@@ -306,7 +317,7 @@ fn send_action(action: Action) -> Result<()> {
 }
 
 /// Send an output configuration action to Conchy WM.
-fn send_output_action(output: String, action: conchy_ipc::OutputAction) -> Result<()> {
+pub(super) fn send_output_action(output: String, action: conchy_ipc::OutputAction) -> Result<()> {
     send_request(Request::Output { output, action })?
         .map_err(|e| anyhow!("Conchy WM error: {}", e))
         .map(|_| ())

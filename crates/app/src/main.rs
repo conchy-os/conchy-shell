@@ -27,6 +27,7 @@ pub mod launcher;
 pub mod notification;
 pub mod osd;
 mod portal_host;
+pub mod session_settings;
 pub mod shortcuts;
 pub mod state;
 mod windows;
@@ -108,6 +109,7 @@ async fn main() {
         osd::init(cx);
         launcher::init(cx);
         portal_host::init(cx);
+        session_settings::init(cx);
 
         launcher::modules::wallpaper::sync_theme_with_wallpaper(cx);
 

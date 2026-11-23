@@ -134,7 +134,7 @@ fn indent(depth: usize, content: impl IntoElement, cx: &App) -> AnyElement {
 
 /// The control's row, lit while it has the keyboard, with what it does
 /// underneath.
-fn control_frame(
+pub(super) fn control_frame(
     content: AnyElement,
     description: &'static str,
     focused: bool,
@@ -274,7 +274,7 @@ pub fn reset_action<S: Editable>(path: &ConfigPath<S>, field: &Field<S>, modifie
 }
 
 /// `label` in the form's label column, `control` filling the rest.
-fn labeled_row(label: Label, control: AnyElement) -> AnyElement {
+pub(super) fn labeled_row(label: Label, control: AnyElement) -> AnyElement {
     h_flex()
         .w_full()
         .items_center()
@@ -428,7 +428,6 @@ fn choice_widget<S: Editable>(path: &ConfigPath<S>, field: &Field<S>, cx: &App) 
         return div().into_any_element();
     };
     let id: SharedString = path.key_string(field.key).into();
-    let colors = cx.theme().colors();
     let selected = current(path.read(cx));
     if options.len() > 5 {
         let labels: Vec<SharedString> = options.iter().map(|o| o.label.into()).collect();
@@ -443,16 +442,36 @@ fn choice_widget<S: Editable>(path: &ConfigPath<S>, field: &Field<S>, cx: &App) 
         );
     }
 
+    let labels: Vec<SharedString> = options.iter().map(|o| o.label.into()).collect();
+    let (path, field) = (path.clone(), field.clone());
+    pills(
+        id,
+        labels,
+        selected,
+        move |ix, cx| field.choose(&path, ix, cx),
+        cx,
+    )
+}
+
+/// A few options as pills, `selected` lit. `on_pick` gets the index clicked.
+pub(super) fn pills(
+    id: SharedString,
+    options: Vec<SharedString>,
+    selected: usize,
+    on_pick: impl Fn(usize, &mut App) + 'static,
+    cx: &App,
+) -> AnyElement {
+    let colors = cx.theme().colors();
+    let on_pick = std::rc::Rc::new(on_pick);
     let mut pills = h_flex()
         .gap(px(4.))
         .p(px(3.))
         .rounded(Radius::Medium.pixels())
         .bg(colors.element_background)
         .items_center();
-    for (ix, opt) in options.iter().enumerate() {
+    for (ix, label) in options.into_iter().enumerate() {
         let is_sel = ix == selected;
-        let path = path.clone();
-        let field = field.clone();
+        let on_pick = on_pick.clone();
         pills = pills.child(
             div()
                 .id(ElementId::NamedInteger(
@@ -473,10 +492,8 @@ fn choice_widget<S: Editable>(path: &ConfigPath<S>, field: &Field<S>, cx: &App) 
                     this.text_color(colors.text_muted)
                         .hover(|s| s.bg(colors.element_hover).text_color(colors.text))
                 })
-                .on_click(move |_, _, cx| {
-                    field.choose(&path, ix, cx);
-                })
-                .child(opt.label),
+                .on_click(move |_, _, cx| on_pick(ix, cx))
+                .child(label),
         );
     }
     pills.into_any_element()

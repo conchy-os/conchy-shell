@@ -70,6 +70,26 @@ impl Editable for Config {
                     .icon(IconName::ChevronRight),
                 )
                 .detail(super::bluetooth_detail::bluetooth_detail(cx)),
+            Item::new("mouse", "Mouse & Touchpad")
+                .subtitle("Pointer speed, acceleration, scrolling and tap to click")
+                .icon(IconName::Mouse)
+                .keywords("mouse touchpad trackpad pointer speed acceleration natural scroll tap click sensitivity")
+                .action(
+                    Action::new("Open Mouse & Touchpad", |_, cx| {
+                        Outcome::Push(super::mouse_page::MousePage::open(cx))
+                    })
+                    .icon(IconName::ChevronRight),
+                ),
+            Item::new("keyboard", "Keyboard")
+                .subtitle("Layouts, switching keys, repeat delay and rate")
+                .icon(IconName::Keyboard)
+                .keywords("keyboard layout language switch russian english repeat delay rate caps lock xkb")
+                .action(
+                    Action::new("Open Keyboard", |_, cx| {
+                        Outcome::Push(super::keyboard_page::KeyboardPage::open(cx))
+                    })
+                    .icon(IconName::ChevronRight),
+                ),
             Item::new("displays", "Displays & Monitors")
                 .subtitle("Resolution, scale, arrangement, and refresh rate")
                 .icon(IconName::ScreenShare)
@@ -81,6 +101,26 @@ impl Editable for Config {
                     .icon(IconName::ChevronRight),
                 )
                 .detail(super::displays_detail::displays_detail(cx)),
+            Item::new("appearance", "Appearance")
+                .subtitle("Fonts, text size, cursor and icon themes")
+                .icon(IconName::Palette)
+                .keywords("appearance fonts font dpi text size scale cursor icons theme look typeface")
+                .action(
+                    Action::new("Open Appearance", |_, cx| {
+                        Outcome::Push(super::appearance_page::AppearancePage::open(cx))
+                    })
+                    .icon(IconName::ChevronRight),
+                ),
+            Item::new("startup", "Startup applications")
+                .subtitle("Programs the session starts at login")
+                .icon(IconName::Play)
+                .keywords("startup autostart login boot applications programs session run at start")
+                .action(
+                    Action::new("Open Startup Applications", |_, cx| {
+                        Outcome::Push(super::autostart_page::AutostartPage::open(cx))
+                    })
+                    .icon(IconName::ChevronRight),
+                ),
             Item::new("sound", "Sound & Audio")
                 .subtitle("Output volume, microphone, and audio devices")
                 .icon(IconName::Volume)

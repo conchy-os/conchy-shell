@@ -139,41 +139,42 @@ pub fn execute_command(cmd: CompositorCommand) -> Result<()> {
             height,
             refresh_rate,
         } => {
-            let cmd = format!("keyword monitor {output},{width}x{height}@{refresh_rate},auto,1");
-            let _ = std::process::Command::new("hyprctl")
-                .args(["--batch", &cmd])
-                .output();
+            let mut config = super::outputs::current_hyprland(&output)?;
+            config.mode = Some(super::types::OutputMode {
+                width: u32::from(width),
+                height: u32::from(height),
+                refresh_rate,
+            });
+            super::outputs::apply_hyprland(&config)?;
         }
         CompositorCommand::SetOutputScale { output, scale } => {
-            let cmd = format!("keyword monitor {output},preferred,auto,{scale}");
-            let _ = std::process::Command::new("hyprctl")
-                .args(["--batch", &cmd])
-                .output();
+            let mut config = super::outputs::current_hyprland(&output)?;
+            config.scale = scale;
+            super::outputs::apply_hyprland(&config)?;
         }
         CompositorCommand::SetOutputTransform { output, transform } => {
-            let cmd = format!("keyword monitor {output},transform,{transform}");
-            let _ = std::process::Command::new("hyprctl")
-                .args(["--batch", &cmd])
-                .output();
+            let mut config = super::outputs::current_hyprland(&output)?;
+            config.transform = transform;
+            super::outputs::apply_hyprland(&config)?;
         }
         CompositorCommand::SetOutputPosition { output, x, y } => {
-            let cmd = format!("keyword monitor {output},preferred,{x}x{y},1");
-            let _ = std::process::Command::new("hyprctl")
-                .args(["--batch", &cmd])
-                .output();
+            let mut config = super::outputs::current_hyprland(&output)?;
+            config.x = x;
+            config.y = y;
+            super::outputs::apply_hyprland(&config)?;
         }
         CompositorCommand::SetOutputVrr { output, enabled } => {
-            let val = if enabled { "1" } else { "0" };
-            let cmd = format!("keyword monitor {output},vrr,{val}");
-            let _ = std::process::Command::new("hyprctl")
-                .args(["--batch", &cmd])
-                .output();
+            let mut config = super::outputs::current_hyprland(&output)?;
+            config.vrr = enabled;
+            super::outputs::apply_hyprland(&config)?;
         }
         CompositorCommand::SetOutputPower { output, on } => {
-            let val = if on { "on" } else { "off" };
-            let _ = std::process::Command::new("hyprctl")
-                .args(["dispatch", "dpms", val, &output])
-                .output();
+            let mut config = super::outputs::current_hyprland(&output)?;
+            config.enabled = on;
+            super::outputs::apply_hyprland(&config)?;
+        }
+        CompositorCommand::ApplyOutput(config) => {
+            super::outputs::apply_hyprland(&config)?;
         }
         CompositorCommand::ToggleMinimizeWindow(_) | CompositorCommand::ToggleOverview => {
             anyhow::bail!("ToggleMinimizeWindow / ToggleOverview not supported on Hyprland");

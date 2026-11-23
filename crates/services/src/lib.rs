@@ -3,15 +3,22 @@
 //! This crate provides reactive services for monitoring and controlling
 //! system components like battery, power profiles, compositor, audio, network, etc.
 
+pub mod appearance;
 pub mod applications;
 pub mod audio;
+pub mod autostart;
 pub mod bluetooth;
 pub mod brightness;
 pub mod bus;
 pub mod clipboard;
 pub mod compositor;
 pub mod core;
+pub mod display_profiles;
+pub mod fsutil;
+pub mod ini;
+pub mod input;
 pub mod jobs;
+pub mod kdl_edit;
 pub mod lifecycle;
 pub mod mimeapps;
 pub mod mpris;
@@ -29,6 +36,8 @@ pub mod upower;
 pub mod vpnx;
 pub mod wallpaper;
 pub mod watcher;
+pub mod wm_config;
+pub mod xkb;
 
 pub use applications::{Application, ApplicationsService};
 pub use audio::{AudioCommand, AudioData, AudioSubscriber};
@@ -40,7 +49,7 @@ pub use brightness::{BrightnessCommand, BrightnessData, BrightnessSubscriber};
 pub use clipboard::{ClipContent, ClipEntry, ClipboardCommand, ClipboardData, ClipboardSubscriber};
 pub use compositor::{
     ActiveWindow, CompositorBackend, CompositorCommand, CompositorState, CompositorSubscriber,
-    Monitor, OutputMode, Window, WindowGeometry, Workspace,
+    Monitor, OutputConfig, OutputMode, Window, WindowGeometry, Workspace,
 };
 pub use core::ServiceCore;
 pub use jobs::JobQueue;
