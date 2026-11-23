@@ -14,6 +14,7 @@ pub mod clipboard;
 pub mod compositor;
 pub mod core;
 pub mod display_profiles;
+pub mod equalizer;
 pub mod fsutil;
 pub mod ini;
 pub mod input;
@@ -52,6 +53,10 @@ pub use compositor::{
     Monitor, OutputConfig, OutputMode, Window, WindowGeometry, Workspace,
 };
 pub use core::ServiceCore;
+pub use equalizer::{
+    EngineState as EqualizerEngineState, EqualizerCommand, EqualizerData, EqualizerSubscriber,
+    OutputDevice,
+};
 pub use jobs::JobQueue;
 pub use lifecycle::{Lifecycle, ManagedService, RunToken, ServiceMode};
 pub use mpris::{

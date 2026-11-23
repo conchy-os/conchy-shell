@@ -30,6 +30,7 @@ pub fn metrics(name: &str, status: &ServiceStatus, cx: &App) -> Vec<Metadata> {
         "Bluetooth" => bluetooth(cx),
         "UPower" => upower(cx),
         "MPRIS" => mpris(cx),
+        "Equalizer" => equalizer(cx),
         "Notifications" => notifications(cx),
         "Tray" => tray(cx),
         "Sysinfo" => sysinfo(cx),
@@ -177,6 +178,27 @@ fn upower(cx: &App) -> Vec<Metadata> {
         };
         rows.push(row("Power profile", profile));
     }
+    rows
+}
+
+fn equalizer(cx: &App) -> Vec<Metadata> {
+    let data = AppState::equalizer(cx).get();
+    let state = match &data.engine {
+        services::EqualizerEngineState::Off => "Off".to_string(),
+        services::EqualizerEngineState::Starting => "Starting".to_string(),
+        services::EqualizerEngineState::Running => "On".to_string(),
+        services::EqualizerEngineState::Failed(reason) => format!("Failed: {reason}"),
+    };
+    let mut rows = vec![row("Equalizer", state)];
+    if let Some(output) = data.output_description() {
+        rows.push(row("Output", output));
+    }
+    rows.push(row(
+        "Preset",
+        data.settings
+            .active_preset()
+            .unwrap_or_else(|| "Custom".to_string()),
+    ));
     rows
 }
 

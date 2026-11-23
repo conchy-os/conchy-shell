@@ -107,6 +107,7 @@ pub(crate) struct Services {
     pub brightness: services::BrightnessSubscriber,
     pub clipboard: services::ClipboardSubscriber,
     pub compositor: services::CompositorSubscriber,
+    pub equalizer: services::EqualizerSubscriber,
     pub mpris: services::MprisSubscriber,
     pub network: services::NetworkSubscriber,
     pub notification: services::NotificationSubscriber,
@@ -123,9 +124,10 @@ impl Services {
     ///
     /// NOTE: keep in sync with the struct above - a new field is not added
     /// here automatically.
-    pub(crate) fn managed(&self) -> [&dyn ManagedService; 14] {
+    pub(crate) fn managed(&self) -> [&dyn ManagedService; 15] {
         [
             &self.audio,
+            &self.equalizer,
             &self.network,
             &self.bluetooth,
             &self.upower,
@@ -157,6 +159,7 @@ pub(crate) async fn init_services() -> anyhow::Result<Services> {
         brightness: services::BrightnessSubscriber::new(),
         clipboard: services::ClipboardSubscriber::new(),
         compositor,
+        equalizer: services::EqualizerSubscriber::new(),
         mpris: services::MprisSubscriber::new(),
         network: services::NetworkSubscriber::new(),
         notification: services::NotificationSubscriber::new(),
@@ -241,7 +244,7 @@ impl AppState {
     }
 
     /// Every service, for the launcher's services view.
-    pub fn managed_services(cx: &App) -> [&dyn ManagedService; 14] {
+    pub fn managed_services(cx: &App) -> [&dyn ManagedService; 15] {
         Self::services(cx).managed()
     }
 
@@ -292,6 +295,13 @@ impl AppState {
     #[inline(always)]
     pub fn compositor(cx: &App) -> &services::CompositorSubscriber {
         &Self::services(cx).compositor
+    }
+
+    #[inline(always)]
+    pub fn equalizer(cx: &App) -> &services::EqualizerSubscriber {
+        let service = &Self::services(cx).equalizer;
+        service.ensure_started();
+        service
     }
 
     #[inline(always)]

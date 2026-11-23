@@ -30,7 +30,7 @@ use crate::launcher::config::{LauncherConfig, ModulesConfig as LauncherModulesCo
 use crate::launcher::modules::{
     self, apps::config::AppsConfig, calculator::config::CalculatorConfig,
     calendar::config::CalendarConfig, clipboard::config::ClipboardConfig,
-    help::config::HelpConfig, mpris::config::MprisConfig, services::config::ServicesConfig,
+    equalizer::config::EqualizerConfig, help::config::HelpConfig, mpris::config::MprisConfig, services::config::ServicesConfig,
     shell::config::ShellConfig, sysinfo::config::SysInfoConfig, theme::config::ThemesConfig,
     wallpaper::config::{WallpaperConfig, WallpaperScheme}, web::config::WebConfig,
 };
@@ -643,6 +643,12 @@ fn module_field(id: &str) -> Option<Field<LauncherModulesConfig>> {
             |m: &mut M| &mut m.sysinfo,
         ),
         "mpris" => Field::nested("mpris", "Media", |m: &M| &m.mpris, |m: &mut M| &mut m.mpris),
+        "equalizer" => Field::nested(
+            "equalizer",
+            "Equalizer",
+            |m: &M| &m.equalizer,
+            |m: &mut M| &mut m.equalizer,
+        ),
         "calculator" => Field::nested(
             "calculator",
             "Calculator",
@@ -717,6 +723,7 @@ prefix_only! {
     ServicesConfig => "Services",
     SysInfoConfig => "System info",
     MprisConfig => "Media",
+    EqualizerConfig => "Equalizer",
     CalculatorConfig => "Calculator",
     HelpConfig => "Help",
     WebConfig => "Web",

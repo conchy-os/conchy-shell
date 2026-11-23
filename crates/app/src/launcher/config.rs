@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::modules::{
     apps::config::AppsConfig, calculator::config::CalculatorConfig, calendar::config::CalendarConfig,
     clipboard::config::ClipboardConfig, config::config::ConfigEditorConfig,
-    help::config::HelpConfig, mpris::config::MprisConfig, services::config::ServicesConfig,
+    equalizer::config::EqualizerConfig, help::config::HelpConfig, mpris::config::MprisConfig, services::config::ServicesConfig,
     shell::config::ShellConfig, sysinfo::config::SysInfoConfig, theme::config::ThemesConfig,
     wallpaper::config::WallpaperConfig, web::config::WebConfig,
 };
@@ -57,6 +57,7 @@ pub struct ModulesConfig {
     pub services: ServicesConfig,
     pub sysinfo: SysInfoConfig,
     pub mpris: MprisConfig,
+    pub equalizer: EqualizerConfig,
     pub calculator: CalculatorConfig,
     pub calendar: CalendarConfig,
     pub clipboard: ClipboardConfig,

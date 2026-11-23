@@ -34,7 +34,7 @@ pub mod network_page;
 mod notification_preview;
 mod osd_preview;
 mod preview;
-mod prompt_page;
+pub mod prompt_page;
 pub mod schema;
 mod sections;
 pub mod select;
