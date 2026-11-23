@@ -47,63 +47,65 @@ pub fn watch_revision<V: 'static>(cx: &mut Context<V>) {
 }
 
 impl LauncherPage for ConfigPage {
+    /// Two groups: how things look (the appearance settings, themes and the
+    /// shell's own sections) and the system (hardware, session, shortcuts).
     fn content(&mut self, _query: &str, cx: &mut Context<Self>) -> Content {
-        let mut list = List::new()
+        let mut appearance = self.system.appearance_items(cx);
+        appearance.push(themes_item(cx));
+        let mut system = self.system.system_items(cx);
+        system.push(shortcuts_item(cx));
+
+        for group in &self.groups {
+            let items = group
+                .fields
+                .iter()
+                .filter(|field| !field.editor.is_empty())
+                .map(|field| section_item(&self.path, field, cx));
+            if group.title == "Desktop Shell" {
+                appearance.extend(items);
+            } else {
+                system.extend(items);
+            }
+        }
+        system.push(self.system.about_item());
+
+        List::new()
             .show_detail(true)
             .click_selects(true)
             .title(Config::title())
             .menu(false)
-            .placeholder("Search settings…");
-        for section in self.system.sections(cx) {
-            list = list.section(section);
-        }
-        for group in &self.groups {
-            let mut items = group
-                .fields
-                .iter()
-                .filter(|field| !field.editor.is_empty())
-                .map(|field| section_item(&self.path, field, cx))
-                .peekable();
-            if items.peek().is_none() {
-                continue;
-            }
-            let section = if group.title.is_empty() {
-                Section::untitled()
-            } else {
-                Section::new(group.title)
-            };
-            list = list.section(section.items(items));
-        }
-        list.section(Section::new("More").items(shortcut_items(cx)))
+            .placeholder("Search settings…")
+            .section(Section::new("Appearance").items(appearance))
+            .section(Section::new("System").items(system))
             .into()
     }
 }
 
-/// Settings that live outside `shell.kdl`: they have pages of their own.
-fn shortcut_items(cx: &App) -> Vec<Item> {
+fn shortcuts_item(cx: &App) -> Item {
+    Item::new("shortcuts", "Shortcuts")
+        .subtitle("Keyboard shortcuts")
+        .icon(IconName::Keyboard)
+        .keywords("shortcuts keybinds hotkeys keys super bindings")
+        .action(
+            Action::new("Open shortcuts", |_, cx| {
+                Outcome::Push(shortcuts_page::ShortcutsPage::open(cx))
+            })
+            .icon(IconName::ChevronRight),
+        )
+        .detail(shortcuts_detail::shortcuts_detail(cx))
+}
+
+fn themes_item(cx: &App) -> Item {
     let prefix = cx.config().launcher.modules.themes.prefix.clone();
-    vec![
-        Item::new("shortcuts", "Shortcuts")
-            .subtitle("Keyboard shortcuts")
-            .icon(IconName::Keyboard)
-            .keywords("shortcuts keybinds hotkeys keys super bindings")
-            .action(
-                Action::new("Open shortcuts", |_, cx| {
-                    Outcome::Push(shortcuts_page::ShortcutsPage::open(cx))
-                })
+    Item::new("themes", "Themes")
+        .subtitle("Desktop themes and colors")
+        .icon(IconName::Palette)
+        .keywords("theme colors palette")
+        .action(
+            Action::new("Open themes", move |_, _| Outcome::SetQuery(prefix.clone()))
                 .icon(IconName::ChevronRight),
-            )
-            .detail(shortcuts_detail::shortcuts_detail(cx)),
-        Item::new("themes", "Themes")
-            .subtitle("Desktop themes and colors")
-            .icon(IconName::Palette)
-            .keywords("theme colors palette")
-            .action(
-                Action::new("Open themes", move |_, _| Outcome::SetQuery(prefix.clone()))
-                    .icon(IconName::ChevronRight),
-            )
-            .detail(themes_detail::themes_detail(cx)),
-    ]
+        )
+        .detail(themes_detail::themes_detail(cx))
 }
 
 /// The list row of a section; its form is the detail pane.

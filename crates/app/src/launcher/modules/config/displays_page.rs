@@ -8,8 +8,8 @@ use ui::{Color, IconName};
 use super::displays_model::{DisplayModel, State};
 use super::prompt_page::PromptPage;
 use super::settings_form as rows;
-use crate::launcher::action::{Action, ActionPanel, Outcome};
-use crate::launcher::content::{Accessory, Detail, Form, Item, Section};
+use crate::launcher::action::{Action, Outcome};
+use crate::launcher::content::{Detail, Form, Item};
 
 const SCALES: [f64; 7] = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
 
@@ -46,118 +46,103 @@ fn title_of(m: &Monitor) -> String {
     }
 }
 
-/// The sections of the displays, and the row of the saved setups. Without displays to
-/// show, one row says why.
-pub fn sections(model: &Entity<DisplayModel>, cx: &App) -> Vec<Section> {
+/// The row of the displays, with the form of every display, the countdown to
+/// keep a change and the saved setups beside it.
+pub fn item(model: &Entity<DisplayModel>, cx: &App) -> Item {
     let m = model.read(cx);
-    let note = |subtitle: &str, text: String| {
-        vec![Section::new("Displays").item(
-            Item::new("displays", "Displays & Monitors")
-                .icon(IconName::ScreenShare)
-                .subtitle(subtitle.to_string())
-                .keywords("display monitor screen resolution scale hz refresh vrr outputs")
-                .detail(Detail::new().markdown(format!("# Displays & Monitors\n\n{text}"))),
-        )]
-    };
-
-    if !m.supported() {
-        return note(
-            "Not available on this compositor",
-            "Mango has no way to change display settings from outside.".into(),
-        );
-    }
-    let monitors = match &m.state {
-        State::Loading => return note("Reading the displays…", "Reading the displays…".into()),
-        State::Failed(err) => {
-            return note("Could not read the displays", err.clone());
+    let subtitle = if !m.supported() {
+        "Not available on this compositor".to_string()
+    } else {
+        match &m.state {
+            State::Loading => "Reading the displays…".to_string(),
+            State::Failed(_) => "Could not read the displays".to_string(),
+            State::Ready(monitors) if monitors.is_empty() => "No displays detected".to_string(),
+            State::Ready(monitors) => monitors
+                .iter()
+                .map(|mon| format!("{} {}", mon.name, mode_text(mon)))
+                .collect::<Vec<_>>()
+                .join(" • "),
         }
-        State::Ready(monitors) => monitors.clone(),
     };
-    if monitors.is_empty() {
-        return note(
-            "No displays detected",
-            "The compositor reported no video outputs.".into(),
-        );
+    let model = model.clone();
+    Item::new("displays", "Displays & Monitors")
+        .icon(IconName::ScreenShare)
+        .subtitle(subtitle)
+        .keywords("display monitor screen resolution scale hz refresh vrr outputs rotation arrangement profile save preset layout setup")
+        .actions(super::system::edit())
+        .detail(Detail::new().form(move |form, cx| displays_form(form, &model, cx)))
+}
+
+fn displays_form(form: &mut Form, model: &Entity<DisplayModel>, cx: &App) {
+    let m = model.read(cx);
+    if !m.supported() {
+        rows::title(form, "Displays & Monitors", "");
+        rows::note(form, "Mango has no way to change display settings from outside.", Color::Warning);
+        return;
+    }
+    match &m.state {
+        State::Loading => {
+            rows::title(form, "Displays & Monitors", "");
+            rows::note(form, "Reading the displays…", Color::Muted);
+            return;
+        }
+        State::Failed(err) => {
+            rows::title(form, "Displays & Monitors", "");
+            rows::note(form, format!("Could not read the displays: {err}"), Color::Error);
+            return;
+        }
+        State::Ready(monitors) if monitors.is_empty() => {
+            rows::title(form, "Displays & Monitors", "");
+            rows::note(form, "The compositor reported no video outputs.", Color::Muted);
+            return;
+        }
+        State::Ready(_) => {}
     }
 
-    let mut items = Vec::new();
-
+    rows::title(
+        form,
+        "Displays & Monitors",
+        "Changes apply at once; keep them within 15 seconds or they are undone",
+    );
     // The countdown, first, so Enter keeps the setup.
     if let Some(revert) = &m.revert {
         let (keep, undo) = (model.clone(), model.clone());
-        items.push(
-            Item::new("revert", format!("Keep these settings? Reverting in {} s", revert.seconds_left))
-                .subtitle("If the screen looks right, keep the new settings")
-                .icon(IconName::Timer)
-                .actions(
-                    ActionPanel::new()
-                        .action(
-                            Action::new("Keep settings", move |_, cx| {
-                                keep.update(cx, |m, cx| m.keep(cx));
-                                Outcome::Stay
-                            })
-                            .icon(IconName::Check),
-                        )
-                        .action(
-                            Action::new("Revert now", move |_, cx| {
-                                undo.update(cx, |m, cx| m.revert_now(cx));
-                                Outcome::Stay
-                            })
-                            .icon(IconName::RotateCcw),
-                        ),
-                )
-                .detail(Detail::new().markdown(
-                    "The display settings changed. Unless you keep them, the previous ones come back on their own.",
-                )),
+        rows::action(
+            form,
+            "Keep these settings",
+            "The screen looks right: do not go back",
+            move |_, cx| {
+                keep.update(cx, |m, cx| m.keep(cx));
+                Outcome::Stay
+            },
+            cx,
+        );
+        rows::action(
+            form,
+            "Revert now",
+            "Put the previous settings back",
+            move |_, cx| {
+                undo.update(cx, |m, cx| m.revert_now(cx));
+                Outcome::Stay
+            },
+            cx,
+        );
+        rows::note(
+            form,
+            format!("Going back in {} s unless you keep them.", revert.seconds_left),
+            Color::Warning,
         );
     }
-
-    for mon in &monitors {
-        let name = mon.name.clone();
-        let mut item = Item::new(format!("display-{name}"), title_of(mon))
-            .icon(IconName::ScreenShare)
-            .subtitle(format!(
-                "{} • {:.2}× • {}",
-                mode_text(mon),
-                mon.scale,
-                rotation_label(mon.transform)
-            ))
-            .keywords(format!("{} {} {} display monitor", mon.name, mon.make, mon.model));
-        if mon.is_focused {
-            item = item.accessory(Accessory::tag("Focused").color(Color::Success));
-        }
-        if mon.is_disabled {
-            item = item.accessory(Accessory::tag("Off").color(Color::Muted));
-        }
-        if mon.vrr_enabled {
-            item = item.accessory(Accessory::tag("VRR").color(Color::Warning));
-        }
-
-        let detail_model = model.clone();
-        items.push(
-            item.actions(super::system::edit())
-                .detail(Detail::new().form(move |form, cx| {
-                    monitor_form(form, &detail_model, &name, cx)
-                })),
-        );
+    for mon in m.monitors() {
+        monitor_form(form, model, &mon.name, cx);
     }
-    items.push(profiles_item(model, monitors));
-    vec![Section::new("Displays").items(items)]
+    profiles_form(form, model, cx);
 }
 
-/// The row of the saved setups; its form saves the current one and lists the rest.
-fn profiles_item(model: &Entity<DisplayModel>, monitors: Vec<Monitor>) -> Item {
-    let model = model.clone();
-    Item::new("display-profiles", "Display profiles")
-        .icon(IconName::Layers)
-        .subtitle("Save a setup of all displays and put it back later")
-        .keywords("profile save preset layout setup displays")
-        .actions(super::system::edit())
-        .detail(Detail::new().form(move |form, cx| profiles_form(form, &model, &monitors, cx)))
-}
-
-fn profiles_form(form: &mut Form, model: &Entity<DisplayModel>, monitors: &[Monitor], cx: &App) {
+/// The saved setups: save the current one, apply, update or delete the rest.
+fn profiles_form(form: &mut Form, model: &Entity<DisplayModel>, cx: &App) {
     let m = model.read(cx);
+    let monitors = m.monitors();
     rows::title(
         form,
         "Display profiles",
@@ -339,7 +324,7 @@ fn monitor_form(form: &mut Form, model: &Entity<DisplayModel>, name: &str, cx: &
     rows::title(
         form,
         &title_of(mon),
-        "Changes apply at once; keep them within 15 seconds or they are undone",
+        if mon.is_focused { "Focused display" } else { "" },
     );
 
     let on_off = {

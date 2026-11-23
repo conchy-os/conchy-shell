@@ -18,8 +18,8 @@ use crate::launcher::action::{Action, ActionPanel, Outcome};
 use crate::launcher::content::{Accessory, Content, Control, Detail, EmptyView, Form, Item, List, Section};
 use crate::launcher::page::{LauncherPage, Page};
 
-/// The rows of the layouts and of typing, each with its form beside it.
-pub fn items(model: &Entity<InputModel>, cx: &App) -> Vec<Item> {
+/// The row of the layouts and of typing, with their form beside it.
+pub fn item(model: &Entity<InputModel>, cx: &App) -> Item {
     let summary = model.read(cx).loaded().map(|l| {
         let names: Vec<String> = l
             .settings
@@ -31,33 +31,26 @@ pub fn items(model: &Entity<InputModel>, cx: &App) -> Vec<Item> {
             .collect();
         (names.join(" · "), l.settings.keyboard.repeat_delay, l.settings.keyboard.repeat_rate)
     });
-
-    let layouts = Item::new("layouts", "Keyboard layouts")
-        .icon(IconName::Languages)
-        .subtitle(summary.as_ref().map_or_else(
-            || "Languages you type in, and the key that switches them".to_string(),
-            |(names, ..)| format!("{names} — and the key that switches them"),
+    Item::new("keyboard", "Keyboard")
+        .icon(IconName::Keyboard)
+        .subtitle(summary.map_or_else(
+            || "Layouts, switching keys, repeat delay and rate".to_string(),
+            |(names, delay, rate)| format!("{names} • repeat after {delay} ms, {rate} per second"),
         ))
-        .keywords("keyboard layout language switch xkb russian english caps lock alt shift")
+        .keywords("keyboard layout language switch xkb russian english caps lock alt shift repeat delay rate speed hold key typing")
         .actions(super::system::edit().action(add_layout_action(model)))
         .detail(Detail::new().form({
             let model = model.clone();
-            move |form, cx| layouts_form(form, &model, cx)
-        }));
+            move |form, cx| keyboard_form(form, &model, cx)
+        }))
+}
 
-    let typing = Item::new("typing", "Typing")
-        .icon(IconName::Keyboard)
-        .subtitle(summary.as_ref().map_or_else(
-            || "How long a held key waits, and how fast it repeats".to_string(),
-            |(_, delay, rate)| format!("Repeat after {delay} ms, {rate} per second"),
-        ))
-        .keywords("keyboard repeat delay rate speed hold key typing")
-        .actions(super::system::edit())
-        .detail(Detail::new().form({
-            let model = model.clone();
-            move |form, cx| typing_form(form, &model, cx)
-        }));
-    vec![layouts, typing]
+fn keyboard_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
+    layouts_form(form, model, cx);
+    let m = model.read(cx);
+    if m.backend != InputBackend::Unsupported && matches!(m.state, State::Ready(_)) {
+        typing_form(form, model, cx);
+    }
 }
 
 fn add_layout_action(model: &Entity<InputModel>) -> Action {

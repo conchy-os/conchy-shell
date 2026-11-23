@@ -30,11 +30,18 @@ pub fn heading(form: &mut Form, title: &str) {
     );
 }
 
-/// A title for the whole form: bold, with what it is for under it.
+/// A title: bold, with what it is for under it. Opens the form, or a part of
+/// a form that stacks several (with room above it then).
 pub fn title(form: &mut Form, title: &str, about: &str) {
+    let above = if form.is_empty() {
+        Spacing::None
+    } else {
+        Spacing::XLarge
+    };
     form.row(
         v_flex()
             .w_full()
+            .pt(above.pixels())
             .pb(Spacing::Medium.pixels())
             .gap(Spacing::Small.pixels())
             .child(
@@ -42,11 +49,13 @@ pub fn title(form: &mut Form, title: &str, about: &str) {
                     .size(TextSize::Medium)
                     .weight(FontWeight::BOLD),
             )
-            .child(
-                Label::new(SharedString::from(about.to_string()))
-                    .size(TextSize::Small)
-                    .color(Color::Muted),
-            ),
+            .when(!about.is_empty(), |el| {
+                el.child(
+                    Label::new(SharedString::from(about.to_string()))
+                        .size(TextSize::Small)
+                        .color(Color::Muted),
+                )
+            }),
     );
 }
 

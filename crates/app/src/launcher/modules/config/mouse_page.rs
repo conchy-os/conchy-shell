@@ -8,39 +8,32 @@ use super::input_model::{InputModel, State};
 use super::settings_form::{self as rows, Number};
 use crate::launcher::content::{Accessory, Detail, Form, Item};
 
-/// The rows of the mouse and the touchpad, each with its form beside it.
-pub fn items(model: &Entity<InputModel>, cx: &App) -> Vec<Item> {
+/// The row of the mouse and the touchpad, with their form beside it.
+pub fn item(model: &Entity<InputModel>, cx: &App) -> Item {
     let (has_touchpad, loaded) = match model.read(cx).loaded() {
         Some(l) => (l.has_touchpad, true),
         None => (true, false),
     };
-
-    let mouse = Item::new("mouse", "Mouse")
+    let mut item = Item::new("mouse", "Mouse & Touchpad")
         .icon(IconName::Mouse)
-        .subtitle("Speed, acceleration and scrolling of external mice")
-        .keywords("mouse pointer speed sensitivity acceleration accel flat adaptive scroll natural left handed")
+        .subtitle("Pointer speed, acceleration, scrolling and tap to click")
+        .keywords("mouse touchpad trackpad pointer speed sensitivity acceleration accel flat adaptive scroll natural left handed tap click gestures disable while typing palm")
         .actions(super::system::edit())
         .detail(Detail::new().form({
             let model = model.clone();
-            move |form, cx| pointer_form(form, &model, cx)
-        }));
-    let mut touchpad = Item::new("touchpad", "Touchpad")
-        .icon(IconName::Mouse)
-        .subtitle(if !loaded || has_touchpad {
-            "Tap to click, natural scrolling, speed"
-        } else {
-            "No touchpad detected on this computer"
-        })
-        .keywords("touchpad trackpad tap click natural scroll gestures disable while typing palm")
-        .actions(super::system::edit())
-        .detail(Detail::new().form({
-            let model = model.clone();
-            move |form, cx| touchpad_form(form, &model, cx)
+            move |form, cx| input_form(form, &model, cx)
         }));
     if loaded && !has_touchpad {
-        touchpad = touchpad.accessory(Accessory::tag("not found").color(Color::Muted));
+        item = item.accessory(Accessory::tag("no touchpad").color(Color::Muted));
     }
-    vec![mouse, touchpad]
+    item
+}
+
+fn input_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
+    if pointer_form(form, model, cx) {
+        touchpad_form(form, model, cx);
+        footer(form, model.read(cx));
+    }
 }
 
 /// What every form says before and after its rows.
@@ -84,7 +77,8 @@ fn accel_from(index: usize) -> AccelProfile {
     }
 }
 
-fn pointer_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
+/// Whether the rows were drawn, and not only what is wrong.
+fn pointer_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) -> bool {
     let m = model.read(cx);
     rows::title(
         form,
@@ -93,12 +87,12 @@ fn pointer_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
     );
     if m.backend == InputBackend::Unsupported {
         rows::note(form, m.backend.persistence_note(), Color::Warning);
-        return;
+        return false;
     }
     if !status(form, m) {
-        return;
+        return false;
     }
-    let Some(loaded) = m.loaded() else { return };
+    let Some(loaded) = m.loaded() else { return false };
     let p = &loaded.settings.pointer;
 
     rows::heading(form, "Movement");
@@ -181,7 +175,7 @@ fn pointer_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
         },
         cx,
     );
-    footer(form, m);
+    true
 }
 
 fn touchpad_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
@@ -339,5 +333,4 @@ fn touchpad_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
         },
         cx,
     );
-    footer(form, m);
 }

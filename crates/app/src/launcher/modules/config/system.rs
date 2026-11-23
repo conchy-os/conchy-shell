@@ -1,5 +1,5 @@
-//! The "System" half of the settings list: network, sound, mouse, displays and
-//! the rest, which are not in `shell.kdl`. Every one is a row of the same list
+//! The rows of the settings list that are not in `shell.kdl`: network, sound,
+//! mouse, displays, appearance and the rest. Every one is a row of the same list
 //! with its form beside it, and Enter moves the keyboard into that form, like
 //! for the shell's own sections: there are no pages to open.
 //!
@@ -23,7 +23,7 @@ use super::{
     keyboard_page, mouse_page, network_page, sound_page,
 };
 use crate::launcher::action::{Action, ActionPanel, Outcome};
-use crate::launcher::content::Section;
+use crate::launcher::content::Item;
 use crate::state::{AppState, watch};
 
 /// What Enter does on a row of the list: the keyboard goes into its form.
@@ -70,26 +70,27 @@ impl System {
         }
     }
 
-    /// The sections, in the order they are listed.
-    pub fn sections(&self, cx: &App) -> Vec<Section> {
-        let mut sections = vec![
-            Section::new("Connections").items([network_page::item(), bluetooth_page::item()]),
-        ];
+    /// The rows that belong to the "Appearance" group.
+    pub fn appearance_items(&self, cx: &App) -> Vec<Item> {
+        vec![appearance_page::item(&self.appearance, cx)]
+    }
 
-        let mut devices = vec![sound_page::item()];
-        devices.extend(mouse_page::items(&self.input, cx));
-        devices.extend(keyboard_page::items(&self.input, cx));
-        sections.push(Section::new("Devices").items(devices));
-
-        sections.extend(displays_page::sections(&self.displays, cx));
-        sections.push(
-            Section::new("Appearance").items(appearance_page::items(&self.appearance, cx)),
-        );
-        sections.push(Section::new("System").items([
+    /// The rows that belong to the "System" group, before the shell's own.
+    pub fn system_items(&self, cx: &App) -> Vec<Item> {
+        vec![
+            network_page::item(),
+            bluetooth_page::item(),
+            sound_page::item(),
+            mouse_page::item(&self.input, cx),
+            keyboard_page::item(&self.input, cx),
+            displays_page::item(&self.displays, cx),
             default_apps_page::item(&self.default_apps),
             autostart_page::item(&self.autostart),
-            about_page::item(&self.about),
-        ]));
-        sections
+        ]
+    }
+
+    /// Last of the "System" group.
+    pub fn about_item(&self) -> Item {
+        about_page::item(&self.about)
     }
 }

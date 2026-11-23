@@ -50,87 +50,50 @@ fn font_of(loaded: &Loaded, role: FontRole) -> &Font {
     }
 }
 
-/// The rows of fonts, text size, cursor and icons, each with its form beside
-/// it. Until the settings are read there is one row that says so.
-pub fn items(model: &Entity<AppearanceModel>, cx: &App) -> Vec<Item> {
+/// The row of fonts, text size, cursor and icons, with their form beside it.
+pub fn item(model: &Entity<AppearanceModel>, cx: &App) -> Item {
+    let subtitle = match &model.read(cx).state {
+        State::Loading => "Reading the current settings…".to_string(),
+        State::Failed(_) => "Could not read the appearance settings".to_string(),
+        State::Ready(loaded) => format!(
+            "{} {} pt • {}× text • {}",
+            loaded.settings.interface_font.family,
+            trim(loaded.settings.interface_font.size),
+            trim(loaded.settings.text_scale),
+            loaded.settings.icon_theme
+        ),
+    };
+    let model = model.clone();
+    Item::new("appearance", "Appearance")
+        .icon(IconName::Palette)
+        .subtitle(subtitle)
+        .keywords("appearance fonts font typeface text scale scaling dpi size zoom cursor pointer theme icons icon papirus adwaita")
+        .actions(super::system::edit())
+        .detail(Detail::new().form(move |form, cx| appearance_form(form, &model, cx)))
+}
+
+fn appearance_form(form: &mut Form, model: &Entity<AppearanceModel>, cx: &App) {
     let m = model.read(cx);
-    let loaded = match &m.state {
+    match &m.state {
         State::Loading => {
-            return vec![
-                Item::new("appearance", "Appearance")
-                    .icon(IconName::Palette)
-                    .subtitle("Reading the current settings…")
-                    .keywords("appearance fonts cursor icons"),
-            ];
+            rows::title(form, "Appearance", "");
+            rows::note(form, "Reading the current settings…", Color::Muted);
+            return;
         }
         State::Failed(err) => {
-            return vec![
-                Item::new("appearance", "Appearance")
-                    .icon(IconName::Palette)
-                    .subtitle("Could not read the appearance settings")
-                    .keywords("appearance fonts cursor icons")
-                    .detail(Detail::new().markdown(format!(
-                        "# Appearance\n\nCould not read the appearance settings.\n\n{err}"
-                    ))),
-            ];
+            rows::title(form, "Appearance", "");
+            rows::note(form, format!("Could not read the settings: {err}"), Color::Error);
+            return;
         }
-        State::Ready(loaded) => loaded,
-    };
-
-    let mut items: Vec<Item> = [FontRole::Interface, FontRole::Document, FontRole::Monospace]
-        .into_iter()
-        .map(|role| {
-            let font = font_of(loaded, role).clone();
-            let detail_model = model.clone();
-            Item::new(format!("font-{}", role.id()), role.name())
-                .icon(IconName::FileText)
-                .subtitle(font.description())
-                .keywords(format!("font typeface text {} {}", role.name(), font.family))
-                .accessory(Accessory::text(format!("{} pt", trim(font.size))))
-                .actions(super::system::edit())
-                .detail(Detail::new().form(move |form, cx| {
-                    font_form(form, &detail_model, role, cx)
-                }))
-        })
-        .collect();
-
-    let detail_model = model.clone();
-    items.push(
-        Item::new("text", "Text size & DPI")
-            .icon(IconName::Sliders)
-            .subtitle(format!(
-                "{}× text, {} dpi",
-                trim(loaded.settings.text_scale),
-                loaded.settings.dpi
-            ))
-            .keywords("text scale scaling dpi font size zoom bigger smaller resolution")
-            .actions(super::system::edit())
-            .detail(Detail::new().form(move |form, cx| text_form(form, &detail_model, cx))),
-    );
-
-    let detail_model = model.clone();
-    items.push(
-        Item::new("cursor", "Cursor")
-            .icon(IconName::Mouse)
-            .subtitle(format!(
-                "{}, {} px",
-                loaded.settings.cursor_theme, loaded.settings.cursor_size
-            ))
-            .keywords("cursor pointer theme size mouse")
-            .actions(super::system::edit())
-            .detail(Detail::new().form(move |form, cx| cursor_form(form, &detail_model, cx))),
-    );
-
-    let detail_model = model.clone();
-    items.push(
-        Item::new("icons", "Icons")
-            .icon(IconName::Palette)
-            .subtitle(loaded.settings.icon_theme.clone())
-            .keywords("icons icon theme papirus adwaita")
-            .actions(super::system::edit())
-            .detail(Detail::new().form(move |form, cx| icons_form(form, &detail_model, cx))),
-    );
-    items
+        State::Ready(_) => {}
+    }
+    for role in [FontRole::Interface, FontRole::Document, FontRole::Monospace] {
+        font_form(form, model, role, cx);
+    }
+    text_form(form, model, cx);
+    cursor_form(form, model, cx);
+    icons_form(form, model, cx);
+    footer(form, m);
 }
 
 fn trim(value: f64) -> String {
@@ -184,7 +147,6 @@ fn font_form(form: &mut Form, model: &Entity<AppearanceModel>, role: FontRole, c
         },
         cx,
     );
-    footer(form, m);
 }
 
 fn text_form(form: &mut Form, model: &Entity<AppearanceModel>, cx: &App) {
@@ -241,7 +203,6 @@ fn text_form(form: &mut Form, model: &Entity<AppearanceModel>, cx: &App) {
         "Programs that are already open may need a restart to pick the change up.",
         Color::Muted,
     );
-    footer(form, m);
 }
 
 fn cursor_form(form: &mut Form, model: &Entity<AppearanceModel>, cx: &App) {
@@ -298,7 +259,6 @@ fn cursor_form(form: &mut Form, model: &Entity<AppearanceModel>, cx: &App) {
         "The compositor and new programs use it at once; programs already open keep the old one.",
         Color::Muted,
     );
-    footer(form, m);
 }
 
 fn icons_form(form: &mut Form, model: &Entity<AppearanceModel>, cx: &App) {
@@ -330,7 +290,6 @@ fn icons_form(form: &mut Form, model: &Entity<AppearanceModel>, cx: &App) {
             cx,
         );
     }
-    footer(form, m);
 }
 
 // -- picking a font ------------------------------------------------------------
