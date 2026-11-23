@@ -18,9 +18,7 @@ mod config_page;
 // Every launcher module keeps its settings in `config.rs`, this one included.
 #[allow(clippy::module_inception)]
 pub mod config;
-mod default_apps_detail;
 pub mod default_apps_page;
-mod displays_detail;
 mod displays_model;
 pub mod displays_page;
 mod dock_preview;
@@ -32,7 +30,6 @@ mod launcher_preview;
 mod layout_page;
 mod look_preset;
 mod mouse_page;
-mod network_detail;
 pub mod network_page;
 mod notification_preview;
 mod osd_preview;
@@ -44,8 +41,8 @@ pub mod select;
 mod settings_form;
 mod shortcuts_detail;
 mod shortcuts_page;
-mod sound_detail;
 pub mod sound_page;
+mod system;
 mod themes_detail;
 mod value_page;
 

@@ -115,6 +115,23 @@ pub fn choice(
     on_pick: impl Fn(usize, &mut App) + 'static,
     cx: &App,
 ) {
+    choice_resettable(form, id, label, description, options, selected, on_pick, None, cx);
+}
+
+/// [`choice`] with one more key: `reset`, which a page gives a shortcut of
+/// its own (Ctrl+R), puts the system's own choice back.
+#[allow(clippy::too_many_arguments)]
+pub fn choice_resettable(
+    form: &mut Form,
+    id: impl Into<SharedString>,
+    label: &'static str,
+    description: &'static str,
+    options: Vec<SharedString>,
+    selected: Option<usize>,
+    on_pick: impl Fn(usize, &mut App) + 'static,
+    reset: Option<Action>,
+    cx: &App,
+) {
     let id: SharedString = id.into();
     let count = options.len();
     let on_pick = std::rc::Rc::new(on_pick);
@@ -151,8 +168,11 @@ pub fn choice(
             },
         )
     };
-    let control = Control::new(ActionPanel::new().action(step(true).icon(IconName::ListTree)))
-        .step(step(false), step(true));
+    let mut panel = ActionPanel::new().action(step(true).icon(IconName::ListTree));
+    if let Some(reset) = reset {
+        panel = panel.action(reset);
+    }
+    let control = Control::new(panel).step(step(false), step(true));
     let row = labeled_row(Label::new(label).size(TextSize::Small), widget);
     form.control(control, |focused| control_frame(row, description, focused, 0, cx));
 }
@@ -292,6 +312,96 @@ pub fn action(
         .into_any_element();
     let _ = colors;
     form.control(control, |focused| control_frame(row, description, focused, 0, cx));
+}
+
+/// A key and its value, nothing to do on it: the rows of an information form.
+pub fn info(form: &mut Form, label: &'static str, value: impl Into<SharedString>) {
+    form.row(
+        h_flex()
+            .w_full()
+            .items_start()
+            .justify_between()
+            .gap(Spacing::Medium.pixels())
+            .px(Spacing::Small.pixels())
+            .py(px(3.))
+            .child(
+                div()
+                    .flex_none()
+                    .child(Label::new(label).size(TextSize::Small).color(Color::Muted)),
+            )
+            .child(
+                div().min_w(px(0.)).child(
+                    Label::new(value.into())
+                        .size(TextSize::Small)
+                        .weight(FontWeight::MEDIUM),
+                ),
+            ),
+    );
+}
+
+/// What a record row shows: a device, a network, a program.
+pub struct Entry {
+    pub icon: IconName,
+    pub title: SharedString,
+    pub subtitle: SharedString,
+    pub tag: Option<(SharedString, Color)>,
+}
+
+/// A record the keyboard can act on: Enter runs the first action, Shift+Enter
+/// the second, and any other one the shortcut it carries. The row tells which
+/// is which while it has the focus.
+pub fn entry(form: &mut Form, spec: Entry, actions: Vec<Action>, cx: &App) {
+    let Entry {
+        icon,
+        title,
+        subtitle,
+        tag,
+    } = spec;
+    let hint = actions
+        .iter()
+        .enumerate()
+        .filter_map(|(ix, action)| {
+            let key = match ix {
+                0 => "Enter".to_string(),
+                1 => "Shift+Enter".to_string(),
+                _ => action.shortcut_label()?.to_string(),
+            };
+            Some(format!("{key}: {}", action.title))
+        })
+        .collect::<Vec<_>>()
+        .join("   ");
+
+    let mut panel = ActionPanel::new();
+    for action in actions {
+        panel = panel.action(action);
+    }
+    let row = h_flex()
+        .w_full()
+        .items_center()
+        .gap(Spacing::Medium.pixels())
+        .child(
+            ui::Icon::new(icon)
+                .size(ui::IconSize::Small)
+                .color(Color::Muted),
+        )
+        .child(
+            v_flex()
+                .flex_1()
+                .min_w(px(0.))
+                .child(Label::new(title).size(TextSize::Small))
+                .child(
+                    Label::new(subtitle)
+                        .size(TextSize::XSmall)
+                        .color(Color::Muted),
+                ),
+        )
+        .children(tag.map(|(text, color)| {
+            Label::new(text).size(TextSize::XSmall).color(color)
+        }))
+        .into_any_element();
+    form.control(Control::new(panel), |focused| {
+        control_frame(row, hint, focused, 0, cx)
+    });
 }
 
 #[cfg(test)]

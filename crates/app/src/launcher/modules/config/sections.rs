@@ -27,8 +27,6 @@ use crate::dock::config::{
     DockAlign, DockConfig, DockHoverEffect, DockMonitors, DockStyle, DockVisibility,
 };
 use crate::launcher::config::{LauncherConfig, ModulesConfig as LauncherModulesConfig};
-use crate::launcher::action::{Action, Outcome};
-use crate::launcher::content::{Item, Section};
 use crate::launcher::modules::{
     self, apps::config::AppsConfig, calculator::config::CalculatorConfig,
     calendar::config::CalendarConfig, clipboard::config::ClipboardConfig,
@@ -45,117 +43,6 @@ impl Editable for Config {
         "Config"
     }
 
-    /// System & Hardware settings sections.
-    fn extra_sections(cx: &App) -> Vec<Section> {
-        vec![Section::new("System").items(vec![
-            Item::new("network", "Network & Wi-Fi")
-                .subtitle("Wi-Fi, Ethernet, and IP configuration")
-                .icon(IconName::Wifi)
-                .keywords("wifi network internet ethernet ip dns address wlan ssid")
-                .action(
-                    Action::new("Open Network Settings", |_, cx| {
-                        Outcome::Push(super::network_page::NetworkPage::open(cx))
-                    })
-                    .icon(IconName::ChevronRight),
-                )
-                .detail(super::network_detail::network_detail(cx)),
-            Item::new("bluetooth", "Bluetooth")
-                .subtitle("Devices, pairing, and adapter settings")
-                .icon(IconName::Bluetooth)
-                .keywords("bluetooth bt pairing devices headphones audio wireless")
-                .action(
-                    Action::new("Open Bluetooth Settings", |_, cx| {
-                        Outcome::Push(super::bluetooth_page::BluetoothPage::open(cx))
-                    })
-                    .icon(IconName::ChevronRight),
-                )
-                .detail(super::bluetooth_detail::bluetooth_detail(cx)),
-            Item::new("mouse", "Mouse & Touchpad")
-                .subtitle("Pointer speed, acceleration, scrolling and tap to click")
-                .icon(IconName::Mouse)
-                .keywords("mouse touchpad trackpad pointer speed acceleration natural scroll tap click sensitivity")
-                .action(
-                    Action::new("Open Mouse & Touchpad", |_, cx| {
-                        Outcome::Push(super::mouse_page::MousePage::open(cx))
-                    })
-                    .icon(IconName::ChevronRight),
-                ),
-            Item::new("keyboard", "Keyboard")
-                .subtitle("Layouts, switching keys, repeat delay and rate")
-                .icon(IconName::Keyboard)
-                .keywords("keyboard layout language switch russian english repeat delay rate caps lock xkb")
-                .action(
-                    Action::new("Open Keyboard", |_, cx| {
-                        Outcome::Push(super::keyboard_page::KeyboardPage::open(cx))
-                    })
-                    .icon(IconName::ChevronRight),
-                ),
-            Item::new("displays", "Displays & Monitors")
-                .subtitle("Resolution, scale, arrangement, and refresh rate")
-                .icon(IconName::ScreenShare)
-                .keywords("display monitor screen resolution scale hz refresh vrr outputs")
-                .action(
-                    Action::new("Open Displays Settings", |_, cx| {
-                        Outcome::Push(super::displays_page::DisplaysPage::open(cx))
-                    })
-                    .icon(IconName::ChevronRight),
-                )
-                .detail(super::displays_detail::displays_detail(cx)),
-            Item::new("appearance", "Appearance")
-                .subtitle("Fonts, text size, cursor and icon themes")
-                .icon(IconName::Palette)
-                .keywords("appearance fonts font dpi text size scale cursor icons theme look typeface")
-                .action(
-                    Action::new("Open Appearance", |_, cx| {
-                        Outcome::Push(super::appearance_page::AppearancePage::open(cx))
-                    })
-                    .icon(IconName::ChevronRight),
-                ),
-            Item::new("startup", "Startup applications")
-                .subtitle("Programs the session starts at login")
-                .icon(IconName::Play)
-                .keywords("startup autostart login boot applications programs session run at start")
-                .action(
-                    Action::new("Open Startup Applications", |_, cx| {
-                        Outcome::Push(super::autostart_page::AutostartPage::open(cx))
-                    })
-                    .icon(IconName::ChevronRight),
-                ),
-            Item::new("sound", "Sound & Audio")
-                .subtitle("Output volume, microphone, and audio devices")
-                .icon(IconName::Volume)
-                .keywords("sound audio volume speakers headphones mic microphone mute")
-                .action(
-                    Action::new("Open Sound Settings", |_, cx| {
-                        Outcome::Push(super::sound_page::SoundPage::open(cx))
-                    })
-                    .icon(IconName::ChevronRight),
-                )
-                .detail(super::sound_detail::sound_detail(cx)),
-            Item::new("default-apps", "Default applications")
-                .subtitle("Which program opens links, folders, images and other files")
-                .icon(IconName::ExternalLink)
-                .keywords("default applications apps mime mimeapps xdg-open browser email file manager associations open with handler")
-                .action(
-                    Action::new("Open Default Applications", |_, cx| {
-                        Outcome::Push(super::default_apps_page::DefaultAppsPage::open(cx))
-                    })
-                    .icon(IconName::ChevronRight),
-                )
-                .detail(super::default_apps_detail::default_apps_detail(cx)),
-            Item::new("about", "About System")
-                .subtitle("System specifications, OS, and hardware details")
-                .icon(IconName::Info)
-                .keywords("about system info specs hardware cpu ram memory kernel os")
-                .action(
-                    Action::new("Open System Info", |_, cx| {
-                        Outcome::Push(super::about_page::AboutPage::open(cx))
-                    })
-                    .icon(IconName::ChevronRight),
-                )
-                .detail(super::about_detail::about_detail(cx)),
-        ])]
-    }
     fn fields() -> Vec<Field<Self>> {
         flatten(Self::groups())
     }

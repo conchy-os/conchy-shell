@@ -1,14 +1,15 @@
 //! Startup applications: what the session starts at login, with a switch for
-//! each, and a way to add programs of one's own.
+//! each, and a way to add programs of one's own. The form beside the
+//! "Startup applications" row.
 
-use gpui::{App, AppContext, Context};
+use gpui::{App, Context, Entity, SharedString};
 use services::autostart::{Autostart, Entry, Off, Origin};
 use ui::{Color, IconName};
 
 use super::prompt_page::PromptPage;
-use crate::launcher::action::{Action, ActionPanel, Outcome};
-use crate::launcher::content::{Accessory, Content, Detail, EmptyView, Item, List, Metadata, Section};
-use crate::launcher::page::{LauncherPage, Page};
+use super::settings_form::{self as rows, Entry as Row};
+use crate::launcher::action::{Action, Outcome};
+use crate::launcher::content::{Detail, Form, Item};
 
 pub struct AutostartPage {
     autostart: Option<Autostart>,
@@ -19,10 +20,6 @@ pub struct AutostartPage {
 }
 
 impl AutostartPage {
-    pub fn open(cx: &mut App) -> Page {
-        Page::new(cx.new(Self::new))
-    }
-
     pub fn new(_cx: &mut Context<Self>) -> Self {
         let mut page = Self {
             autostart: None,
@@ -88,55 +85,44 @@ fn program_name(command: &str) -> String {
     }
 }
 
-fn state_tag(entry: &Entry) -> Accessory {
+fn state_label(entry: &Entry) -> (SharedString, Color) {
     match entry.off {
-        None => Accessory::tag("On").color(Color::Success),
-        Some(Off::Switched) => Accessory::tag("Off").color(Color::Muted),
-        Some(Off::OtherDesktop) => Accessory::tag("Other desktop").color(Color::Muted),
-        Some(Off::NotInstalled) => Accessory::tag("Not installed").color(Color::Warning),
+        None => ("On".into(), Color::Success),
+        Some(Off::Switched) => ("Off".into(), Color::Muted),
+        Some(Off::OtherDesktop) => ("Other desktop".into(), Color::Muted),
+        Some(Off::NotInstalled) => ("Not installed".into(), Color::Warning),
     }
 }
 
-fn detail_of(entry: &Entry) -> Detail {
-    let mut detail = Detail::new()
-        .markdown(format!(
-            "# {}\n\n{}",
-            entry.name,
-            if entry.comment.is_empty() {
-                "Started when the session begins."
-            } else {
-                entry.comment.as_str()
-            }
-        ))
-        .metadata(Metadata::label("Command", entry.exec.clone()))
-        .metadata(Metadata::label(
-            "Status",
-            match entry.off {
-                None => "Starts at login",
-                Some(Off::Switched) => "Switched off",
-                Some(Off::OtherDesktop) => "Not for this desktop (OnlyShowIn / NotShowIn)",
-                Some(Off::NotInstalled) => "The program is not installed (TryExec)",
-            },
-        ))
-        .metadata(Metadata::label(
-            "From",
-            match entry.origin {
-                Origin::User if entry.shadows_system => "Your override of a system entry",
-                Origin::User => "Your autostart folder",
-                Origin::System => "The system (off here means a copy in your folder)",
-            },
-        ))
-        .metadata(Metadata::label("File", entry.path.display().to_string()));
-    if let Some(icon) = &entry.icon {
-        detail = detail.metadata(Metadata::label("Icon", icon.clone()));
-    }
-    detail
+pub fn item(page: &Entity<AutostartPage>) -> Item {
+    let page = page.clone();
+    Item::new("startup", "Startup applications")
+        .subtitle("Programs the session starts at login")
+        .icon(IconName::Play)
+        .keywords("startup autostart login boot applications programs session run at start")
+        .actions(super::system::edit())
+        .detail(Detail::new().form(move |form, cx| startup_form(form, &page, cx)))
 }
 
-impl LauncherPage for AutostartPage {
-    fn content(&mut self, _query: &str, cx: &mut Context<Self>) -> Content {
-        let add = Action::listener("Add program…", cx, |_, _, cx| {
-            let page = cx.entity();
+fn startup_form(form: &mut Form, page: &Entity<AutostartPage>, cx: &App) {
+    let this = page.read(cx);
+    rows::title(
+        form,
+        "Startup applications",
+        "Programs the session starts when you log in",
+    );
+    if let Some(err) = &this.error {
+        rows::note(form, format!("Cannot find the autostart folders: {err}"), Color::Error);
+        return;
+    }
+
+    let add_to = page.clone();
+    rows::action(
+        form,
+        "Add program…",
+        "Run a command at every login",
+        move |_, cx| {
+            let page = add_to.clone();
             PromptPage::ask(
                 cx,
                 "Add startup program",
@@ -155,109 +141,74 @@ impl LauncherPage for AutostartPage {
                     Outcome::Pop
                 },
             )
-        })
-        .icon(IconName::Plus)
-        .shortcut("ctrl-n");
+        },
+        cx,
+    );
+    if let Some((text, error)) = &this.notice {
+        rows::note(form, text.clone(), if *error { Color::Error } else { Color::Muted });
+    }
 
-        let mut list = List::new()
-            .show_detail(true)
-            .click_selects(true)
-            .title("Startup applications")
-            .placeholder("Search startup applications…")
-            .actions(ActionPanel::new().action(add.clone()));
-
-        if let Some(err) = &self.error {
-            return list
-                .empty(
-                    EmptyView::new("Cannot find the autostart folders")
-                        .description(err.clone())
-                        .icon(IconName::Warning),
+    let row_of = |entry: &Entry, form: &mut Form| {
+        let enabled = entry.enabled();
+        let mut actions = Vec::new();
+        if entry.switchable() {
+            let (page, id) = (page.clone(), entry.id.clone());
+            actions.push(
+                Action::new(
+                    if enabled { "Don't start at login" } else { "Start at login" },
+                    move |_, cx| {
+                        page.update(cx, |page, cx| page.toggle(&id, !enabled, cx));
+                        Outcome::Stay
+                    },
                 )
-                .into();
-        }
-
-        if let Some((text, error)) = &self.notice {
-            list = list.section(
-                Section::untitled().item(
-                    Item::new("notice", text.clone())
-                        .icon(if *error { IconName::Warning } else { IconName::Info }),
-                ),
+                .icon(if enabled { IconName::Stop } else { IconName::Play }),
             );
         }
-
-        let item_of = |entry: &Entry, cx: &Context<Self>| {
-            let id = entry.id.clone();
-            let enabled = entry.enabled();
-            let subtitle = if entry.comment.is_empty() {
-                entry.exec.clone()
-            } else {
-                entry.comment.clone()
-            };
-            let mut actions = ActionPanel::new();
-            if entry.switchable() {
-                let id = id.clone();
-                actions = actions.action(
-                    Action::listener(
-                        if enabled { "Don't start at login" } else { "Start at login" },
-                        cx,
-                        move |page, _, cx| {
-                            page.toggle(&id, !enabled, cx);
-                            Outcome::Stay
-                        },
-                    )
-                    .icon(if enabled { IconName::Stop } else { IconName::Play }),
-                );
-            }
-            if entry.removable() {
-                let id = id.clone();
-                actions = actions.action(
-                    Action::listener("Remove from startup", cx, move |page, _, cx| {
-                        page.remove(&id, cx);
-                        Outcome::Stay
-                    })
-                    .icon(IconName::Trash)
-                    .destructive(),
-                );
-            }
-            actions = actions.action(add.clone());
-            Item::new(format!("autostart-{id}"), entry.name.clone())
-                .icon(if enabled { IconName::Play } else { IconName::Pause })
-                .subtitle(subtitle)
-                .keywords(format!("{} {} startup autostart login", entry.exec, entry.id))
-                .accessory(state_tag(entry))
-                .actions(actions)
-                .detail(detail_of(entry))
+        if entry.removable() {
+            let (page, id) = (page.clone(), entry.id.clone());
+            let remove = Action::new("Remove from startup", move |_, cx| {
+                page.update(cx, |page, cx| page.remove(&id, cx));
+                Outcome::Stay
+            })
+            .icon(IconName::Trash)
+            .destructive();
+            // Enter and Shift+Enter are taken by the first two; this one has a key of its own.
+            actions.push(if actions.is_empty() { remove } else { remove.shortcut("ctrl-d") });
+        }
+        let subtitle = if entry.comment.is_empty() {
+            entry.exec.clone()
+        } else {
+            entry.comment.clone()
         };
+        rows::entry(
+            form,
+            Row {
+                icon: if enabled { IconName::Play } else { IconName::Pause },
+                title: entry.name.clone().into(),
+                subtitle: subtitle.into(),
+                tag: Some(state_label(entry)),
+            },
+            actions,
+            cx,
+        );
+    };
 
-        let mine: Vec<Item> = self
-            .entries
-            .iter()
-            .filter(|e| e.origin == Origin::User)
-            .map(|e| item_of(e, cx))
-            .collect();
-        let system: Vec<Item> = self
-            .entries
-            .iter()
-            .filter(|e| e.origin == Origin::System)
-            .map(|e| item_of(e, cx))
-            .collect();
-
-        if mine.is_empty() && system.is_empty() {
-            return list
-                .empty(
-                    EmptyView::new("Nothing starts at login")
-                        .description("Press Ctrl+N to add a program.")
-                        .icon(IconName::Play),
-                )
-                .into();
+    let mine: Vec<&Entry> = this.entries.iter().filter(|e| e.origin == Origin::User).collect();
+    let system: Vec<&Entry> = this.entries.iter().filter(|e| e.origin == Origin::System).collect();
+    if mine.is_empty() && system.is_empty() {
+        rows::note(form, "Nothing starts at login yet.", Color::Muted);
+    }
+    if !mine.is_empty() {
+        rows::heading(form, "Your programs");
+        for entry in mine {
+            row_of(entry, form);
         }
-        if !mine.is_empty() {
-            list = list.section(Section::new("Your programs").items(mine));
+    }
+    if !system.is_empty() {
+        rows::heading(form, "System");
+        for entry in system {
+            row_of(entry, form);
         }
-        if !system.is_empty() {
-            list = list.section(Section::new("System").items(system));
-        }
-        list.into()
     }
 }
 

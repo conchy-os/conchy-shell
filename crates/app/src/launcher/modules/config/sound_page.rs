@@ -1,196 +1,96 @@
-use gpui::{App, Context, prelude::*};
+//! Sound & Audio: the form beside the "Sound & Audio" row. Volume and mute
+//! of the speakers and the microphone.
+
+use gpui::App;
 use services::AudioCommand;
 use ui::IconName;
 
-use crate::launcher::action::{Action, ActionPanel, Outcome};
-use crate::launcher::content::{Accessory, Content, Item, List, Section};
-use crate::launcher::page::{LauncherPage, Page};
-use crate::state::{AppState, watch};
+use super::settings_form::{self as rows, Number};
+use crate::launcher::content::{Detail, Form, Item};
+use crate::state::AppState;
 
-pub struct SoundPage;
-
-impl SoundPage {
-    pub fn open(cx: &mut App) -> Page {
-        Page::new(cx.new(|cx| Self::new(cx)))
-    }
-
-    pub fn new(cx: &mut Context<Self>) -> Self {
-        let audio = AppState::audio(cx);
-        watch(cx, audio.subscribe(), |_, _, cx| {
-            cx.notify();
-        });
-        Self
-    }
+pub fn item() -> Item {
+    Item::new("sound", "Sound & Audio")
+        .subtitle("Output volume, microphone, and audio devices")
+        .icon(IconName::Volume)
+        .keywords("sound audio volume speakers headphones mic microphone mute")
+        .actions(super::system::edit())
+        .detail(Detail::new().form(sound_form))
 }
 
-impl LauncherPage for SoundPage {
-    fn content(&mut self, _query: &str, cx: &mut Context<Self>) -> Content {
-        let service = AppState::audio(cx);
-        let audio = service.get();
+fn sound_form(form: &mut Form, cx: &App) {
+    let service = AppState::audio(cx);
+    let audio = service.get();
 
-        let mut list = List::new()
-            .show_detail(true)
-            .click_selects(true)
-            .title("Sound & Audio")
-            .placeholder("Search sound settings…");
+    rows::title(
+        form,
+        "Sound & Audio",
+        "Volume and mute of the default speakers and microphone",
+    );
 
-        // Global actions
-        let s_mute = service.clone();
-        let s_mic = service.clone();
-        let actions = ActionPanel::default()
-            .action(Action::new(
-                if audio.sink_muted {
-                    "Unmute Speakers"
-                } else {
-                    "Mute Speakers"
-                },
-                move |_, _| {
-                    s_mute.dispatch(AudioCommand::ToggleSinkMute);
-                    Outcome::Stay
-                },
-            ))
-            .action(Action::new(
-                if audio.source_muted {
-                    "Unmute Microphone"
-                } else {
-                    "Mute Microphone"
-                },
-                move |_, _| {
-                    s_mic.dispatch(AudioCommand::ToggleSourceMute);
-                    Outcome::Stay
-                },
-            ));
+    rows::heading(form, "Output");
+    rows::number(
+        form,
+        Number {
+            id: "sound-out".into(),
+            label: "Volume",
+            description: "Master volume of the speakers or headphones",
+            value: f64::from(audio.sink_volume),
+            min: 0.0,
+            max: 100.0,
+            step: 5.0,
+            unit: Some("%"),
+            default: 50.0,
+        },
+        {
+            let service = service.clone();
+            move |v, _| service.dispatch(AudioCommand::SetSinkVolume(v.round() as u8))
+        },
+        cx,
+    );
+    rows::toggle(
+        form,
+        "sound-out-mute",
+        "Muted",
+        "Silence the speakers",
+        audio.sink_muted,
+        {
+            let service = service.clone();
+            move |_, _| service.dispatch(AudioCommand::ToggleSinkMute)
+        },
+        cx,
+    );
 
-        list = list.actions(actions);
-
-        // 1. Output (Sinks) section
-        let s = service.clone();
-        let out_icon = if audio.sink_muted {
-            IconName::VolumeOff
-        } else if audio.sink_volume > 66 {
-            IconName::Volume
-        } else if audio.sink_volume > 33 {
-            IconName::VolumeMedium
-        } else {
-            IconName::VolumeLow
-        };
-
-        let output_item = Item::new("output-volume", "Output Volume (Master)")
-            .subtitle(format!(
-                "{} • {}",
-                if audio.sink_muted { "Muted" } else { "Active" },
-                "PipeWire / PulseAudio"
-            ))
-            .icon(out_icon)
-            .accessory(Accessory::tag(format!("{}%", audio.sink_volume)))
-            .actions(
-                ActionPanel::default()
-                    .action(Action::new(
-                        if audio.sink_muted { "Unmute" } else { "Mute" },
-                        {
-                            let s = s.clone();
-                            move |_, _| {
-                                s.dispatch(AudioCommand::ToggleSinkMute);
-                                Outcome::Stay
-                            }
-                        },
-                    ))
-                    .action(Action::new("Volume Up (+5%)", {
-                        let s = s.clone();
-                        move |_, _| {
-                            s.dispatch(AudioCommand::AdjustSinkVolume(5));
-                            Outcome::Stay
-                        }
-                    }))
-                    .action(Action::new("Volume Down (-5%)", {
-                        let s = s.clone();
-                        move |_, _| {
-                            s.dispatch(AudioCommand::AdjustSinkVolume(-5));
-                            Outcome::Stay
-                        }
-                    }))
-                    .action(Action::new("Set Volume 100%", {
-                        let s = s.clone();
-                        move |_, _| {
-                            s.dispatch(AudioCommand::SetSinkVolume(100));
-                            Outcome::Stay
-                        }
-                    }))
-                    .action(Action::new("Set Volume 75%", {
-                        let s = s.clone();
-                        move |_, _| {
-                            s.dispatch(AudioCommand::SetSinkVolume(75));
-                            Outcome::Stay
-                        }
-                    }))
-                    .action(Action::new("Set Volume 50%", {
-                        let s = s.clone();
-                        move |_, _| {
-                            s.dispatch(AudioCommand::SetSinkVolume(50));
-                            Outcome::Stay
-                        }
-                    }))
-                    .action(Action::new("Set Volume 25%", {
-                        let s = s.clone();
-                        move |_, _| {
-                            s.dispatch(AudioCommand::SetSinkVolume(25));
-                            Outcome::Stay
-                        }
-                    })),
-            );
-
-        // 2. Input (Sources) section
-        let s_in = service.clone();
-        let mic_icon = if audio.source_muted {
-            IconName::MicOff
-        } else {
-            IconName::Mic
-        };
-
-        let input_item = Item::new("input-volume", "Microphone Input (Master)")
-            .subtitle(if audio.source_muted {
-                "Microphone is muted".to_string()
-            } else {
-                "Microphone is live".to_string()
-            })
-            .icon(mic_icon)
-            .accessory(Accessory::tag(format!("{}%", audio.source_volume)))
-            .actions(
-                ActionPanel::default()
-                    .action(Action::new(
-                        if audio.source_muted {
-                            "Unmute Microphone"
-                        } else {
-                            "Mute Microphone"
-                        },
-                        {
-                            let s = s_in.clone();
-                            move |_, _| {
-                                s.dispatch(AudioCommand::ToggleSourceMute);
-                                Outcome::Stay
-                            }
-                        },
-                    ))
-                    .action(Action::new("Mic Volume Up (+5%)", {
-                        let s = s_in.clone();
-                        move |_, _| {
-                            s.dispatch(AudioCommand::AdjustSourceVolume(5));
-                            Outcome::Stay
-                        }
-                    }))
-                    .action(Action::new("Mic Volume Down (-5%)", {
-                        let s = s_in.clone();
-                        move |_, _| {
-                            s.dispatch(AudioCommand::AdjustSourceVolume(-5));
-                            Outcome::Stay
-                        }
-                    })),
-            );
-
-        list = list
-            .section(Section::new("Audio Output").item(output_item))
-            .section(Section::new("Audio Input").item(input_item));
-
-        list.into()
-    }
+    rows::heading(form, "Input");
+    rows::number(
+        form,
+        Number {
+            id: "sound-in".into(),
+            label: "Volume",
+            description: "Gain of the microphone",
+            value: f64::from(audio.source_volume),
+            min: 0.0,
+            max: 100.0,
+            step: 5.0,
+            unit: Some("%"),
+            default: 50.0,
+        },
+        {
+            let service = service.clone();
+            move |v, _| service.dispatch(AudioCommand::SetSourceVolume(v.round() as u8))
+        },
+        cx,
+    );
+    rows::toggle(
+        form,
+        "sound-in-mute",
+        "Muted",
+        "Silence the microphone",
+        audio.source_muted,
+        {
+            let service = service.clone();
+            move |_, _| service.dispatch(AudioCommand::ToggleSourceMute)
+        },
+        cx,
+    );
 }

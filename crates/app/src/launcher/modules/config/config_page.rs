@@ -1,6 +1,8 @@
 //! The page of the config module: the sections in a list on the left, the
 //! selected one's form on the right. Enter (or →) on a section moves the
-//! keyboard into its form; Esc brings it back to the list.
+//! keyboard into its form; Esc brings it back to the list. The system
+//! sections (network, sound, displays…) come from [`System`], the shell's own
+//! from `shell.kdl`.
 
 use gpui::{App, Context, FontWeight, div, prelude::*, px};
 use ui::{
@@ -10,6 +12,7 @@ use ui::{
 
 use super::form::{add_field, add_groups, reset_action};
 use super::schema::{ConfigPath, Editable, Editor, Field, Group};
+use super::system::System;
 use super::{shortcuts_detail, shortcuts_page, themes_detail};
 use crate::config::{ActiveConfig, Config, ConfigSignals};
 use crate::launcher::action::{Action, ActionPanel, Outcome};
@@ -20,6 +23,7 @@ use crate::state::watch;
 pub struct ConfigPage {
     path: ConfigPath<Config>,
     groups: Vec<Group<Config>>,
+    system: System,
 }
 
 impl ConfigPage {
@@ -28,6 +32,7 @@ impl ConfigPage {
         Self {
             path: ConfigPath::root(),
             groups: Config::groups(),
+            system: System::new(cx),
         }
     }
 }
@@ -49,7 +54,7 @@ impl LauncherPage for ConfigPage {
             .title(Config::title())
             .menu(false)
             .placeholder("Search settings…");
-        for section in Config::extra_sections(cx) {
+        for section in self.system.sections(cx) {
             list = list.section(section);
         }
         for group in &self.groups {

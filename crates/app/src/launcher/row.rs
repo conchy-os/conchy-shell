@@ -143,7 +143,6 @@ fn accessory(accessory: &Accessory, cx: &App) -> AnyElement {
         .map(|icon| Icon::new(icon).size(IconSize::XSmall).color(color));
     let el = div().flex().items_center().gap(px(4.)).children(icon);
     match &accessory.kind {
-        AccessoryKind::Icon => el,
         AccessoryKind::Text(text) => {
             el.child(Label::new(text.clone()).size(TextSize::Small).color(color))
         }

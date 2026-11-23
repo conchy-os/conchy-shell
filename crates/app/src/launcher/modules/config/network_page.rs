@@ -1,290 +1,298 @@
-use gpui::{App, Context, prelude::*};
+//! Network & Wi-Fi: the form beside the "Network & Wi-Fi" row. The Wi-Fi
+//! switch, the connection in use and the networks around, each one a row the
+//! keyboard can act on.
+
+use gpui::{App, SharedString};
 use services::{ActiveConnectionInfo, NetworkCommand};
-use ui::{
-    ActiveTheme, Color, IconName,
-};
+use ui::{Color, IconName};
 
+use super::settings_form::{self as rows, Entry};
 use crate::icons;
-use crate::launcher::action::{Action, ActionPanel, Outcome};
-use crate::launcher::content::{Accessory, Content, EmptyView, Item, List, Section};
-use crate::launcher::page::{LauncherPage, Page};
-use crate::state::{AppState, watch};
+use crate::launcher::action::{Action, Outcome};
+use crate::launcher::content::{Detail, Form, Item};
+use crate::state::AppState;
 
-pub struct NetworkPage;
-
-impl NetworkPage {
-    pub fn open(cx: &mut App) -> Page {
-        Page::new(cx.new(|cx| Self::new(cx)))
-    }
-
-    pub fn new(cx: &mut Context<Self>) -> Self {
-        let network = AppState::network(cx);
-        watch(cx, network.subscribe(), |_, _, cx| {
-            cx.notify();
-        });
-        Self
-    }
+pub fn item() -> Item {
+    Item::new("network", "Network & Wi-Fi")
+        .subtitle("Wi-Fi, Ethernet, and IP configuration")
+        .icon(IconName::Wifi)
+        .keywords("wifi network internet ethernet ip dns address wlan ssid")
+        .actions(super::system::edit())
+        .detail(Detail::new().form(network_form))
 }
 
-impl LauncherPage for NetworkPage {
-    fn content(&mut self, _query: &str, cx: &mut Context<Self>) -> Content {
-        let service = AppState::network(cx);
-        let data = service.get();
+fn network_form(form: &mut Form, cx: &App) {
+    let service = AppState::network(cx);
+    let data = service.get();
+    let wifi_on = data.wifi_enabled;
 
-        let wifi_on = data.wifi_enabled;
-        let scanning = data.scanning;
+    rows::title(
+        form,
+        "Network & Wi-Fi",
+        "Wireless and wired connections, their addresses and the networks around",
+    );
 
-        let mut list = List::new()
-            .show_detail(true)
-            .click_selects(true)
-            .title("Network & Wi-Fi")
-            .placeholder("Search network connections…");
-
-        // Global actions
-        let actions = ActionPanel::default()
-            .action(
-                Action::new(
-                    if wifi_on {
-                        "Turn Wi-Fi Off"
-                    } else {
-                        "Turn Wi-Fi On"
-                    },
-                    {
-                        let service = service.clone();
-                        move |_, _| {
-                            service.dispatch(NetworkCommand::ToggleWifi);
-                            Outcome::Stay
-                        }
-                    },
-                )
-                .icon(if wifi_on {
-                    IconName::WifiOff
-                } else {
-                    IconName::Wifi
-                }),
-            )
-            .action(Action::new("Rescan Networks", {
+    rows::heading(form, "Wi-Fi");
+    rows::toggle(
+        form,
+        "net-wifi",
+        "Wi-Fi",
+        "Turn the wireless adapter on or off",
+        wifi_on,
+        {
+            let service = service.clone();
+            move |_, _| service.dispatch(NetworkCommand::ToggleWifi)
+        },
+        cx,
+    );
+    if wifi_on {
+        rows::action(
+            form,
+            if data.scanning {
+                "Looking for networks…"
+            } else {
+                "Look for networks"
+            },
+            "Ask the adapter to scan again",
+            {
                 let service = service.clone();
                 move |_, _| {
                     service.dispatch(NetworkCommand::RequestScan);
                     Outcome::Stay
                 }
-            }));
+            },
+            cx,
+        );
+    }
 
-        list = list.actions(actions);
-
-        // 1. Active Connections section
-        let mut active_items = Vec::new();
-        for (idx, conn) in data.active_connections.iter().enumerate() {
-            match conn {
-                ActiveConnectionInfo::WiFi {
-                    id: _,
-                    name,
-                    strength,
-                    interface,
-                    hw_address: _,
-                    ipv4_address,
-                    ipv4_gateway: _,
-                    dns_servers: _,
-                    frequency: _,
-                    channel: _,
-                    bitrate: _,
-                    security: _,
-                    ..
-                } => {
-                    let mut item = Item::new(
-                        format!("active-wifi-{idx}"),
-                        format!("{name} (Connected Wi-Fi)"),
-                    )
-                    .subtitle(format!(
-                        "Interface: {} • IP: {}",
-                        interface,
-                        ipv4_address.as_deref().unwrap_or("Assigning...")
-                    ))
-                    .icon(icons::wifi_signal_icon(*strength))
-                    .accessory(Accessory::tag("Active").color(Color::Custom(
-                        cx.theme().colors().status.success,
-                    )));
-
-                    if let Some(ip) = ipv4_address {
-                        item = item.accessory(Accessory::text(ip.clone()));
-                    }
-
-                    let disconnect_name = name.clone();
-                    let s = service.clone();
-                    let item_actions = ActionPanel::default()
-                        .action(Action::new("Disconnect", move |_, _| {
-                            s.dispatch(NetworkCommand::Disconnect(disconnect_name.clone()));
-                            Outcome::Stay
-                        }))
-                        .action(Action::new("Forget Network", {
-                            let s = service.clone();
-                            let forget_ssid = name.clone();
-                            move |_, _| {
-                                s.dispatch(NetworkCommand::Forget(forget_ssid.clone()));
-                                Outcome::Stay
-                            }
-                        }));
-
-                    active_items.push(item.actions(item_actions));
-                }
-                ActiveConnectionInfo::Wired {
-                    name,
-                    speed,
-                    interface,
-                    hw_address: _,
-                    ipv4_address,
-                    ipv4_gateway: _,
-                    dns_servers: _,
-                    ..
-                } => {
-                    let mut item = Item::new(
-                        format!("active-wired-{idx}"),
-                        format!("{name} (Ethernet)"),
-                    )
-                    .subtitle(format!(
-                        "{} • {} Mbps • IP: {}",
-                        interface,
-                        speed,
-                        ipv4_address.as_deref().unwrap_or("Connected")
-                    ))
-                    .icon(IconName::Ethernet)
-                    .accessory(Accessory::tag("Active").color(Color::Custom(
-                        cx.theme().colors().status.success,
-                    )));
-
-                    if let Some(ip) = ipv4_address {
-                        item = item.accessory(Accessory::text(ip.clone()));
-                    }
-
-                    active_items.push(item);
-                }
-                ActiveConnectionInfo::Vpn { name, .. } => {
-                    active_items.push(
-                        Item::new(format!("active-vpn-{idx}"), format!("VPN: {name}"))
-                            .subtitle("Secure encrypted tunnel")
-                            .icon(IconName::Shield)
-                            .accessory(Accessory::tag("VPN").color(Color::Custom(
-                                cx.theme().colors().status.success,
-                            ))),
-                    );
-                }
-            }
-        }
-
-        if !active_items.is_empty() {
-            list = list.section(Section::new("Active Connection").items(active_items));
-        }
-
-        // 2. Wi-Fi Access Points section
-        if wifi_on {
-            let mut wifi_items = Vec::new();
-            for (idx, ap) in data.wireless_access_points.iter().enumerate() {
-                // If it's already active, skip duplicate in scanned list
-                let is_active = data
-                    .active_connections
-                    .iter()
-                    .any(|c| matches!(c, ActiveConnectionInfo::WiFi { name, .. } if name == &ap.ssid));
-
-                if is_active {
-                    continue;
-                }
-
-                let sub = format!(
-                    "{} • {} • Ch {}",
-                    ap.band(),
-                    if ap.public { "Open" } else { &ap.security },
-                    ap.channel()
-                );
-
-                let mut item = Item::new(format!("ap-{idx}"), ap.ssid.clone())
-                    .subtitle(sub)
-                    .icon(icons::wifi_signal_icon(ap.strength))
-                    .accessory(Accessory::text(format!("{}%", ap.strength)));
-
-                if ap.known {
-                    item = item.accessory(
-                        Accessory::icon(IconName::Check)
-                            .color(Color::Custom(cx.theme().colors().status.success)),
-                    );
-                }
-
-                if !ap.public {
-                    item = item.accessory(Accessory::icon(IconName::Lock).color(Color::Muted));
-                }
-
-                let ap_ssid = ap.ssid.clone();
-                let is_known = ap.known;
-                let is_public = ap.public;
-                let s = service.clone();
-
-                let mut item_actions = ActionPanel::default().action(Action::new(
-                    if is_known || is_public {
-                        "Connect"
-                    } else {
-                        "Connect with Password"
+    rows::heading(form, "Connection");
+    if data.active_connections.is_empty() {
+        rows::note(
+            form,
+            "Not connected. Join a Wi-Fi network or plug in a cable.",
+            Color::Muted,
+        );
+    }
+    for conn in &data.active_connections {
+        match conn {
+            ActiveConnectionInfo::WiFi {
+                name,
+                strength,
+                interface,
+                ipv4_address,
+                ..
+            } => {
+                let (disconnect, forget) = (service.clone(), service.clone());
+                let (disconnect_name, forget_name) = (name.clone(), name.clone());
+                rows::entry(
+                    form,
+                    Entry {
+                        icon: icons::wifi_signal_icon(*strength),
+                        title: name.clone().into(),
+                        subtitle: format!(
+                            "{interface} • {}",
+                            ipv4_address.as_deref().unwrap_or("getting an address…")
+                        )
+                        .into(),
+                        tag: Some((format!("{strength}%").into(), Color::Success)),
                     },
-                    move |_, _cx| {
-                        if is_known || is_public {
-                            s.dispatch(NetworkCommand::Connect {
-                                ssid: ap_ssid.clone(),
-                                password: None,
-                            });
+                    vec![
+                        Action::new("Disconnect", move |_, _| {
+                            disconnect.dispatch(NetworkCommand::Disconnect(disconnect_name.clone()));
                             Outcome::Stay
-                        } else {
-                            // Trigger connect password attempt
-                            s.dispatch(NetworkCommand::Connect {
-                                ssid: ap_ssid.clone(),
-                                password: None,
-                            });
-                            Outcome::Stay
-                        }
-                    },
-                ));
-
-                if ap.known {
-                    let forget_ssid = ap.ssid.clone();
-                    let s_forget = service.clone();
-                    item_actions =
-                        item_actions.action(Action::new("Forget Network", move |_, _| {
-                            s_forget.dispatch(NetworkCommand::Forget(forget_ssid.clone()));
-                            Outcome::Stay
-                        }));
-                }
-
-                wifi_items.push(item.actions(item_actions));
-            }
-
-            if !wifi_items.is_empty() {
-                list = list.section(
-                    Section::new(if scanning {
-                        "Available Wi-Fi Networks (Scanning…)"
-                    } else {
-                        "Available Wi-Fi Networks"
-                    })
-                    .items(wifi_items),
-                );
-            } else if scanning {
-                list = list.empty(
-                    EmptyView::new("Scanning for Wi-Fi networks…")
-                        .description("Searching for nearby wireless access points.")
-                        .icon(IconName::Wifi),
-                );
-            } else {
-                list = list.empty(
-                    EmptyView::new("No Wi-Fi networks found")
-                        .description("Press Mod+R to rescan for nearby wireless networks.")
+                        })
                         .icon(IconName::WifiOff),
+                        Action::new("Forget", move |_, _| {
+                            forget.dispatch(NetworkCommand::Forget(forget_name.clone()));
+                            Outcome::Stay
+                        })
+                        .icon(IconName::Trash)
+                        .destructive(),
+                    ],
+                    cx,
                 );
             }
-        } else {
-            list = list.empty(
-                EmptyView::new("Wi-Fi is turned off")
-                    .description("Press Enter or toggle action to turn Wi-Fi on.")
-                    .icon(IconName::WifiOff),
+            ActiveConnectionInfo::Wired {
+                name,
+                speed,
+                interface,
+                ipv4_address,
+                ..
+            } => {
+                rows::info(form, "Ethernet", name.clone());
+                rows::info(form, "Link", format!("{interface} • {speed} Mbps"));
+                rows::info(
+                    form,
+                    "IP address",
+                    ipv4_address.clone().unwrap_or_else(|| "None".into()),
+                );
+            }
+            ActiveConnectionInfo::Vpn { name, .. } => rows::info(form, "VPN", name.clone()),
+        }
+    }
+    if let Some(details) = data.active_connections.first() {
+        details_rows(form, details);
+    }
+
+    if wifi_on {
+        let around: Vec<_> = data
+            .wireless_access_points
+            .iter()
+            .filter(|ap| {
+                !data.active_connections.iter().any(
+                    |c| matches!(c, ActiveConnectionInfo::WiFi { name, .. } if name == &ap.ssid),
+                )
+            })
+            .collect();
+        rows::heading(
+            form,
+            if data.scanning {
+                "Networks around (scanning…)"
+            } else {
+                "Networks around"
+            },
+        );
+        if around.is_empty() {
+            rows::note(
+                form,
+                if data.scanning {
+                    "Searching for nearby access points…"
+                } else {
+                    "No networks found. Use “Look for networks” to scan again."
+                },
+                Color::Muted,
             );
         }
+        for ap in around {
+            let mut actions = vec![
+                {
+                    let (service, ssid) = (service.clone(), ap.ssid.clone());
+                    Action::new("Connect", move |_, _| {
+                        service.dispatch(NetworkCommand::Connect {
+                            ssid: ssid.clone(),
+                            password: None,
+                        });
+                        Outcome::Stay
+                    })
+                    .icon(IconName::Wifi)
+                },
+            ];
+            if ap.known {
+                let (service, ssid) = (service.clone(), ap.ssid.clone());
+                actions.push(
+                    Action::new("Forget", move |_, _| {
+                        service.dispatch(NetworkCommand::Forget(ssid.clone()));
+                        Outcome::Stay
+                    })
+                    .icon(IconName::Trash)
+                    .destructive(),
+                );
+            }
+            let tag: SharedString = if ap.known {
+                format!("saved • {}%", ap.strength).into()
+            } else {
+                format!("{}%", ap.strength).into()
+            };
+            rows::entry(
+                form,
+                Entry {
+                    icon: icons::wifi_signal_icon(ap.strength),
+                    title: ap.ssid.clone().into(),
+                    subtitle: format!(
+                        "{} • {} • channel {}",
+                        ap.band(),
+                        if ap.public { "open" } else { ap.security.as_str() },
+                        ap.channel()
+                    )
+                    .into(),
+                    tag: Some((tag, Color::Muted)),
+                },
+                actions,
+                cx,
+            );
+        }
+    }
+}
 
-        list.into()
+/// Addresses and radio details of the connection in use.
+fn details_rows(form: &mut Form, conn: &ActiveConnectionInfo) {
+    let list = |servers: &[String]| {
+        if servers.is_empty() {
+            "None".to_string()
+        } else {
+            servers.join(", ")
+        }
+    };
+    match conn {
+        ActiveConnectionInfo::WiFi {
+            hw_address,
+            ipv4_address,
+            ipv4_gateway,
+            dns_servers,
+            frequency,
+            channel,
+            bitrate,
+            security,
+            ..
+        } => {
+            rows::heading(form, "Details");
+            rows::info(form, "Security", security.as_deref().unwrap_or("WPA2"));
+            if let Some(f) = frequency {
+                let band = if *f >= 5925 {
+                    "6 GHz"
+                } else if *f >= 4900 {
+                    "5 GHz"
+                } else {
+                    "2.4 GHz"
+                };
+                rows::info(
+                    form,
+                    "Frequency",
+                    match channel {
+                        Some(ch) => format!("{f} MHz ({band}, channel {ch})"),
+                        None => format!("{f} MHz ({band})"),
+                    },
+                );
+            }
+            if let Some(b) = bitrate {
+                rows::info(form, "Link speed", format!("{:.1} Mbps", f64::from(*b) / 1000.0));
+            }
+            rows::info(
+                form,
+                "IP address",
+                ipv4_address.clone().unwrap_or_else(|| "None".into()),
+            );
+            rows::info(
+                form,
+                "Gateway",
+                ipv4_gateway.clone().unwrap_or_else(|| "None".into()),
+            );
+            rows::info(form, "DNS", list(dns_servers));
+            rows::info(
+                form,
+                "MAC address",
+                hw_address.clone().unwrap_or_else(|| "Unknown".into()),
+            );
+        }
+        ActiveConnectionInfo::Wired {
+            hw_address,
+            ipv4_gateway,
+            dns_servers,
+            ..
+        } => {
+            rows::heading(form, "Details");
+            rows::info(
+                form,
+                "Gateway",
+                ipv4_gateway.clone().unwrap_or_else(|| "None".into()),
+            );
+            rows::info(form, "DNS", list(dns_servers));
+            rows::info(
+                form,
+                "MAC address",
+                hw_address.clone().unwrap_or_else(|| "Unknown".into()),
+            );
+        }
+        ActiveConnectionInfo::Vpn { .. } => {}
     }
 }

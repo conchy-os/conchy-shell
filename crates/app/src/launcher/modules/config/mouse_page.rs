@@ -1,79 +1,46 @@
 //! Mouse and touchpad: speed, acceleration, scrolling and tapping.
 
-use gpui::{App, AppContext, Context, Entity, SharedString};
+use gpui::{App, Entity, SharedString};
 use services::input::{AccelProfile, Change, ClickMethod, InputBackend};
 use ui::{Color, IconName};
 
 use super::input_model::{InputModel, State};
 use super::settings_form::{self as rows, Number};
-use crate::launcher::action::{Action, ActionPanel, Outcome};
-use crate::launcher::content::{Accessory, Content, Detail, Form, Item, List, Section};
-use crate::launcher::page::{LauncherPage, Page};
+use crate::launcher::content::{Accessory, Detail, Form, Item};
 
-pub struct MousePage {
-    model: Entity<InputModel>,
-}
+/// The rows of the mouse and the touchpad, each with its form beside it.
+pub fn items(model: &Entity<InputModel>, cx: &App) -> Vec<Item> {
+    let (has_touchpad, loaded) = match model.read(cx).loaded() {
+        Some(l) => (l.has_touchpad, true),
+        None => (true, false),
+    };
 
-impl MousePage {
-    pub fn open(cx: &mut App) -> Page {
-        Page::new(cx.new(Self::new))
-    }
-
-    pub fn new(cx: &mut Context<Self>) -> Self {
-        let model = cx.new(InputModel::new);
-        cx.observe(&model, |_, _, cx| cx.notify()).detach();
-        Self { model }
-    }
-}
-
-impl LauncherPage for MousePage {
-    fn content(&mut self, _query: &str, cx: &mut Context<Self>) -> Content {
-        let model = self.model.clone();
-        let (has_touchpad, loaded) = match model.read(cx).loaded() {
-            Some(l) => (l.has_touchpad, true),
-            None => (true, false),
-        };
-
-        let edit = || {
-            ActionPanel::new()
-                .action(Action::new("Edit", |_, _| Outcome::FocusDetail).icon(IconName::ChevronRight))
-        };
-
-        let mut mouse = Item::new("mouse", "Mouse")
-            .icon(IconName::Mouse)
-            .subtitle("Speed, acceleration and scrolling of external mice")
-            .keywords("mouse pointer speed sensitivity acceleration accel flat adaptive scroll natural left handed")
-            .actions(edit());
-        let mut touchpad = Item::new("touchpad", "Touchpad")
-            .icon(IconName::Mouse)
-            .subtitle(if !loaded || has_touchpad {
-                "Tap to click, natural scrolling, speed"
-            } else {
-                "No touchpad detected on this computer"
-            })
-            .keywords("touchpad trackpad tap click natural scroll gestures disable while typing palm")
-            .actions(edit());
-
-        mouse = mouse.detail(Detail::new().form({
+    let mouse = Item::new("mouse", "Mouse")
+        .icon(IconName::Mouse)
+        .subtitle("Speed, acceleration and scrolling of external mice")
+        .keywords("mouse pointer speed sensitivity acceleration accel flat adaptive scroll natural left handed")
+        .actions(super::system::edit())
+        .detail(Detail::new().form({
             let model = model.clone();
             move |form, cx| pointer_form(form, &model, cx)
         }));
-        touchpad = touchpad.detail(Detail::new().form({
+    let mut touchpad = Item::new("touchpad", "Touchpad")
+        .icon(IconName::Mouse)
+        .subtitle(if !loaded || has_touchpad {
+            "Tap to click, natural scrolling, speed"
+        } else {
+            "No touchpad detected on this computer"
+        })
+        .keywords("touchpad trackpad tap click natural scroll gestures disable while typing palm")
+        .actions(super::system::edit())
+        .detail(Detail::new().form({
             let model = model.clone();
             move |form, cx| touchpad_form(form, &model, cx)
         }));
-        if loaded && !has_touchpad {
-            touchpad = touchpad.accessory(Accessory::tag("not found").color(Color::Muted));
-        }
-
-        List::new()
-            .show_detail(true)
-            .click_selects(true)
-            .title("Mouse & Touchpad")
-            .placeholder("Search pointer settings…")
-            .section(Section::new("Pointing devices").items([mouse, touchpad]))
-            .into()
+    if loaded && !has_touchpad {
+        touchpad = touchpad.accessory(Accessory::tag("not found").color(Color::Muted));
     }
+    vec![mouse, touchpad]
 }
 
 /// What every form says before and after its rows.

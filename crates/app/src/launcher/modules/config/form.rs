@@ -136,12 +136,13 @@ fn indent(depth: usize, content: impl IntoElement, cx: &App) -> AnyElement {
 /// underneath.
 pub(super) fn control_frame(
     content: AnyElement,
-    description: &'static str,
+    description: impl Into<SharedString>,
     focused: bool,
     depth: usize,
     cx: &App,
 ) -> AnyElement {
     let colors = cx.theme().colors();
+    let description: SharedString = description.into();
     let row = v_flex()
         .w_full()
         .gap(px(2.))

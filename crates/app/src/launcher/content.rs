@@ -349,7 +349,6 @@ impl Item {
 pub(super) enum AccessoryKind {
     Text(SharedString),
     Tag(SharedString),
-    Icon,
 }
 
 /// Right-aligned extra on a list row.
@@ -367,13 +366,6 @@ impl Accessory {
 
     pub fn tag(text: impl Into<SharedString>) -> Self {
         Self::of(AccessoryKind::Tag(text.into()))
-    }
-
-    pub fn icon(icon: IconName) -> Self {
-        Self {
-            icon: Some(icon),
-            ..Self::of(AccessoryKind::Icon)
-        }
     }
 
     fn of(kind: AccessoryKind) -> Self {

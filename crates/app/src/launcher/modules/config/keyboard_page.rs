@@ -15,81 +15,49 @@ use super::input_model::{InputModel, State};
 use super::select::select;
 use super::settings_form::{self as rows, Number};
 use crate::launcher::action::{Action, ActionPanel, Outcome};
-use crate::launcher::content::{
-    Accessory, Content, Control, Detail, EmptyView, Form, Item, List, Section,
-};
+use crate::launcher::content::{Accessory, Content, Control, Detail, EmptyView, Form, Item, List, Section};
 use crate::launcher::page::{LauncherPage, Page};
 
-pub struct KeyboardPage {
-    model: Entity<InputModel>,
-}
+/// The rows of the layouts and of typing, each with its form beside it.
+pub fn items(model: &Entity<InputModel>, cx: &App) -> Vec<Item> {
+    let summary = model.read(cx).loaded().map(|l| {
+        let names: Vec<String> = l
+            .settings
+            .keyboard
+            .xkb
+            .layouts
+            .iter()
+            .map(|e| e.layout.to_uppercase())
+            .collect();
+        (names.join(" · "), l.settings.keyboard.repeat_delay, l.settings.keyboard.repeat_rate)
+    });
 
-impl KeyboardPage {
-    pub fn open(cx: &mut App) -> Page {
-        Page::new(cx.new(Self::new))
-    }
+    let layouts = Item::new("layouts", "Keyboard layouts")
+        .icon(IconName::Languages)
+        .subtitle(summary.as_ref().map_or_else(
+            || "Languages you type in, and the key that switches them".to_string(),
+            |(names, ..)| format!("{names} — and the key that switches them"),
+        ))
+        .keywords("keyboard layout language switch xkb russian english caps lock alt shift")
+        .actions(super::system::edit().action(add_layout_action(model)))
+        .detail(Detail::new().form({
+            let model = model.clone();
+            move |form, cx| layouts_form(form, &model, cx)
+        }));
 
-    pub fn new(cx: &mut Context<Self>) -> Self {
-        let model = cx.new(InputModel::new);
-        cx.observe(&model, |_, _, cx| cx.notify()).detach();
-        Self { model }
-    }
-}
-
-impl LauncherPage for KeyboardPage {
-    fn content(&mut self, _query: &str, cx: &mut Context<Self>) -> Content {
-        let model = self.model.clone();
-        let summary = model.read(cx).loaded().map(|l| {
-            let names: Vec<String> = l
-                .settings
-                .keyboard
-                .xkb
-                .layouts
-                .iter()
-                .map(|e| e.layout.to_uppercase())
-                .collect();
-            (names.join(" · "), l.settings.keyboard.repeat_delay, l.settings.keyboard.repeat_rate)
-        });
-
-        let edit = || {
-            ActionPanel::new()
-                .action(Action::new("Edit", |_, _| Outcome::FocusDetail).icon(IconName::ChevronRight))
-        };
-
-        let layouts = Item::new("layouts", "Layouts")
-            .icon(IconName::Languages)
-            .subtitle(summary.as_ref().map_or_else(
-                || "Languages you type in, and the key that switches them".to_string(),
-                |(names, ..)| format!("{names} — and the key that switches them"),
-            ))
-            .keywords("keyboard layout language switch xkb russian english caps lock alt shift")
-            .actions(edit().action(add_layout_action(&model)))
-            .detail(Detail::new().form({
-                let model = model.clone();
-                move |form, cx| layouts_form(form, &model, cx)
-            }));
-
-        let typing = Item::new("typing", "Typing")
-            .icon(IconName::Keyboard)
-            .subtitle(summary.as_ref().map_or_else(
-                || "How long a held key waits, and how fast it repeats".to_string(),
-                |(_, delay, rate)| format!("Repeat after {delay} ms, {rate} per second"),
-            ))
-            .keywords("keyboard repeat delay rate speed hold key typing")
-            .actions(edit())
-            .detail(Detail::new().form({
-                let model = model.clone();
-                move |form, cx| typing_form(form, &model, cx)
-            }));
-
-        List::new()
-            .show_detail(true)
-            .click_selects(true)
-            .title("Keyboard")
-            .placeholder("Search keyboard settings…")
-            .section(Section::new("Keyboard").items([layouts, typing]))
-            .into()
-    }
+    let typing = Item::new("typing", "Typing")
+        .icon(IconName::Keyboard)
+        .subtitle(summary.as_ref().map_or_else(
+            || "How long a held key waits, and how fast it repeats".to_string(),
+            |(_, delay, rate)| format!("Repeat after {delay} ms, {rate} per second"),
+        ))
+        .keywords("keyboard repeat delay rate speed hold key typing")
+        .actions(super::system::edit())
+        .detail(Detail::new().form({
+            let model = model.clone();
+            move |form, cx| typing_form(form, &model, cx)
+        }));
+    vec![layouts, typing]
 }
 
 fn add_layout_action(model: &Entity<InputModel>) -> Action {

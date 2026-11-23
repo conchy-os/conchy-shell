@@ -11,25 +11,25 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use gpui::{App, AppContext, Context, Entity};
+use gpui::{App, AppContext, Context, Entity, SharedString};
 use services::LocalSlot;
 use services::mimeapps::{
     DesktopEntry, DesktopIndex, Group, Layers, MimeApps, Source, Store, describe, known_mime_types,
 };
 use ui::{Color, IconName};
 
+use super::settings_form as rows;
 use crate::launcher::action::{Action, ActionPanel, Outcome};
-use crate::launcher::content::{Accessory, Content, EmptyView, Item, ItemIcon, List, Section};
-use crate::launcher::page::{LauncherPage, Page};
+use crate::launcher::content::{
+    Accessory, Content, Detail, Form, Item, ItemIcon, List, Section,
+};
+use crate::launcher::page::LauncherPage;
 use crate::state::AppState;
 
 /// One everyday setting: a name, and the types that move together under it.
 pub(super) struct Role {
     id: &'static str,
     pub(super) name: &'static str,
-    pub(super) icon: IconName,
-    /// What the row matches in search, besides its name.
-    words: &'static str,
     pub(super) mimes: &'static [&'static str],
 }
 
@@ -37,8 +37,6 @@ pub(super) const ROLES: &[Role] = &[
     Role {
         id: "web",
         name: "Web browser",
-        icon: IconName::Globe,
-        words: "browser internet links http https html url",
         mimes: &[
             "x-scheme-handler/http",
             "x-scheme-handler/https",
@@ -49,29 +47,21 @@ pub(super) const ROLES: &[Role] = &[
     Role {
         id: "mail",
         name: "Email",
-        icon: IconName::Mail,
-        words: "mail mailto client",
         mimes: &["x-scheme-handler/mailto"],
     },
     Role {
         id: "files",
         name: "File manager",
-        icon: IconName::Folder,
-        words: "folders directories files explorer",
         mimes: &["inode/directory"],
     },
     Role {
         id: "text",
         name: "Text editor",
-        icon: IconName::FileText,
-        words: "text plain editor notes",
         mimes: &["text/plain"],
     },
     Role {
         id: "images",
         name: "Images",
-        icon: IconName::Image,
-        words: "pictures photos viewer png jpeg jpg gif webp svg",
         mimes: &[
             "image/png",
             "image/jpeg",
@@ -88,8 +78,6 @@ pub(super) const ROLES: &[Role] = &[
     Role {
         id: "video",
         name: "Video",
-        icon: IconName::Play,
-        words: "movies player mp4 mkv webm",
         mimes: &[
             "video/mp4",
             "video/x-matroska",
@@ -103,8 +91,6 @@ pub(super) const ROLES: &[Role] = &[
     Role {
         id: "audio",
         name: "Music",
-        icon: IconName::Music,
-        words: "audio player mp3 flac ogg wav",
         mimes: &[
             "audio/mpeg",
             "audio/flac",
@@ -118,15 +104,11 @@ pub(super) const ROLES: &[Role] = &[
     Role {
         id: "pdf",
         name: "PDF documents",
-        icon: IconName::BookOpen,
-        words: "pdf reader documents",
         mimes: &["application/pdf"],
     },
     Role {
         id: "archives",
         name: "Archives",
-        icon: IconName::Paperclip,
-        words: "zip tar rar 7z gzip compressed",
         mimes: &[
             "application/zip",
             "application/x-tar",
@@ -181,12 +163,7 @@ pub struct DefaultAppsPage {
 }
 
 impl DefaultAppsPage {
-    pub fn open(cx: &mut App) -> Page {
-        let page = Self::load(cx);
-        Page::new(cx.new(|_| page))
-    }
-
-    fn load(cx: &App) -> Self {
+    pub fn new(cx: &App) -> Self {
         let icons = AppState::applications(cx)
             .all()
             .iter()
@@ -358,117 +335,121 @@ impl DefaultAppsPage {
         )
     }
 
-    // -- rows -----------------------------------------------------------------
-
-    fn role_row(&self, role: &'static Role, page: &Entity<Self>) -> Item {
-        let choice = role_choice(role, |mime| self.resolve(mime).map(|(id, _)| id));
-        let overridden = role
-            .mimes
-            .iter()
-            .any(|mime| matches!(self.resolve(mime), Some((_, Source::Override(_)))));
-
-        let (subtitle, icon) = match &choice {
-            Choice::Unset => ("Not set".to_string(), role.icon.into()),
-            Choice::One(id) => (self.app_name(id), self.icon(id, role.icon)),
-            Choice::Mixed(ids) => (
-                ids.iter()
-                    .map(|id| self.app_name(id))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                role.icon.into(),
-            ),
-        };
-        let mut item = Item::new(format!("role:{}", role.id), role.name)
-            .subtitle(subtitle)
-            .icon(icon)
-            .keywords(role.words);
-        match choice {
-            Choice::Mixed(_) => {
-                item = item.accessory(Accessory::tag("mixed").color(Color::Warning));
-            }
-            Choice::Unset => {}
-            Choice::One(_) => {}
-        }
-        if overridden {
-            item = item.accessory(Accessory::tag("overridden").color(Color::Warning));
-        }
-
-        let mimes: Vec<String> = role.mimes.iter().map(|m| m.to_string()).collect();
-        let (choose_page, reset_page) = (page.clone(), page.clone());
-        let (choose_mimes, reset_mimes) = (mimes.clone(), mimes);
-        let name = role.name;
-        item.actions(
-            ActionPanel::new()
-                .action(
-                    Action::new("Choose application", move |_, cx| {
-                        let (page, mimes) = (choose_page.clone(), choose_mimes.clone());
-                        Outcome::push(cx.new(|cx| ChoosePage::new(page, name.into(), mimes, cx)))
-                    })
-                    .icon(IconName::ChevronRight),
-                )
-                .action(
-                    Action::new("Use the system's choice", move |_, cx| {
-                        reset_page.update(cx, |page, cx| {
-                            page.clear(Group::Default, &reset_mimes, cx);
-                        });
-                        Outcome::Stay
-                    })
-                    .icon(IconName::RotateCcw),
-                ),
-        )
-    }
 }
 
-impl LauncherPage for DefaultAppsPage {
-    fn content(&mut self, _query: &str, cx: &mut Context<Self>) -> Content {
-        let list = List::new()
-            .title("Default applications")
-            .placeholder("Search default applications…");
-        if let Some(reason) = &self.load_error {
-            return list
-                .empty(
-                    EmptyView::new("mimeapps.list could not be read")
-                        .description(reason.clone())
-                        .icon(IconName::CircleAlert),
-                )
-                .into();
+/// The row beside which the form of default applications is drawn.
+pub fn item(page: &Entity<DefaultAppsPage>) -> Item {
+    let page = page.clone();
+    Item::new("default-apps", "Default applications")
+        .subtitle("Which program opens links, folders, images and other files")
+        .icon(IconName::ExternalLink)
+        .keywords("default applications apps mime mimeapps xdg-open browser email file manager associations open with handler")
+        .actions(super::system::edit())
+        .detail(Detail::new().form(move |form, cx| default_apps_form(form, &page, cx)))
+}
+
+fn default_apps_form(form: &mut Form, page: &Entity<DefaultAppsPage>, cx: &App) {
+    let this = page.read(cx);
+    rows::title(
+        form,
+        "Default applications",
+        "Which program opens links, folders, images and other files",
+    );
+    if let Some(reason) = &this.load_error {
+        rows::note(form, format!("mimeapps.list could not be read: {reason}"), Color::Error);
+        return;
+    }
+
+    rows::heading(form, "Common");
+    for role in ROLES {
+        let choice = role_choice(role, |mime| this.resolve(mime).map(|(id, _)| id));
+        let current = match &choice {
+            Choice::One(id) => Some(id.clone()),
+            _ => None,
+        };
+
+        // The applications that can open the role's types, and the one in use
+        // even when it cannot (a hand-written entry).
+        let mut ids: Vec<String> = this
+            .index
+            .all()
+            .iter()
+            .filter(|entry| role.mimes.iter().any(|mime| entry.opens(mime)))
+            .map(|entry| entry.id.clone())
+            .collect();
+        if let Some(current) = &current
+            && !ids.contains(current)
+        {
+            ids.insert(0, current.clone());
         }
+        let options: Vec<SharedString> = ids.iter().map(|id| this.app_name(id).into()).collect();
+        let selected = current.and_then(|current| ids.iter().position(|id| *id == current));
 
-        let page = cx.entity();
-        let common = ROLES.iter().map(|role| self.role_row(role, &page));
+        let mimes: Vec<String> = role.mimes.iter().map(|m| m.to_string()).collect();
+        let description = match &choice {
+            Choice::Mixed(_) => "Its types use different applications; picking one sets them all",
+            Choice::Unset => "Not set: the system decides",
+            Choice::One(_) => "",
+        };
+        let reset = {
+            let (page, mimes) = (page.clone(), mimes.clone());
+            Action::new("Use the system's choice", move |_, cx| {
+                page.update(cx, |page, cx| {
+                    page.clear(Group::Default, &mimes, cx);
+                });
+                Outcome::Stay
+            })
+            .icon(IconName::RotateCcw)
+            .shortcut("ctrl-r")
+        };
+        let page = page.clone();
+        rows::choice_resettable(
+            form,
+            format!("default-{}", role.id),
+            role.name,
+            description,
+            options,
+            selected,
+            move |ix, cx| {
+                if let Some(id) = ids.get(ix) {
+                    page.update(cx, |page, cx| page.set_default(&mimes, id, cx));
+                }
+            },
+            Some(reset),
+            cx,
+        );
+    }
 
-        let (types_page, file_page) = (page.clone(), page.clone());
-        let missing = self.missing_count();
-        let mut file_row = Item::new("file", "mimeapps.list")
-            .subtitle(tilde(self.store.path()))
-            .icon(IconName::FileText)
-            .keywords("mimeapps list file associations added removed edit")
-            .action(
-                Action::new("Open entries", move |_, cx| {
-                    let page = file_page.clone();
-                    Outcome::push(cx.new(|cx| FilePage::new(page, cx)))
-                })
-                .icon(IconName::ChevronRight),
-            );
-        if missing > 0 {
-            file_row = file_row
-                .accessory(Accessory::tag(format!("{missing} missing")).color(Color::Warning));
-        }
-        let types_row = Item::new("types", "All file types")
-            .subtitle("Choose an application for any type, one by one")
-            .icon(IconName::List)
-            .keywords("mime types extensions formats associations")
-            .action(
-                Action::new("Open file types", move |_, cx| {
-                    let page = types_page.clone();
-                    Outcome::push(cx.new(|cx| TypesPage::new(page, cx)))
-                })
-                .icon(IconName::ChevronRight),
-            );
-
-        list.section(Section::new("Common").items(common))
-            .section(Section::new("Advanced").items([types_row, file_row]))
-            .into()
+    rows::heading(form, "Advanced");
+    let types_page = page.clone();
+    rows::action(
+        form,
+        "All file types…",
+        "Choose an application for any type, one by one",
+        move |_, cx| {
+            let page = types_page.clone();
+            Outcome::push(cx.new(|cx| TypesPage::new(page, cx)))
+        },
+        cx,
+    );
+    let file_page = page.clone();
+    rows::action(
+        form,
+        "Entries of mimeapps.list…",
+        "The file itself, with what the system added and removed",
+        move |_, cx| {
+            let page = file_page.clone();
+            Outcome::push(cx.new(|cx| FilePage::new(page, cx)))
+        },
+        cx,
+    );
+    let missing = this.missing_count();
+    if missing > 0 {
+        rows::note(
+            form,
+            format!("{missing} entries in {} name applications that are not installed.", tilde(this.store.path())),
+            Color::Warning,
+        );
     }
 }
 

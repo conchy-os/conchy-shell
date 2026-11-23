@@ -1,7 +1,7 @@
 //! Displays: resolution, refresh rate, scale, rotation, arrangement, and
 //! profiles that put a whole setup back.
 
-use gpui::{App, AppContext, Context, Entity, SharedString};
+use gpui::{App, Entity, SharedString};
 use services::Monitor;
 use ui::{Color, IconName};
 
@@ -9,24 +9,7 @@ use super::displays_model::{DisplayModel, State};
 use super::prompt_page::PromptPage;
 use super::settings_form as rows;
 use crate::launcher::action::{Action, ActionPanel, Outcome};
-use crate::launcher::content::{Accessory, Content, Detail, EmptyView, Form, Item, List, Section};
-use crate::launcher::page::{LauncherPage, Page};
-
-pub struct DisplaysPage {
-    model: Entity<DisplayModel>,
-}
-
-impl DisplaysPage {
-    pub fn open(cx: &mut App) -> Page {
-        Page::new(cx.new(Self::new))
-    }
-
-    pub fn new(cx: &mut Context<Self>) -> Self {
-        let model = cx.new(DisplayModel::new);
-        cx.observe(&model, |_, _, cx| cx.notify()).detach();
-        Self { model }
-    }
-}
+use crate::launcher::content::{Accessory, Detail, Form, Item, Section};
 
 const SCALES: [f64; 7] = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
 
@@ -63,149 +46,105 @@ fn title_of(m: &Monitor) -> String {
     }
 }
 
-impl LauncherPage for DisplaysPage {
-    fn content(&mut self, _query: &str, cx: &mut Context<Self>) -> Content {
-        let model = self.model.clone();
-        let m = model.read(cx);
-
-        let mut list = List::new()
-            .show_detail(true)
-            .click_selects(true)
-            .title("Displays & Monitors")
-            .placeholder("Search displays…");
-
-        if !m.supported() {
-            return list
-                .empty(
-                    EmptyView::new("Not available on this compositor")
-                        .description("Mango has no way to change display settings from outside.")
-                        .icon(IconName::ScreenShare),
-                )
-                .into();
-        }
-        let monitors = match &m.state {
-            State::Loading => return list.loading(true).into(),
-            State::Failed(err) => {
-                return list
-                    .empty(
-                        EmptyView::new("Could not read the displays")
-                            .description(err.clone())
-                            .icon(IconName::ScreenShare),
-                    )
-                    .into();
-            }
-            State::Ready(monitors) => monitors.clone(),
-        };
-        if monitors.is_empty() {
-            return list
-                .empty(
-                    EmptyView::new("No displays detected")
-                        .description("The compositor reported no video outputs.")
-                        .icon(IconName::ScreenShare),
-                )
-                .into();
-        }
-
-        // 1. The countdown, first, so Enter keeps the setup.
-        if let Some(revert) = &m.revert {
-            let (keep, undo) = (model.clone(), model.clone());
-            list = list.section(Section::new("Keep these settings?").item(
-                Item::new("revert", format!("Reverting in {} s", revert.seconds_left))
-                    .subtitle("If the screen looks right, keep the new settings")
-                    .icon(IconName::Timer)
-                    .actions(
-                        ActionPanel::new()
-                            .action(
-                                Action::new("Keep settings", move |_, cx| {
-                                    keep.update(cx, |m, cx| m.keep(cx));
-                                    Outcome::Stay
-                                })
-                                .icon(IconName::Check),
-                            )
-                            .action(
-                                Action::new("Revert now", move |_, cx| {
-                                    undo.update(cx, |m, cx| m.revert_now(cx));
-                                    Outcome::Stay
-                                })
-                                .icon(IconName::RotateCcw),
-                            ),
-                    )
-                    .detail(Detail::new().markdown(
-                        "The display settings changed. Unless you keep them, the previous ones come back on their own.",
-                    )),
-            ));
-        }
-
-        // 2. The displays.
-        let others_on = monitors.iter().filter(|m| !m.is_disabled).count();
-        let mut items = Vec::new();
-        for mon in &monitors {
-            let name = mon.name.clone();
-            let mut item = Item::new(format!("display-{name}"), title_of(mon))
+/// The sections of the displays and of the saved setups. Without displays to
+/// show, one row says why.
+pub fn sections(model: &Entity<DisplayModel>, cx: &App) -> Vec<Section> {
+    let m = model.read(cx);
+    let note = |subtitle: &str, text: String| {
+        vec![Section::new("Displays").item(
+            Item::new("displays", "Displays & Monitors")
                 .icon(IconName::ScreenShare)
-                .subtitle(format!(
-                    "{} • {:.2}× • {}",
-                    mode_text(mon),
-                    mon.scale,
-                    rotation_label(mon.transform)
-                ))
-                .keywords(format!("{} {} {} display monitor", mon.name, mon.make, mon.model));
-            if mon.is_focused {
-                item = item.accessory(Accessory::tag("Focused").color(Color::Success));
-            }
-            if mon.is_disabled {
-                item = item.accessory(Accessory::tag("Off").color(Color::Muted));
-            }
-            if mon.vrr_enabled {
-                item = item.accessory(Accessory::tag("VRR").color(Color::Warning));
-            }
+                .subtitle(subtitle.to_string())
+                .keywords("display monitor screen resolution scale hz refresh vrr outputs")
+                .detail(Detail::new().markdown(format!("# Displays & Monitors\n\n{text}"))),
+        )]
+    };
 
-            let mut actions = ActionPanel::new().action(
-                Action::new("Edit", |_, _| Outcome::FocusDetail).icon(IconName::ChevronRight),
-            );
-            if !mon.is_disabled {
-                let (model, name, next) = (model.clone(), name.clone(), (mon.transform + 1) % 4);
-                actions = actions.action(
-                    Action::new(
-                        format!("Rotate to {}", rotation_label(next)),
-                        move |_, cx| {
-                            model.update(cx, |m, cx| {
-                                m.change_monitor(&name, true, |c, _| c.transform = next, cx)
-                            });
-                            Outcome::Stay
-                        },
-                    )
-                    .icon(IconName::RotateCw),
-                );
-            }
-            // The last screen on cannot be turned off.
-            if mon.is_disabled || others_on > 1 {
-                let (model, name, on) = (model.clone(), name.clone(), mon.is_disabled);
-                actions = actions.action(
-                    Action::new(
-                        if on { "Turn on" } else { "Turn off" },
-                        move |_, cx| {
-                            model.update(cx, |m, cx| {
-                                m.change_monitor(&name, true, |c, _| c.enabled = on, cx)
-                            });
-                            Outcome::Stay
-                        },
-                    )
-                    .icon(IconName::Power),
-                );
-            }
-
-            let detail_model = model.clone();
-            items.push(item.actions(actions).detail(Detail::new().form(move |form, cx| {
-                monitor_form(form, &detail_model, &name, cx)
-            })));
-        }
-        list = list.section(Section::new("Displays").items(items));
-
-        // 3. The profiles.
-        list = list.section(Section::new("Profiles").items(profile_items(&model, &monitors, cx)));
-        list.into()
+    if !m.supported() {
+        return note(
+            "Not available on this compositor",
+            "Mango has no way to change display settings from outside.".into(),
+        );
     }
+    let monitors = match &m.state {
+        State::Loading => return note("Reading the displays…", "Reading the displays…".into()),
+        State::Failed(err) => {
+            return note("Could not read the displays", err.clone());
+        }
+        State::Ready(monitors) => monitors.clone(),
+    };
+    if monitors.is_empty() {
+        return note(
+            "No displays detected",
+            "The compositor reported no video outputs.".into(),
+        );
+    }
+
+    let mut items = Vec::new();
+
+    // The countdown, first, so Enter keeps the setup.
+    if let Some(revert) = &m.revert {
+        let (keep, undo) = (model.clone(), model.clone());
+        items.push(
+            Item::new("revert", format!("Keep these settings? Reverting in {} s", revert.seconds_left))
+                .subtitle("If the screen looks right, keep the new settings")
+                .icon(IconName::Timer)
+                .actions(
+                    ActionPanel::new()
+                        .action(
+                            Action::new("Keep settings", move |_, cx| {
+                                keep.update(cx, |m, cx| m.keep(cx));
+                                Outcome::Stay
+                            })
+                            .icon(IconName::Check),
+                        )
+                        .action(
+                            Action::new("Revert now", move |_, cx| {
+                                undo.update(cx, |m, cx| m.revert_now(cx));
+                                Outcome::Stay
+                            })
+                            .icon(IconName::RotateCcw),
+                        ),
+                )
+                .detail(Detail::new().markdown(
+                    "The display settings changed. Unless you keep them, the previous ones come back on their own.",
+                )),
+        );
+    }
+
+    for mon in &monitors {
+        let name = mon.name.clone();
+        let mut item = Item::new(format!("display-{name}"), title_of(mon))
+            .icon(IconName::ScreenShare)
+            .subtitle(format!(
+                "{} • {:.2}× • {}",
+                mode_text(mon),
+                mon.scale,
+                rotation_label(mon.transform)
+            ))
+            .keywords(format!("{} {} {} display monitor", mon.name, mon.make, mon.model));
+        if mon.is_focused {
+            item = item.accessory(Accessory::tag("Focused").color(Color::Success));
+        }
+        if mon.is_disabled {
+            item = item.accessory(Accessory::tag("Off").color(Color::Muted));
+        }
+        if mon.vrr_enabled {
+            item = item.accessory(Accessory::tag("VRR").color(Color::Warning));
+        }
+
+        let detail_model = model.clone();
+        items.push(
+            item.actions(super::system::edit())
+                .detail(Detail::new().form(move |form, cx| {
+                    monitor_form(form, &detail_model, &name, cx)
+                })),
+        );
+    }
+    vec![
+        Section::new("Displays").items(items),
+        Section::new("Display profiles").items(profile_items(model, &monitors, cx)),
+    ]
 }
 
 fn profile_items(model: &Entity<DisplayModel>, monitors: &[Monitor], cx: &App) -> Vec<Item> {

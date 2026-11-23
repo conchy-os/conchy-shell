@@ -10,22 +10,6 @@ use crate::launcher::action::{Action, ActionPanel, Outcome};
 use crate::launcher::content::{Accessory, Content, Detail, EmptyView, Form, Item, List, Section};
 use crate::launcher::page::{LauncherPage, Page};
 
-pub struct AppearancePage {
-    model: Entity<AppearanceModel>,
-}
-
-impl AppearancePage {
-    pub fn open(cx: &mut App) -> Page {
-        Page::new(cx.new(Self::new))
-    }
-
-    pub fn new(cx: &mut Context<Self>) -> Self {
-        let model = cx.new(AppearanceModel::new);
-        cx.observe(&model, |_, _, cx| cx.notify()).detach();
-        Self { model }
-    }
-}
-
 impl FontRoleExt for FontRole {
     fn name(self) -> &'static str {
         match self {
@@ -66,110 +50,87 @@ fn font_of(loaded: &Loaded, role: FontRole) -> &Font {
     }
 }
 
-impl LauncherPage for AppearancePage {
-    fn content(&mut self, _query: &str, cx: &mut Context<Self>) -> Content {
-        let model = self.model.clone();
-        let list = List::new()
-            .show_detail(true)
-            .click_selects(true)
-            .title("Appearance")
-            .placeholder("Search appearance settings…");
+/// The rows of fonts, text size, cursor and icons, each with its form beside
+/// it. Until the settings are read there is one row that says so.
+pub fn items(model: &Entity<AppearanceModel>, cx: &App) -> Vec<Item> {
+    let m = model.read(cx);
+    let loaded = match &m.state {
+        State::Loading => {
+            return vec![
+                Item::new("appearance", "Appearance")
+                    .icon(IconName::Palette)
+                    .subtitle("Reading the current settings…")
+                    .keywords("appearance fonts cursor icons"),
+            ];
+        }
+        State::Failed(err) => {
+            return vec![
+                Item::new("appearance", "Appearance")
+                    .icon(IconName::Palette)
+                    .subtitle("Could not read the appearance settings")
+                    .keywords("appearance fonts cursor icons")
+                    .detail(Detail::new().markdown(format!(
+                        "# Appearance\n\nCould not read the appearance settings.\n\n{err}"
+                    ))),
+            ];
+        }
+        State::Ready(loaded) => loaded,
+    };
 
-        let m = model.read(cx);
-        let loaded = match &m.state {
-            State::Loading => return list.loading(true).into(),
-            State::Failed(err) => {
-                return list
-                    .empty(
-                        EmptyView::new("Could not read the appearance settings")
-                            .description(err.clone())
-                            .icon(IconName::Palette),
-                    )
-                    .into();
-            }
-            State::Ready(loaded) => loaded,
-        };
-
-        let edit = || {
-            ActionPanel::new()
-                .action(Action::new("Edit", |_, _| Outcome::FocusDetail).icon(IconName::ChevronRight))
-        };
-
-        let font_items: Vec<Item> = [FontRole::Interface, FontRole::Document, FontRole::Monospace]
-            .into_iter()
-            .map(|role| {
-                let font = font_of(loaded, role).clone();
-                let (pick_model, size_model) = (model.clone(), model.clone());
-                let detail_model = model.clone();
-                Item::new(format!("font-{}", role.id()), role.name())
-                    .icon(IconName::FileText)
-                    .subtitle(font.description())
-                    .keywords(format!("font typeface text {} {}", role.name(), font.family))
-                    .accessory(Accessory::text(format!("{} pt", trim(font.size))))
-                    .actions(
-                        ActionPanel::new()
-                            .action(
-                                Action::new("Choose font…", move |_, cx| {
-                                    Outcome::Push(FontPicker::open(pick_model.clone(), role, cx))
-                                })
-                                .icon(IconName::ChevronRight),
-                            )
-                            .action(
-                                Action::new("Change size", move |_, _| {
-                                    let _ = &size_model;
-                                    Outcome::FocusDetail
-                                })
-                                .icon(IconName::Pencil),
-                            ),
-                    )
-                    .detail(Detail::new().form(move |form, cx| {
-                        font_form(form, &detail_model, role, cx)
-                    }))
-            })
-            .collect();
-
-        let text = {
+    let mut items: Vec<Item> = [FontRole::Interface, FontRole::Document, FontRole::Monospace]
+        .into_iter()
+        .map(|role| {
+            let font = font_of(loaded, role).clone();
             let detail_model = model.clone();
-            Item::new("text", "Text size & DPI")
-                .icon(IconName::Sliders)
-                .subtitle(format!(
-                    "{}× text, {} dpi",
-                    trim(loaded.settings.text_scale),
-                    loaded.settings.dpi
-                ))
-                .keywords("text scale scaling dpi font size zoom bigger smaller resolution")
-                .actions(edit())
-                .detail(Detail::new().form(move |form, cx| text_form(form, &detail_model, cx)))
-        };
+            Item::new(format!("font-{}", role.id()), role.name())
+                .icon(IconName::FileText)
+                .subtitle(font.description())
+                .keywords(format!("font typeface text {} {}", role.name(), font.family))
+                .accessory(Accessory::text(format!("{} pt", trim(font.size))))
+                .actions(super::system::edit())
+                .detail(Detail::new().form(move |form, cx| {
+                    font_form(form, &detail_model, role, cx)
+                }))
+        })
+        .collect();
 
-        let cursor = {
-            let detail_model = model.clone();
-            Item::new("cursor", "Cursor")
-                .icon(IconName::Mouse)
-                .subtitle(format!(
-                    "{}, {} px",
-                    loaded.settings.cursor_theme, loaded.settings.cursor_size
-                ))
-                .keywords("cursor pointer theme size mouse")
-                .actions(edit())
-                .detail(Detail::new().form(move |form, cx| cursor_form(form, &detail_model, cx)))
-        };
+    let detail_model = model.clone();
+    items.push(
+        Item::new("text", "Text size & DPI")
+            .icon(IconName::Sliders)
+            .subtitle(format!(
+                "{}× text, {} dpi",
+                trim(loaded.settings.text_scale),
+                loaded.settings.dpi
+            ))
+            .keywords("text scale scaling dpi font size zoom bigger smaller resolution")
+            .actions(super::system::edit())
+            .detail(Detail::new().form(move |form, cx| text_form(form, &detail_model, cx))),
+    );
 
-        let icons = {
-            let detail_model = model.clone();
-            Item::new("icons", "Icons")
-                .icon(IconName::Palette)
-                .subtitle(loaded.settings.icon_theme.clone())
-                .keywords("icons icon theme papirus adwaita")
-                .actions(edit())
-                .detail(Detail::new().form(move |form, cx| icons_form(form, &detail_model, cx)))
-        };
+    let detail_model = model.clone();
+    items.push(
+        Item::new("cursor", "Cursor")
+            .icon(IconName::Mouse)
+            .subtitle(format!(
+                "{}, {} px",
+                loaded.settings.cursor_theme, loaded.settings.cursor_size
+            ))
+            .keywords("cursor pointer theme size mouse")
+            .actions(super::system::edit())
+            .detail(Detail::new().form(move |form, cx| cursor_form(form, &detail_model, cx))),
+    );
 
-        list.section(Section::new("Fonts").items(font_items))
-            .section(Section::new("Display").item(text))
-            .section(Section::new("Pointer & icons").items([cursor, icons]))
-            .into()
-    }
+    let detail_model = model.clone();
+    items.push(
+        Item::new("icons", "Icons")
+            .icon(IconName::Palette)
+            .subtitle(loaded.settings.icon_theme.clone())
+            .keywords("icons icon theme papirus adwaita")
+            .actions(super::system::edit())
+            .detail(Detail::new().form(move |form, cx| icons_form(form, &detail_model, cx))),
+    );
+    items
 }
 
 fn trim(value: f64) -> String {
@@ -190,10 +151,16 @@ fn font_form(form: &mut Form, model: &Entity<AppearanceModel>, role: FontRole, c
     let font = font_of(loaded, role).clone();
 
     rows::heading(form, "Font");
-    rows::note(
+    rows::info(form, "Family", font.family.clone());
+    rows::action(
         form,
-        format!("{} — press Enter on the list item to choose another family.", font.family),
-        Color::Muted,
+        "Choose another family…",
+        "Pick from the fonts installed on this computer",
+        {
+            let model = model.clone();
+            move |_, cx| Outcome::Push(FontPicker::open(model.clone(), role, cx))
+        },
+        cx,
     );
     rows::number(
         form,

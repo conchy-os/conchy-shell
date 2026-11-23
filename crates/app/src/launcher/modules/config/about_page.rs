@@ -1,123 +1,57 @@
-use gpui::{App, Context, prelude::*};
+//! About: the form beside the "About System" row. What the computer is, and
+//! one key to copy it all for a bug report.
+
+use gpui::{App, SharedString};
 use ui::IconName;
 
-use super::about_detail::{SystemInfo, get_system_info};
-use crate::launcher::action::{Action, ActionPanel, Outcome};
-use crate::launcher::content::{Accessory, Content, Item, List, Section};
-use crate::launcher::page::{LauncherPage, Page};
+use super::about_detail::SystemInfo;
+use super::settings_form as rows;
+use crate::launcher::action::Outcome;
+use crate::launcher::content::{Detail, Form, Item};
 
-pub struct AboutPage {
-    info: SystemInfo,
+pub fn item(info: &std::rc::Rc<SystemInfo>) -> Item {
+    let info = info.clone();
+    Item::new("about", "About System")
+        .subtitle("System specifications, OS, and hardware details")
+        .icon(IconName::Info)
+        .keywords("about system info specs hardware cpu ram memory kernel os")
+        .actions(super::system::edit())
+        .detail(Detail::new().form(move |form, cx| about_form(form, &info, cx)))
 }
 
-impl AboutPage {
-    pub fn open(cx: &mut App) -> Page {
-        Page::new(cx.new(|_| Self::new()))
-    }
+fn about_form(form: &mut Form, info: &SystemInfo, cx: &App) {
+    rows::title(form, "About System", "What this computer is and what it runs");
 
-    pub fn new() -> Self {
-        Self {
-            info: get_system_info(),
-        }
-    }
-}
+    rows::heading(form, "Operating system");
+    rows::info(form, "System", info.os_name.clone());
+    rows::info(form, "Kernel", info.kernel.clone());
+    rows::info(form, "Host name", info.hostname.clone());
+    rows::info(form, "Architecture", std::env::consts::ARCH);
 
-impl LauncherPage for AboutPage {
-    fn content(&mut self, _query: &str, _cx: &mut Context<Self>) -> Content {
-        let info = &self.info;
+    rows::heading(form, "Hardware");
+    rows::info(form, "Processor", info.cpu.clone());
+    rows::info(form, "Memory", info.memory.clone());
+    rows::info(form, "Uptime", info.uptime.clone());
 
-        let mut list = List::new()
-            .show_detail(true)
-            .click_selects(true)
-            .title("About System")
-            .placeholder("Search system info…");
+    rows::heading(form, "Desktop");
+    rows::info(form, "Compositor", info.compositor.clone());
+    rows::info(form, "Shell", "Conchy Shell");
+    rows::info(form, "Display protocol", "Wayland");
 
-        // Action: Copy summary to clipboard
-        let summary_text = format!(
-            "OS: {}\nKernel: {}\nHost: {}\nCPU: {}\nMemory: {}\nCompositor: {}\nUptime: {}",
-            info.os_name, info.kernel, info.hostname, info.cpu, info.memory, info.compositor, info.uptime
-        );
-        let summary_clone = summary_text.clone();
-        let actions = ActionPanel::default().action(Action::new("Copy System Info", move |_, cx| {
-            cx.write_to_clipboard(gpui::ClipboardItem::new_string(summary_clone.clone()));
+    let summary: SharedString = format!(
+        "OS: {}\nKernel: {}\nHost: {}\nCPU: {}\nMemory: {}\nCompositor: {}\nUptime: {}",
+        info.os_name, info.kernel, info.hostname, info.cpu, info.memory, info.compositor, info.uptime
+    )
+    .into();
+    rows::heading(form, "Share");
+    rows::action(
+        form,
+        "Copy system info",
+        "Put the lines above on the clipboard",
+        move |_, cx| {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(summary.to_string()));
             Outcome::Stay
-        }));
-
-        list = list.actions(actions);
-
-        // 1. Operating System section
-        let os_items = vec![
-            Item::new("os_name", "Operating System")
-                .subtitle(info.os_name.clone())
-                .icon(IconName::ScreenShare)
-                .accessory(Accessory::text(info.os_name.clone()))
-                .action(copy_action("Copy OS Name", &info.os_name)),
-            Item::new("kernel", "Linux Kernel")
-                .subtitle(info.kernel.clone())
-                .icon(IconName::Sliders)
-                .accessory(Accessory::text(info.kernel.clone()))
-                .action(copy_action("Copy Kernel", &info.kernel)),
-            Item::new("hostname", "Host Name")
-                .subtitle(info.hostname.clone())
-                .icon(IconName::Globe)
-                .accessory(Accessory::text(info.hostname.clone()))
-                .action(copy_action("Copy Hostname", &info.hostname)),
-            Item::new("arch", "Architecture")
-                .subtitle(std::env::consts::ARCH)
-                .icon(IconName::Cpu)
-                .accessory(Accessory::text(std::env::consts::ARCH))
-                .action(copy_action("Copy Architecture", std::env::consts::ARCH)),
-        ];
-        list = list.section(Section::new("Operating System").items(os_items));
-
-        // 2. Hardware section
-        let hw_items = vec![
-            Item::new("cpu", "Processor")
-                .subtitle(info.cpu.clone())
-                .icon(IconName::Cpu)
-                .accessory(Accessory::text(info.cpu.clone()))
-                .action(copy_action("Copy CPU Info", &info.cpu)),
-            Item::new("memory", "Total Memory (RAM)")
-                .subtitle(info.memory.clone())
-                .icon(IconName::Layers)
-                .accessory(Accessory::text(info.memory.clone()))
-                .action(copy_action("Copy RAM Info", &info.memory)),
-            Item::new("uptime", "System Uptime")
-                .subtitle(format!("Running for {}", info.uptime))
-                .icon(IconName::Clock)
-                .accessory(Accessory::text(info.uptime.clone()))
-                .action(copy_action("Copy Uptime", &info.uptime)),
-        ];
-        list = list.section(Section::new("Hardware").items(hw_items));
-
-        // 3. Desktop Environment section
-        let de_items = vec![
-            Item::new("compositor", "Window Manager / Compositor")
-                .subtitle(info.compositor.clone())
-                .icon(IconName::Layout)
-                .accessory(Accessory::text("Smithay / Niri"))
-                .action(copy_action("Copy Compositor", &info.compositor)),
-            Item::new("shell", "Desktop Shell")
-                .subtitle("Conchy Shell (GPU-accelerated GPUI)")
-                .icon(IconName::Settings)
-                .accessory(Accessory::text("GPUI 60+ FPS"))
-                .action(copy_action("Copy Shell", "Conchy Shell (GPUI)")),
-            Item::new("display_server", "Display Protocol")
-                .subtitle("Wayland Native")
-                .icon(IconName::ScreenShare)
-                .accessory(Accessory::text("Wayland"))
-                .action(copy_action("Copy Protocol", "Wayland")),
-        ];
-        list = list.section(Section::new("Desktop Environment").items(de_items));
-
-        list.into()
-    }
-}
-
-fn copy_action(label: &'static str, text: &str) -> Action {
-    let t = text.to_string();
-    Action::new(label, move |_, cx| {
-        cx.write_to_clipboard(gpui::ClipboardItem::new_string(t.clone()));
-        Outcome::Stay
-    })
+        },
+        cx,
+    );
 }
