@@ -19,10 +19,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
-use std::io::Cursor;
-use std::os::unix::process::CommandExt;
-use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::process::Child;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
@@ -35,10 +32,7 @@ use pipewire::{
     metadata::Metadata,
     node::Node,
     proxy::Listener,
-    spa::{
-        param::ParamType,
-        pod::{Object, Pod, Property, Value, serialize::PodSerializer},
-    },
+    spa::{param::ParamType, pod::Pod},
     types::ObjectType,
 };
 use tracing::{debug, info, warn};
@@ -48,15 +42,11 @@ use super::model::{self, Settings};
 use super::{EqualizerCommand, EqualizerData, EngineState, OutputDevice};
 use crate::jobs::JobReceiver;
 use crate::lifecycle::RunToken;
+use crate::pwutil::{self, default_name as default_sink_name, params_pod, quoted, runtime_file};
 
 /// The virtual sink every stream is sent to while the equalizer is on.
 pub const SINK_NAME: &str = "conchy_eq_sink";
 const OUTPUT_STREAM_NAME: &str = "conchy_eq_out";
-
-/// `SPA_PROP_params`: the property of a `Props` object that carries
-/// `"node:control" value` pairs.
-const SPA_PROP_PARAMS: u32 = 0x8_0001;
-const SPA_TYPE_OBJECT_PROPS: u32 = 0x4_0002;
 
 const KEY_CONFIGURED: &str = "default.configured.audio.sink";
 const KEY_ACTUAL: &str = "default.audio.sink";
@@ -79,13 +69,6 @@ pub enum Wake {
 }
 
 // -- the chain's config -------------------------------------------------------
-
-fn quoted(text: &str) -> String {
-    format!(
-        "\"{}\"",
-        text.replace('\\', "\\\\").replace('"', "\\\"")
-    )
-}
 
 /// The `pipewire -c` file for a chain that plays to `output`, with the
 /// controls at the values of `settings`.
@@ -168,35 +151,6 @@ fn controls(settings: &Settings) -> Vec<(String, f32)> {
         controls.push((format!("band_{band}:Gain"), *gain));
     }
     controls
-}
-
-/// A `Props` pod setting `controls`.
-fn params_pod(controls: &[(String, f32)]) -> Option<Vec<u8>> {
-    let items = controls
-        .iter()
-        .flat_map(|(name, value)| [Value::String(name.clone()), Value::Float(*value)])
-        .collect();
-    let object = Value::Object(Object {
-        type_: SPA_TYPE_OBJECT_PROPS,
-        id: ParamType::Props.as_raw(),
-        properties: vec![Property::new(SPA_PROP_PARAMS, Value::Struct(items))],
-    });
-    PodSerializer::serialize(Cursor::new(Vec::new()), &object)
-        .ok()
-        .map(|(cursor, _)| cursor.into_inner())
-}
-
-/// `{"name":"alsa_output..."}` from a metadata value.
-fn default_sink_name(value: Option<&str>) -> Option<String> {
-    let json: serde_json::Value = serde_json::from_str(value?).ok()?;
-    json.get("name")?.as_str().map(str::to_string)
-}
-
-fn runtime_file(name: &str) -> PathBuf {
-    let base = std::env::var_os("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
-    base.join("conchy").join(name)
 }
 
 // -- the engine ---------------------------------------------------------------
@@ -570,28 +524,7 @@ impl Engine {
         }
         std::fs::write(&conf, chain_config(output, &self.state.borrow().settings))
             .context("writing the filter-chain config")?;
-        let log_file = std::fs::File::create(&log).ok();
-
-        let mut command = Command::new("pipewire");
-        command
-            .arg("-c")
-            .arg(&conf)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(log_file.map_or_else(Stdio::null, Stdio::from));
-        // SAFETY: only `prctl` runs between fork and exec, which is
-        // async-signal-safe.
-        unsafe {
-            command.pre_exec(|| {
-                if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL as libc::c_ulong) != 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                Ok(())
-            });
-        }
-        let child = command
-            .spawn()
-            .context("starting `pipewire -c` for the filter-chain")?;
+        let child = pwutil::spawn_chain(&conf, &log)?;
         info!("Equalizer chain started for {output} (pid {})", child.id());
 
         let mut state = self.state.borrow_mut();
@@ -760,8 +693,7 @@ impl Engine {
 }
 
 fn set_default(metadata: &Metadata, sink: &str) {
-    let value = format!("{{\"name\":{}}}", quoted(sink));
-    metadata.set_property(0, KEY_CONFIGURED, Some("Spa:String:JSON"), Some(&value));
+    pwutil::set_default(metadata, KEY_CONFIGURED, sink);
 }
 
 /// One PipeWire session: connect, follow the graph, serve commands until
@@ -915,21 +847,5 @@ mod tests {
         assert_eq!(controls[4], ("band_3:Gain".to_string(), -2.5));
     }
 
-    #[test]
-    fn the_props_pod_is_built() {
-        let bytes = params_pod(&controls(&Settings::default())).unwrap();
-        assert!(Pod::from_bytes(&bytes).is_some());
-        let text = String::from_utf8_lossy(&bytes);
-        assert!(text.contains("band_9:Gain"));
-    }
 
-    #[test]
-    fn the_default_sink_name_is_read_from_the_json() {
-        assert_eq!(
-            default_sink_name(Some(r#"{"name":"alsa_output.x"}"#)).as_deref(),
-            Some("alsa_output.x")
-        );
-        assert_eq!(default_sink_name(Some("not json")), None);
-        assert_eq!(default_sink_name(None), None);
-    }
 }

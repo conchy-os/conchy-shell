@@ -38,11 +38,11 @@ pub mod prompt_page;
 pub mod schema;
 mod sections;
 pub mod select;
-mod settings_form;
+pub(in crate::launcher) mod settings_form;
 mod shortcuts_detail;
 mod shortcuts_page;
 pub mod sound_page;
-mod system;
+pub(in crate::launcher) mod system;
 mod themes_detail;
 mod value_page;
 

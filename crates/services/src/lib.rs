@@ -21,7 +21,9 @@ pub mod input;
 pub mod jobs;
 pub mod kdl_edit;
 pub mod lifecycle;
+pub mod pwutil;
 pub mod mimeapps;
+pub mod mic;
 pub mod mpris;
 pub mod network;
 #[allow(clippy::too_many_arguments)]
@@ -58,6 +60,9 @@ pub use equalizer::{
     OutputDevice,
 };
 pub use jobs::JobQueue;
+pub use mic::{
+    EngineState as MicEngineState, InputDevice, MicCommand, MicData, MicSubscriber,
+};
 pub use lifecycle::{Lifecycle, ManagedService, RunToken, ServiceMode};
 pub use mpris::{
     MprisCommand, MprisData, MprisPlayerData, MprisPlayerMetadata, MprisSubscriber,

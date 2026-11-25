@@ -7,6 +7,7 @@ pub mod calculator;
 pub mod clipboard;
 pub mod config;
 pub mod equalizer;
+pub mod mic;
 pub mod help;
 pub mod mpris;
 pub mod services;
@@ -32,6 +33,7 @@ pub fn registry(config: &ModulesConfig) -> Vec<ModuleDescriptor> {
         sysinfo::descriptor(&config.sysinfo),
         mpris::descriptor(&config.mpris),
         equalizer::descriptor(&config.equalizer),
+        mic::descriptor(&config.mic),
         calculator::descriptor(&config.calculator),
         calendar::descriptor(&config.calendar),
         clipboard::descriptor(&config.clipboard),

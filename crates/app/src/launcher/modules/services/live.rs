@@ -31,6 +31,7 @@ pub fn metrics(name: &str, status: &ServiceStatus, cx: &App) -> Vec<Metadata> {
         "UPower" => upower(cx),
         "MPRIS" => mpris(cx),
         "Equalizer" => equalizer(cx),
+        "Microphone" => mic(cx),
         "Notifications" => notifications(cx),
         "Tray" => tray(cx),
         "Sysinfo" => sysinfo(cx),
@@ -192,6 +193,27 @@ fn equalizer(cx: &App) -> Vec<Metadata> {
     let mut rows = vec![row("Equalizer", state)];
     if let Some(output) = data.output_description() {
         rows.push(row("Output", output));
+    }
+    rows.push(row(
+        "Preset",
+        data.settings
+            .active_preset()
+            .unwrap_or_else(|| "Custom".to_string()),
+    ));
+    rows
+}
+
+fn mic(cx: &App) -> Vec<Metadata> {
+    let data = AppState::mic(cx).get();
+    let state = match &data.engine {
+        services::MicEngineState::Off => "Off".to_string(),
+        services::MicEngineState::Starting => "Starting".to_string(),
+        services::MicEngineState::Running => "On".to_string(),
+        services::MicEngineState::Failed(reason) => format!("Failed: {reason}"),
+    };
+    let mut rows = vec![row("Microphone effects", state)];
+    if let Some(input) = data.input_description() {
+        rows.push(row("Microphone", input));
     }
     rows.push(row(
         "Preset",
