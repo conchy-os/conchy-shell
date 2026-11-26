@@ -99,7 +99,12 @@ mod tests {
 
         write_through(&link, "new").unwrap();
 
-        assert!(fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+        assert!(
+            fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         assert_eq!(fs::read_to_string(&real).unwrap(), "new");
     }
 

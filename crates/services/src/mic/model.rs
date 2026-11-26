@@ -160,7 +160,11 @@ impl Voice {
 
     pub fn set(&mut self, param: Param, value: f32) {
         let spec = param.spec();
-        let value = if value.is_finite() { value } else { spec.default };
+        let value = if value.is_finite() {
+            value
+        } else {
+            spec.default
+        };
         self.values[param.index()] = round_to(value.clamp(spec.min, spec.max), spec.step);
     }
 
@@ -206,56 +210,108 @@ pub fn builtin_presets() -> Vec<Preset> {
         (
             "Voice Call",
             Voice::with(&[
-                (Denoiser, 1.0), (RnnoiseVad, 40.0), (HighpassHz, 100.0),
-                (EqOn, 1.0), (EqMud, -1.5), (EqPresence, 2.0),
-                (CompOn, 1.0), (CompThreshold, -22.0), (CompRatio, 3.0), (CompMakeup, 4.0),
-                (LimiterOn, 1.0), (LimiterCeiling, -1.0),
+                (Denoiser, 1.0),
+                (RnnoiseVad, 40.0),
+                (HighpassHz, 100.0),
+                (EqOn, 1.0),
+                (EqMud, -1.5),
+                (EqPresence, 2.0),
+                (CompOn, 1.0),
+                (CompThreshold, -22.0),
+                (CompRatio, 3.0),
+                (CompMakeup, 4.0),
+                (LimiterOn, 1.0),
+                (LimiterCeiling, -1.0),
             ]),
         ),
         (
             "Streaming",
             Voice::with(&[
-                (Denoiser, 1.0), (RnnoiseVad, 50.0), (HighpassHz, 100.0),
-                (GateOn, 1.0), (GateThreshold, -45.0), (GateReduction, -30.0),
-                (EqOn, 1.0), (EqMud, -2.0), (EqPresence, 3.0), (EqAir, 2.0),
-                (CompOn, 1.0), (CompThreshold, -20.0), (CompRatio, 4.0), (CompMakeup, 6.0),
-                (LimiterOn, 1.0), (LimiterCeiling, -1.0),
+                (Denoiser, 1.0),
+                (RnnoiseVad, 50.0),
+                (HighpassHz, 100.0),
+                (GateOn, 1.0),
+                (GateThreshold, -45.0),
+                (GateReduction, -30.0),
+                (EqOn, 1.0),
+                (EqMud, -2.0),
+                (EqPresence, 3.0),
+                (EqAir, 2.0),
+                (CompOn, 1.0),
+                (CompThreshold, -20.0),
+                (CompRatio, 4.0),
+                (CompMakeup, 6.0),
+                (LimiterOn, 1.0),
+                (LimiterCeiling, -1.0),
             ]),
         ),
         (
             "Studio Voice",
             Voice::with(&[
-                (Denoiser, 2.0), (DeepFilterLimit, 40.0),
-                (GateOn, 1.0), (GateThreshold, -52.0), (GateReduction, -20.0),
-                (EqOn, 1.0), (EqLow, 1.5), (EqPresence, 2.0), (EqAir, 1.5),
-                (CompOn, 1.0), (CompThreshold, -20.0), (CompRatio, 2.5), (CompMakeup, 4.0),
-                (LimiterOn, 1.0), (LimiterCeiling, -1.0),
+                (Denoiser, 2.0),
+                (DeepFilterLimit, 40.0),
+                (GateOn, 1.0),
+                (GateThreshold, -52.0),
+                (GateReduction, -20.0),
+                (EqOn, 1.0),
+                (EqLow, 1.5),
+                (EqPresence, 2.0),
+                (EqAir, 1.5),
+                (CompOn, 1.0),
+                (CompThreshold, -20.0),
+                (CompRatio, 2.5),
+                (CompMakeup, 4.0),
+                (LimiterOn, 1.0),
+                (LimiterCeiling, -1.0),
             ]),
         ),
         (
             "Podcast",
             Voice::with(&[
-                (Denoiser, 2.0), (DeepFilterLimit, 50.0), (HighpassHz, 90.0),
-                (GateOn, 1.0), (GateThreshold, -48.0),
-                (EqOn, 1.0), (EqLow, 2.0), (EqMud, -2.0), (EqPresence, 2.5), (EqAir, 1.0),
-                (CompOn, 1.0), (CompThreshold, -18.0), (CompRatio, 3.5), (CompMakeup, 6.0),
-                (LimiterOn, 1.0), (LimiterCeiling, -1.5),
+                (Denoiser, 2.0),
+                (DeepFilterLimit, 50.0),
+                (HighpassHz, 90.0),
+                (GateOn, 1.0),
+                (GateThreshold, -48.0),
+                (EqOn, 1.0),
+                (EqLow, 2.0),
+                (EqMud, -2.0),
+                (EqPresence, 2.5),
+                (EqAir, 1.0),
+                (CompOn, 1.0),
+                (CompThreshold, -18.0),
+                (CompRatio, 3.5),
+                (CompMakeup, 6.0),
+                (LimiterOn, 1.0),
+                (LimiterCeiling, -1.5),
             ]),
         ),
         (
             "Noisy Room",
             Voice::with(&[
-                (Denoiser, 2.0), (DeepFilterLimit, 100.0), (HighpassHz, 150.0),
-                (GateOn, 1.0), (GateThreshold, -40.0), (GateReduction, -35.0),
-                (CompOn, 1.0), (CompThreshold, -24.0), (CompRatio, 4.0), (CompMakeup, 8.0),
-                (LimiterOn, 1.0), (LimiterCeiling, -2.0),
+                (Denoiser, 2.0),
+                (DeepFilterLimit, 100.0),
+                (HighpassHz, 150.0),
+                (GateOn, 1.0),
+                (GateThreshold, -40.0),
+                (GateReduction, -35.0),
+                (CompOn, 1.0),
+                (CompThreshold, -24.0),
+                (CompRatio, 4.0),
+                (CompMakeup, 8.0),
+                (LimiterOn, 1.0),
+                (LimiterCeiling, -2.0),
             ]),
         ),
         (
             "Quiet Mic Boost",
             Voice::with(&[
-                (CompOn, 1.0), (CompThreshold, -32.0), (CompRatio, 3.0), (CompMakeup, 14.0),
-                (LimiterOn, 1.0), (LimiterCeiling, -1.0),
+                (CompOn, 1.0),
+                (CompThreshold, -32.0),
+                (CompRatio, 3.0),
+                (CompMakeup, 14.0),
+                (LimiterOn, 1.0),
+                (LimiterCeiling, -1.0),
             ]),
         ),
     ];
@@ -350,7 +406,9 @@ pub fn path() -> anyhow::Result<PathBuf> {
 pub fn load() -> anyhow::Result<Settings> {
     let path = path()?;
     match fsutil::read_optional(&path)? {
-        Some(text) => from_kdl(&text).with_context(|| format!("Failed to parse {}", path.display())),
+        Some(text) => {
+            from_kdl(&text).with_context(|| format!("Failed to parse {}", path.display()))
+        }
         None => Ok(Settings::default()),
     }
 }
@@ -404,7 +462,8 @@ fn read_value(node: &kdl::KdlNode) -> Option<f32> {
 /// Every param the nodes name, on top of `voice`.
 fn read_voice<'a>(voice: &mut Voice, nodes: impl IntoIterator<Item = &'a kdl::KdlNode>) {
     for node in nodes {
-        if let (Some(param), Some(value)) = (Param::from_key(node.name().value()), read_value(node)) {
+        if let (Some(param), Some(value)) = (Param::from_key(node.name().value()), read_value(node))
+        {
             voice.set(param, value);
         }
     }
@@ -431,7 +490,10 @@ pub fn from_kdl(text: &str) -> anyhow::Result<Settings> {
             continue;
         };
         let mut voice = Voice::default();
-        read_voice(&mut voice, node.children().iter().flat_map(|block| block.nodes()));
+        read_voice(
+            &mut voice,
+            node.children().iter().flat_map(|block| block.nodes()),
+        );
         settings.user_presets.push(Preset {
             name,
             voice,
@@ -475,7 +537,11 @@ mod tests {
         assert_eq!(keys.len(), Param::ALL.len());
         for param in Param::ALL {
             let spec = param.spec();
-            assert!(spec.min <= spec.default && spec.default <= spec.max, "{}", spec.key);
+            assert!(
+                spec.min <= spec.default && spec.default <= spec.max,
+                "{}",
+                spec.key
+            );
             assert_eq!(Param::from_key(spec.key), Some(param));
         }
     }
@@ -543,7 +609,9 @@ mod tests {
 
     #[test]
     fn a_hand_edited_file_is_read_leniently() {
-        let settings = from_kdl("enabled true\neq-low 99\ngate-threshold -999\nunknown 3\ndenoiser 1\n").unwrap();
+        let settings =
+            from_kdl("enabled true\neq-low 99\ngate-threshold -999\nunknown 3\ndenoiser 1\n")
+                .unwrap();
         assert!(settings.enabled);
         assert_eq!(settings.voice.get(Param::EqLow), 8.0);
         assert_eq!(settings.voice.get(Param::GateThreshold), -80.0);

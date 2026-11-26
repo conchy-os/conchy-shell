@@ -344,10 +344,10 @@ fn append(block: &mut KdlDocument, depth: usize, mut node: KdlNode) {
             block.set_leading("\n");
             block.set_trailing(indent);
         } else {
-            if let Some(last) = block.nodes_mut().last_mut() {
-                if !last.trailing().is_some_and(|s| s.contains('\n')) {
-                    last.set_trailing("\n");
-                }
+            if let Some(last) = block.nodes_mut().last_mut()
+                && !last.trailing().is_some_and(|s| s.contains('\n'))
+            {
+                last.set_trailing("\n");
             }
             if !block
                 .trailing()

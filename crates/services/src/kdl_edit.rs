@@ -52,9 +52,7 @@ pub fn arg_str(doc: &KdlDocument, path: &[&str]) -> Option<String> {
 
 pub fn arg_f64(doc: &KdlDocument, path: &[&str]) -> Option<f64> {
     let value = arg(doc, path)?;
-    value
-        .as_f64()
-        .or_else(|| value.as_i64().map(|i| i as f64))
+    value.as_f64().or_else(|| value.as_i64().map(|i| i as f64))
 }
 
 pub fn arg_bool(doc: &KdlDocument, path: &[&str]) -> Option<bool> {
@@ -153,11 +151,7 @@ pub fn remove(doc: &mut KdlDocument, path: &[&str]) -> bool {
 /// The nodes named `name` in the top-level block whose first argument is
 /// `first_arg` (`output "eDP-1"`); a mutable reference to the found one, or
 /// a new one appended.
-pub fn keyed_node<'a>(
-    doc: &'a mut KdlDocument,
-    name: &str,
-    first_arg: &str,
-) -> &'a mut KdlNode {
+pub fn keyed_node<'a>(doc: &'a mut KdlDocument, name: &str, first_arg: &str) -> &'a mut KdlNode {
     let position = doc.nodes().iter().position(|n| {
         n.name().value() == name
             && n.entries()
@@ -282,7 +276,12 @@ mod tests {
     #[test]
     fn changing_a_value_keeps_the_comments() {
         let mut doc = parse(SAMPLE).unwrap();
-        set_args(&mut doc, &["input", "keyboard", "repeat-delay"], vec![int(300)]).unwrap();
+        set_args(
+            &mut doc,
+            &["input", "keyboard", "repeat-delay"],
+            vec![int(300)],
+        )
+        .unwrap();
         let out = doc.to_string();
         assert!(out.contains("// my config"));
         assert!(out.contains("// typing"));
@@ -293,17 +292,26 @@ mod tests {
     #[test]
     fn a_new_node_lands_inside_its_block_and_parses_back() {
         let mut doc = parse(SAMPLE).unwrap();
-        set_args(&mut doc, &["input", "keyboard", "repeat-rate"], vec![int(40)]).unwrap();
+        set_args(
+            &mut doc,
+            &["input", "keyboard", "repeat-rate"],
+            vec![int(40)],
+        )
+        .unwrap();
         set_flag(&mut doc, &["input", "touchpad", "tap"], true).unwrap();
         let reparsed = parse(&doc.to_string()).unwrap();
-        assert_eq!(arg_f64(&reparsed, &["input", "keyboard", "repeat-rate"]), Some(40.0));
+        assert_eq!(
+            arg_f64(&reparsed, &["input", "keyboard", "repeat-rate"]),
+            Some(40.0)
+        );
         assert!(has(&reparsed, &["input", "touchpad", "tap"]));
         assert!(!has(&reparsed, &["input", "mouse", "tap"]));
     }
 
     #[test]
     fn a_flag_goes_away_when_turned_off() {
-        let mut doc = parse("input {\n    touchpad {\n        tap\n        dwt\n    }\n}\n").unwrap();
+        let mut doc =
+            parse("input {\n    touchpad {\n        tap\n        dwt\n    }\n}\n").unwrap();
         set_flag(&mut doc, &["input", "touchpad", "tap"], false).unwrap();
         let out = doc.to_string();
         assert!(!out.contains("tap"));
@@ -313,9 +321,17 @@ mod tests {
     #[test]
     fn an_empty_file_gets_a_whole_path() {
         let mut doc = parse("").unwrap();
-        set_args(&mut doc, &["input", "mouse", "accel-speed"], vec![float(0.25)]).unwrap();
+        set_args(
+            &mut doc,
+            &["input", "mouse", "accel-speed"],
+            vec![float(0.25)],
+        )
+        .unwrap();
         let reparsed = parse(&doc.to_string()).unwrap();
-        assert_eq!(arg_f64(&reparsed, &["input", "mouse", "accel-speed"]), Some(0.25));
+        assert_eq!(
+            arg_f64(&reparsed, &["input", "mouse", "accel-speed"]),
+            Some(0.25)
+        );
     }
 
     #[test]
@@ -330,7 +346,13 @@ mod tests {
             set_args(block_of(out), &["scale"], vec![float(1.5)]).unwrap();
         }
         let reparsed = parse(&doc.to_string()).unwrap();
-        assert_eq!(doc.nodes().iter().filter(|n| n.name().value() == "output").count(), 2);
+        assert_eq!(
+            doc.nodes()
+                .iter()
+                .filter(|n| n.name().value() == "output")
+                .count(),
+            2
+        );
         assert!(doc.to_string().contains("scale 2.0") || doc.to_string().contains("scale 2"));
         assert_eq!(reparsed.nodes().len(), 3);
     }
@@ -340,8 +362,18 @@ mod tests {
         let mut doc = parse("output \"A\" {\n    scale 1.0\n}\n").unwrap();
         {
             let out = keyed_node(&mut doc, "output", "A");
-            set_props(block_of(out), &["position"], vec![("x", int(10)), ("y", int(20))]).unwrap();
-            set_props(block_of(out), &["position"], vec![("x", int(30)), ("y", int(40))]).unwrap();
+            set_props(
+                block_of(out),
+                &["position"],
+                vec![("x", int(10)), ("y", int(20))],
+            )
+            .unwrap();
+            set_props(
+                block_of(out),
+                &["position"],
+                vec![("x", int(30)), ("y", int(40))],
+            )
+            .unwrap();
         }
         let text = doc.to_string();
         assert_eq!(text.matches("position").count(), 1, "{text}");

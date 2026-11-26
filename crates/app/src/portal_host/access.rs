@@ -29,7 +29,11 @@ type Reply = oneshot::Sender<(u32, AccessResult)>;
 
 /// A dialog waiting for its turn: only one overlay owns the keyboard at a time.
 pub(super) enum Pending {
-    Access { id: String, req: AccessRequest, reply: Reply },
+    Access {
+        id: String,
+        req: AccessRequest,
+        reply: Reply,
+    },
     Cast(super::cast_picker::CastPending),
 }
 
@@ -69,7 +73,14 @@ impl Global for AccessQueue {}
 pub fn handle(event: HostEvent, cx: &mut App) {
     match event {
         HostEvent::Access { id, req, reply } => {
-            enqueue(Pending::Access { id, req: *req, reply }, cx);
+            enqueue(
+                Pending::Access {
+                    id,
+                    req: *req,
+                    reply,
+                },
+                cx,
+            );
         }
         HostEvent::PickCast { id, req, reply } => super::cast_picker::request(id, *req, reply, cx),
         HostEvent::Cancel { id } => cancel(&id, cx),
@@ -249,7 +260,10 @@ impl AccessDialog {
                 choices: self
                     .choices
                     .iter()
-                    .map(|(c, v)| ChoiceSelection { id: c.id.clone(), value: v.clone() })
+                    .map(|(c, v)| ChoiceSelection {
+                        id: c.id.clone(),
+                        value: v.clone(),
+                    })
                     .collect(),
             }
         } else {
@@ -259,7 +273,14 @@ impl AccessDialog {
     }
 
     fn finish(&mut self, grant: bool, cx: &mut Context<Self>) {
-        self.answer(if grant { response::OK } else { response::CANCELLED }, grant);
+        self.answer(
+            if grant {
+                response::OK
+            } else {
+                response::CANCELLED
+            },
+            grant,
+        );
         let handle = self.window;
         cx.defer(move |cx| {
             let _ = cx.update_window(handle, |_, window, _| window.remove_window());
@@ -330,7 +351,11 @@ impl Render for AccessDialog {
         }
 
         let deny = Button::new("access-deny", deny_label)
-            .style(if self.grant_focused { ButtonStyle::Outlined } else { ButtonStyle::Filled })
+            .style(if self.grant_focused {
+                ButtonStyle::Outlined
+            } else {
+                ButtonStyle::Filled
+            })
             .on_click(cx.listener(|this, _, _, cx| this.finish(false, cx)));
         let grant = Button::new("access-grant", grant_label)
             .style(if self.grant_focused {
@@ -339,7 +364,13 @@ impl Render for AccessDialog {
                 ButtonStyle::Outlined
             })
             .on_click(cx.listener(|this, _, _, cx| this.finish(true, cx)));
-        let modal = modal.footer(h_flex().justify_end().gap(Spacing::Small.pixels()).child(deny).child(grant));
+        let modal = modal.footer(
+            h_flex()
+                .justify_end()
+                .gap(Spacing::Small.pixels())
+                .child(deny)
+                .child(grant),
+        );
 
         let entity = cx.entity();
         div()
@@ -354,18 +385,31 @@ impl Render for AccessDialog {
 }
 
 fn non_empty(s: &str, fallback: &str) -> String {
-    if s.trim().is_empty() { fallback.to_string() } else { s.to_string() }
+    if s.trim().is_empty() {
+        fallback.to_string()
+    } else {
+        s.to_string()
+    }
 }
 
 /// A checkbox (no options) or a row of option buttons.
-fn render_choice(i: usize, choice: &Choice, value: &str, cx: &mut Context<AccessDialog>) -> impl IntoElement {
+fn render_choice(
+    i: usize,
+    choice: &Choice,
+    value: &str,
+    cx: &mut Context<AccessDialog>,
+) -> impl IntoElement {
     if choice.options.is_empty() {
         let on = value == "true";
         return Checkbox::new(("access-choice", i), ToggleState::from(on))
             .label(choice.label.clone())
             .on_click(cx.listener(move |this, _, _, cx| {
                 if let Some((_, v)) = this.choices.get_mut(i) {
-                    *v = if *v == "true" { "false".into() } else { "true".into() };
+                    *v = if *v == "true" {
+                        "false".into()
+                    } else {
+                        "true".into()
+                    };
                 }
                 cx.notify();
             }))
@@ -377,7 +421,11 @@ fn render_choice(i: usize, choice: &Choice, value: &str, cx: &mut Context<Access
         let id = opt.id.clone();
         row = row.child(
             Button::new(("access-opt", i * 100 + j), opt.label.clone())
-                .style(if opt.id == value { ButtonStyle::Tinted(TintColor::Accent) } else { ButtonStyle::Outlined })
+                .style(if opt.id == value {
+                    ButtonStyle::Tinted(TintColor::Accent)
+                } else {
+                    ButtonStyle::Outlined
+                })
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if let Some((_, v)) = this.choices.get_mut(i) {
                         *v = id.clone();

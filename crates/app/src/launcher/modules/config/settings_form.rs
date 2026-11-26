@@ -124,7 +124,17 @@ pub fn choice(
     on_pick: impl Fn(usize, &mut App) + 'static,
     cx: &App,
 ) {
-    choice_resettable(form, id, label, description, options, selected, on_pick, None, cx);
+    choice_resettable(
+        form,
+        id,
+        label,
+        description,
+        options,
+        selected,
+        on_pick,
+        None,
+        cx,
+    );
 }
 
 /// [`choice`] with one more key: `reset`, which a page gives a shortcut of
@@ -162,7 +172,11 @@ pub fn choice_resettable(
     let step = |forward: bool| {
         let on_pick = on_pick.clone();
         Action::new(
-            if forward { "Next option" } else { "Previous option" },
+            if forward {
+                "Next option"
+            } else {
+                "Previous option"
+            },
             move |_, cx| {
                 if count > 0 {
                     let current = selected.unwrap_or(if forward { count - 1 } else { 0 });
@@ -183,7 +197,9 @@ pub fn choice_resettable(
     }
     let control = Control::new(panel).step(step(false), step(true));
     let row = labeled_row(Label::new(label).size(TextSize::Small), widget);
-    form.control(control, |focused| control_frame(row, description, focused, 0, cx));
+    form.control(control, |focused| {
+        control_frame(row, description, focused, 0, cx)
+    });
 }
 
 /// What a number row needs besides its label.
@@ -241,9 +257,7 @@ pub fn number(
         .items_baseline()
         .gap(Spacing::Small.pixels())
         .child(Label::new(label).size(TextSize::Small))
-        .children(
-            unit.map(|unit| Label::new(unit).size(TextSize::XSmall).color(Color::Muted)),
-        );
+        .children(unit.map(|unit| Label::new(unit).size(TextSize::XSmall).color(Color::Muted)));
     let row = v_flex()
         .w_full()
         .gap(Spacing::Small.pixels())
@@ -278,7 +292,9 @@ pub fn number(
     };
     let control = Control::new(ActionPanel::new().action(reset))
         .step(nudge("Decrease", -1.0), nudge("Increase", 1.0));
-    form.control(control, |focused| control_frame(row, description, focused, 0, cx));
+    form.control(control, |focused| {
+        control_frame(row, description, focused, 0, cx)
+    });
 }
 
 /// `value` rounded to a multiple of `step`, so floating point drift from a
@@ -320,7 +336,9 @@ pub fn action(
         .child(Label::new(label).size(TextSize::Small).color(Color::Accent))
         .into_any_element();
     let _ = colors;
-    form.control(control, |focused| control_frame(row, description, focused, 0, cx));
+    form.control(control, |focused| {
+        control_frame(row, description, focused, 0, cx)
+    });
 }
 
 /// A key and its value, nothing to do on it: the rows of an information form.
@@ -404,9 +422,7 @@ pub fn entry(form: &mut Form, spec: Entry, actions: Vec<Action>, cx: &App) {
                         .color(Color::Muted),
                 ),
         )
-        .children(tag.map(|(text, color)| {
-            Label::new(text).size(TextSize::XSmall).color(color)
-        }))
+        .children(tag.map(|(text, color)| Label::new(text).size(TextSize::XSmall).color(color)))
         .into_any_element();
     form.control(Control::new(panel), |focused| {
         control_frame(row, hint, focused, 0, cx)

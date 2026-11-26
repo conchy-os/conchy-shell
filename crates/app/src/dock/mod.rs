@@ -454,11 +454,13 @@ impl Dock {
 
         let Some(index) = activation_index(&item.windows, self.cycle_index.get(&item.key).copied())
         else {
-            if let [window] = item.windows.as_slice() {
-                if window.is_focused {
-                    self.compositor
-                        .dispatch(services::CompositorCommand::ToggleMinimizeWindow(Some(window.id.clone())));
-                }
+            if let [window] = item.windows.as_slice()
+                && window.is_focused
+            {
+                self.compositor
+                    .dispatch(services::CompositorCommand::ToggleMinimizeWindow(Some(
+                        window.id.clone(),
+                    )));
             }
             return;
         };
@@ -470,7 +472,9 @@ impl Dock {
         let window_id = window.id.clone();
         if window.is_minimized {
             self.compositor
-                .dispatch(services::CompositorCommand::ToggleMinimizeWindow(Some(window_id.clone())));
+                .dispatch(services::CompositorCommand::ToggleMinimizeWindow(Some(
+                    window_id.clone(),
+                )));
         }
 
         self.compositor

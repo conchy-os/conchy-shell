@@ -20,7 +20,7 @@ pub fn shortcuts_detail(_cx: &App) -> Detail {
         let tap = shortcuts.tap();
         let is_super_launcher = tap
             .as_ref()
-            .map_or(false, |b| b.action.trim() == LAUNCHER_ACTION);
+            .is_some_and(|b| b.action.trim() == LAUNCHER_ACTION);
 
         let header = v_flex()
             .w_full()
@@ -84,24 +84,22 @@ pub fn shortcuts_detail(_cx: &App) -> Detail {
                                 .color(Color::Muted),
                             ),
                     )
-                    .child(
-                        Switch::new("super-tap-toggle", is_super_launcher).on_click(
-                            move |_, _, cx| {
-                                if let Ok(store) = Store::standard() {
-                                    if let Ok(mut sc) = store.load() {
-                                        if is_super_launcher {
-                                            sc.remove(shortcuts::SUPER_KEY);
-                                        } else {
-                                            sc.put(Bind::launcher_tap(true));
-                                        }
-                                        if store.save(&sc).is_ok() {
-                                            ConfigSignals::publish(cx);
-                                        }
-                                    }
+                    .child(Switch::new("super-tap-toggle", is_super_launcher).on_click(
+                        move |_, _, cx| {
+                            if let Ok(store) = Store::standard()
+                                && let Ok(mut sc) = store.load()
+                            {
+                                if is_super_launcher {
+                                    sc.remove(shortcuts::SUPER_KEY);
+                                } else {
+                                    sc.put(Bind::launcher_tap(true));
                                 }
-                            },
-                        ),
-                    ),
+                                if store.save(&sc).is_ok() {
+                                    ConfigSignals::publish(cx);
+                                }
+                            }
+                        },
+                    )),
             );
 
         let non_tap_binds: Vec<&Bind> = shortcuts
@@ -110,62 +108,63 @@ pub fn shortcuts_detail(_cx: &App) -> Detail {
             .filter(|b| !(b.is_tap() && b.key.eq_ignore_ascii_case(shortcuts::SUPER_KEY)))
             .collect();
 
-        let binds_list = v_flex()
-            .w_full()
-            .gap(Spacing::Small.pixels())
-            .children(non_tap_binds.into_iter().map(|bind| {
-                let key_parts = bind.key.split('+');
-                let keycaps = h_flex().gap(px(4.)).items_center().children(
-                    key_parts.enumerate().flat_map(|(ix, part)| {
-                        let mut elems: Vec<AnyElement> = Vec::new();
-                        if ix > 0 {
+        let binds_list =
+            v_flex()
+                .w_full()
+                .gap(Spacing::Small.pixels())
+                .children(non_tap_binds.into_iter().map(|bind| {
+                    let key_parts = bind.key.split('+');
+                    let keycaps = h_flex().gap(px(4.)).items_center().children(
+                        key_parts.enumerate().flat_map(|(ix, part)| {
+                            let mut elems: Vec<AnyElement> = Vec::new();
+                            if ix > 0 {
+                                elems.push(
+                                    Label::new("+")
+                                        .size(TextSize::XSmall)
+                                        .color(Color::Muted)
+                                        .into_any_element(),
+                                );
+                            }
                             elems.push(
-                                Label::new("+")
-                                    .size(TextSize::XSmall)
-                                    .color(Color::Muted)
+                                div()
+                                    .px(Spacing::Small.pixels())
+                                    .py(px(2.))
+                                    .rounded(Radius::Small.pixels())
+                                    .bg(colors.element_background)
+                                    .border_1()
+                                    .border_color(colors.border)
+                                    .child(
+                                        Label::new(SharedString::from(part.to_string()))
+                                            .size(TextSize::XSmall)
+                                            .weight(FontWeight::SEMIBOLD),
+                                    )
                                     .into_any_element(),
                             );
-                        }
-                        elems.push(
-                            div()
-                                .px(Spacing::Small.pixels())
-                                .py(px(2.))
-                                .rounded(Radius::Small.pixels())
-                                .bg(colors.element_background)
-                                .border_1()
-                                .border_color(colors.border)
-                                .child(
-                                    Label::new(SharedString::from(part.to_string()))
-                                        .size(TextSize::XSmall)
-                                        .weight(FontWeight::SEMIBOLD),
-                                )
-                                .into_any_element(),
-                        );
-                        elems
-                    }),
-                );
+                            elems
+                        }),
+                    );
 
-                h_flex()
-                    .w_full()
-                    .items_center()
-                    .justify_between()
-                    .p(Spacing::Medium.pixels())
-                    .rounded(Radius::Medium.pixels())
-                    .bg(colors.surface_background)
-                    .border_1()
-                    .border_color(colors.border_variant)
-                    .child(
-                        h_flex()
-                            .gap(Spacing::Medium.pixels())
-                            .items_center()
-                            .child(keycaps)
-                            .child(
-                                Label::new(describe(&bind.action))
-                                    .size(TextSize::Small)
-                                    .color(Color::Default),
-                            ),
-                    )
-            }));
+                    h_flex()
+                        .w_full()
+                        .items_center()
+                        .justify_between()
+                        .p(Spacing::Medium.pixels())
+                        .rounded(Radius::Medium.pixels())
+                        .bg(colors.surface_background)
+                        .border_1()
+                        .border_color(colors.border_variant)
+                        .child(
+                            h_flex()
+                                .gap(Spacing::Medium.pixels())
+                                .items_center()
+                                .child(keycaps)
+                                .child(
+                                    Label::new(describe(&bind.action))
+                                        .size(TextSize::Small)
+                                        .color(Color::Default),
+                                ),
+                        )
+                }));
 
         v_flex()
             .w_full()

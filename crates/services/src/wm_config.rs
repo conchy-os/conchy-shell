@@ -33,7 +33,8 @@ pub fn path() -> anyhow::Result<PathBuf> {
 pub fn load() -> anyhow::Result<(PathBuf, KdlDocument)> {
     let path = path()?;
     let text = fsutil::read_optional(&path)?.unwrap_or_default();
-    let doc = kdl_edit::parse(&text).with_context(|| format!("{} does not parse", path.display()))?;
+    let doc =
+        kdl_edit::parse(&text).with_context(|| format!("{} does not parse", path.display()))?;
     Ok((path, doc))
 }
 

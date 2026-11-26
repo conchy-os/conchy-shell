@@ -82,7 +82,11 @@ fn appearance_form(form: &mut Form, model: &Entity<AppearanceModel>, cx: &App) {
         }
         State::Failed(err) => {
             rows::title(form, "Appearance", "");
-            rows::note(form, format!("Could not read the settings: {err}"), Color::Error);
+            rows::note(
+                form,
+                format!("Could not read the settings: {err}"),
+                Color::Error,
+            );
             return;
         }
         State::Ready(_) => {}
@@ -221,7 +225,10 @@ fn cursor_form(form: &mut Form, model: &Entity<AppearanceModel>, cx: &App) {
             "cursor-theme",
             "Theme",
             "The set of pointer shapes",
-            themes.iter().map(|t| SharedString::from(t.clone())).collect(),
+            themes
+                .iter()
+                .map(|t| SharedString::from(t.clone()))
+                .collect(),
             themes.iter().position(|t| *t == s.cursor_theme),
             {
                 let model = model.clone();
@@ -276,7 +283,10 @@ fn icons_form(form: &mut Form, model: &Entity<AppearanceModel>, cx: &App) {
             "icon-theme",
             "Icon theme",
             "Applies to GTK and Qt programs; the shell's own icons stay as they are",
-            themes.iter().map(|t| SharedString::from(t.clone())).collect(),
+            themes
+                .iter()
+                .map(|t| SharedString::from(t.clone()))
+                .collect(),
             themes.iter().position(|t| *t == loaded.settings.icon_theme),
             {
                 let model = model.clone();
@@ -338,11 +348,13 @@ impl LauncherPage for FontPicker {
                 item = item.accessory(Accessory::tag("current").color(Color::Accent));
             }
             let size = current.size;
-            item.actions(ActionPanel::new().action(Action::new("Use this font", move |_, cx| {
-                let font = Font::new(family.clone(), size);
-                model.update(cx, |m, cx| m.change(Change::Font(role, font), cx));
-                Outcome::Pop
-            })))
+            item.actions(
+                ActionPanel::new().action(Action::new("Use this font", move |_, cx| {
+                    let font = Font::new(family.clone(), size);
+                    model.update(cx, |m, cx| m.change(Change::Font(role, font), cx));
+                    Outcome::Pop
+                })),
+            )
         };
 
         if role == FontRole::Monospace && !fonts.monospace.is_empty() {

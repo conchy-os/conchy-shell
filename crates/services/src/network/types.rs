@@ -139,7 +139,11 @@ impl AccessPoint {
     /// Wi-Fi channel number derived from frequency.
     pub fn channel(&self) -> u32 {
         if self.frequency >= 2412 && self.frequency <= 2484 {
-            if self.frequency == 2484 { 14 } else { (self.frequency - 2407) / 5 }
+            if self.frequency == 2484 {
+                14
+            } else {
+                (self.frequency - 2407) / 5
+            }
         } else if self.frequency >= 5170 && self.frequency <= 5825 {
             (self.frequency - 5000) / 5
         } else if self.frequency >= 5955 && self.frequency <= 7115 {

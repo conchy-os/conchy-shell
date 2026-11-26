@@ -268,9 +268,11 @@ pub fn write_files(paths: &Paths, change: &Change, report: &mut Report) {
                 continue;
             }
             let edit = |text: &str| {
-                gtk_edits.iter().fold(text.to_string(), |text, (key, value)| {
-                    ini::set_key(&text, "Settings", key, Some(value))
-                })
+                gtk_edits
+                    .iter()
+                    .fold(text.to_string(), |text, (key, value)| {
+                        ini::set_key(&text, "Settings", key, Some(value))
+                    })
             };
             match edit_file(path, edit) {
                 Ok(()) => report.ok(&format!("{label} settings.ini")),
@@ -294,7 +296,9 @@ pub fn write_files(paths: &Paths, change: &Change, report: &mut Report) {
         let edit = |text: &str| {
             xsettings
                 .iter()
-                .fold(text.to_string(), |text, (key, value)| xsettings_set(&text, key, value))
+                .fold(text.to_string(), |text, (key, value)| {
+                    xsettings_set(&text, key, value)
+                })
         };
         match edit_file(&paths.xsettingsd, edit) {
             Ok(()) => report.ok("xsettingsd.conf"),
@@ -315,15 +319,22 @@ pub fn write_files(paths: &Paths, change: &Change, report: &mut Report) {
 
     // What the next login starts with.
     let env: Vec<(&str, String)> = match change {
-        Change::CursorTheme(name) => vec![("XCURSOR_THEME", name.clone()), ("HYPRCURSOR_THEME", name.clone())],
-        Change::CursorSize(size) => vec![("XCURSOR_SIZE", size.to_string()), ("HYPRCURSOR_SIZE", size.to_string())],
+        Change::CursorTheme(name) => vec![
+            ("XCURSOR_THEME", name.clone()),
+            ("HYPRCURSOR_THEME", name.clone()),
+        ],
+        Change::CursorSize(size) => vec![
+            ("XCURSOR_SIZE", size.to_string()),
+            ("HYPRCURSOR_SIZE", size.to_string()),
+        ],
         _ => Vec::new(),
     };
     if !env.is_empty() {
         if paths.uwsm_env.exists() {
             let edit = |text: &str| {
-                env.iter()
-                    .fold(text.to_string(), |text, (key, value)| env_file_set(&text, key, value))
+                env.iter().fold(text.to_string(), |text, (key, value)| {
+                    env_file_set(&text, key, value)
+                })
             };
             match edit_file(&paths.uwsm_env, edit) {
                 Ok(()) => report.ok("uwsm env"),
@@ -407,7 +418,10 @@ fn apply_cursor_to_compositor(
     s.apply(change);
     match backend {
         CompositorBackend::Hyprland => {
-            match run("hyprctl", &["setcursor", &s.cursor_theme, &s.cursor_size.to_string()]) {
+            match run(
+                "hyprctl",
+                &["setcursor", &s.cursor_theme, &s.cursor_size.to_string()],
+            ) {
                 Ok(()) => report.ok("Hyprland cursor"),
                 Err(err) => report.fail("Hyprland cursor", err),
             }
@@ -479,7 +493,10 @@ fn run_with_input(program: &str, args: &[&str], input: &str) -> Result<(), Strin
     if out.status.success() {
         Ok(())
     } else {
-        Err(format!("{program}: {}", String::from_utf8_lossy(&out.stderr).trim()))
+        Err(format!(
+            "{program}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ))
     }
 }
 
@@ -600,9 +617,8 @@ pub fn icon_themes() -> Vec<String> {
 
 fn icon_themes_in(dirs: &[PathBuf]) -> Vec<String> {
     themes_in(dirs, |path| {
-        fs::read_to_string(path.join("index.theme")).is_ok_and(|text| {
-            ini::get_key(&text, "Icon Theme", "Directories").is_some()
-        })
+        fs::read_to_string(path.join("index.theme"))
+            .is_ok_and(|text| ini::get_key(&text, "Icon Theme", "Directories").is_some())
     })
     .into_iter()
     // Fallbacks every theme inherits, not choices.
@@ -683,7 +699,10 @@ mod tests {
         let f = Font::parse("'JetBrainsMono Nerd Font 10.5'");
         assert_eq!(f, Font::new("JetBrainsMono Nerd Font", 10.5));
         assert_eq!(f.description(), "JetBrainsMono Nerd Font 10.5");
-        assert_eq!(Font::new("Cantarell Bold", 11.0).description(), "Cantarell Bold 11");
+        assert_eq!(
+            Font::new("Cantarell Bold", 11.0).description(),
+            "Cantarell Bold 11"
+        );
         // No size: a plain default.
         assert_eq!(Font::parse("Sans").size, 11.0);
     }
@@ -692,25 +711,49 @@ mod tests {
     fn a_cursor_theme_reaches_every_file_that_names_one() {
         let dir = tempfile::tempdir().unwrap();
         let p = paths(dir.path());
-        write(&p.gtk3, "[Settings]\ngtk-cursor-theme-name=old\ngtk-font-name=Keep 10\n");
+        write(
+            &p.gtk3,
+            "[Settings]\ngtk-cursor-theme-name=old\ngtk-font-name=Keep 10\n",
+        );
         write(&p.gtk4, "[Settings]\ngtk-cursor-theme-name=old\n");
-        write(&p.xsettingsd, "Net/ThemeName \"x\"\nGtk/CursorThemeName \"old\"\n");
-        write(&p.cursor_defaults[0], "[Icon Theme]\nName=Default\nInherits=old\n");
-        write(&p.uwsm_env, "export BROWSER=firefox\nexport XCURSOR_THEME=\"old\"\nexport HYPRCURSOR_THEME=\"old\"\n");
+        write(
+            &p.xsettingsd,
+            "Net/ThemeName \"x\"\nGtk/CursorThemeName \"old\"\n",
+        );
+        write(
+            &p.cursor_defaults[0],
+            "[Icon Theme]\nName=Default\nInherits=old\n",
+        );
+        write(
+            &p.uwsm_env,
+            "export BROWSER=firefox\nexport XCURSOR_THEME=\"old\"\nexport HYPRCURSOR_THEME=\"old\"\n",
+        );
         write(&p.session_kdl, "env {\n    XCURSOR_SIZE \"24\"\n}\n");
 
         let mut report = Report::default();
-        write_files(&p, &Change::CursorTheme("Bibata-Modern-Ice".into()), &mut report);
+        write_files(
+            &p,
+            &Change::CursorTheme("Bibata-Modern-Ice".into()),
+            &mut report,
+        );
 
         assert!(report.failed.is_empty(), "{:?}", report.failed);
         let gtk3 = fs::read_to_string(&p.gtk3).unwrap();
         assert!(gtk3.contains("gtk-cursor-theme-name=Bibata-Modern-Ice"));
         assert!(gtk3.contains("gtk-font-name=Keep 10"));
-        assert!(fs::read_to_string(&p.gtk4).unwrap().contains("Bibata-Modern-Ice"));
+        assert!(
+            fs::read_to_string(&p.gtk4)
+                .unwrap()
+                .contains("Bibata-Modern-Ice")
+        );
         let xs = fs::read_to_string(&p.xsettingsd).unwrap();
         assert!(xs.contains("Gtk/CursorThemeName \"Bibata-Modern-Ice\""));
         assert!(xs.contains("Net/ThemeName \"x\""));
-        assert!(fs::read_to_string(&p.cursor_defaults[0]).unwrap().contains("Inherits=Bibata-Modern-Ice"));
+        assert!(
+            fs::read_to_string(&p.cursor_defaults[0])
+                .unwrap()
+                .contains("Inherits=Bibata-Modern-Ice")
+        );
         let env = fs::read_to_string(&p.uwsm_env).unwrap();
         assert!(env.contains("export XCURSOR_THEME=Bibata-Modern-Ice"));
         assert!(env.contains("export HYPRCURSOR_THEME=Bibata-Modern-Ice"));
@@ -729,8 +772,16 @@ mod tests {
         write(&p.xsettingsd, "Net/ThemeName \"x\"\n");
         let mut report = Report::default();
         write_files(&p, &Change::Dpi(120), &mut report);
-        assert!(fs::read_to_string(&p.gtk3).unwrap().contains("gtk-xft-dpi=122880"));
-        assert!(fs::read_to_string(&p.xsettingsd).unwrap().contains("Xft/DPI 122880"));
+        assert!(
+            fs::read_to_string(&p.gtk3)
+                .unwrap()
+                .contains("gtk-xft-dpi=122880")
+        );
+        assert!(
+            fs::read_to_string(&p.xsettingsd)
+                .unwrap()
+                .contains("Xft/DPI 122880")
+        );
         // And read back as DPI.
         let loaded = load(&p);
         assert_eq!(loaded.dpi, 120);
@@ -751,15 +802,24 @@ mod tests {
         let text = "export A=1\n";
         assert_eq!(env_file_set(text, "XCURSOR_SIZE", "32"), text);
         let text = "XCURSOR_SIZE=24\n";
-        assert_eq!(env_file_set(text, "XCURSOR_SIZE", "32"), "XCURSOR_SIZE=32\n");
+        assert_eq!(
+            env_file_set(text, "XCURSOR_SIZE", "32"),
+            "XCURSOR_SIZE=32\n"
+        );
     }
 
     #[test]
     fn themes_are_found_by_what_is_inside() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().to_path_buf();
-        write(&root.join("Papirus/index.theme"), "[Icon Theme]\nName=P\nDirectories=48x48/apps\n");
-        write(&root.join("hicolor/index.theme"), "[Icon Theme]\nDirectories=48x48/apps\n");
+        write(
+            &root.join("Papirus/index.theme"),
+            "[Icon Theme]\nName=P\nDirectories=48x48/apps\n",
+        );
+        write(
+            &root.join("hicolor/index.theme"),
+            "[Icon Theme]\nDirectories=48x48/apps\n",
+        );
         write(&root.join("Bibata/index.theme"), "[Icon Theme]\nName=B\n");
         fs::create_dir_all(root.join("Bibata/cursors")).unwrap();
         fs::create_dir_all(root.join("default")).unwrap();

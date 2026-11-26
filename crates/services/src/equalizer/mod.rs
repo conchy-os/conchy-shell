@@ -65,7 +65,10 @@ impl EqualizerData {
 pub enum EqualizerCommand {
     SetEnabled(bool),
     /// Gain of one band, in dB.
-    SetBand { band: usize, gain: f32 },
+    SetBand {
+        band: usize,
+        gain: f32,
+    },
     /// Preamp, in dB.
     SetPreamp(f32),
     SetAutoPreamp(bool),

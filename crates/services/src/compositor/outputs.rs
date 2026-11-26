@@ -24,7 +24,10 @@ pub fn query_monitors(backend: CompositorBackend) -> Result<Vec<Monitor>> {
                 .output()
                 .context("failed to run hyprctl")?;
             if !out.status.success() {
-                bail!("hyprctl monitors: {}", String::from_utf8_lossy(&out.stderr).trim());
+                bail!(
+                    "hyprctl monitors: {}",
+                    String::from_utf8_lossy(&out.stderr).trim()
+                );
             }
             monitors_from_hyprland_json(&String::from_utf8_lossy(&out.stdout))
         }
@@ -40,7 +43,8 @@ pub fn query_monitors(backend: CompositorBackend) -> Result<Vec<Monitor>> {
 
 fn monitors_from_hyprland_json(text: &str) -> Result<Vec<Monitor>> {
     let list: Vec<Value> = serde_json::from_str(text).context("unreadable `hyprctl monitors`")?;
-    let str_of = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).unwrap_or("").to_string();
+    let str_of =
+        |v: &Value, key: &str| v.get(key).and_then(Value::as_str).unwrap_or("").to_string();
     Ok(list
         .iter()
         .map(|m| {
@@ -89,7 +93,10 @@ fn monitors_from_hyprland_json(text: &str) -> Result<Vec<Monitor>> {
 /// The `monitor` rule in Hyprland's Lua API.
 fn hyprland_lua(cfg: &OutputConfig) -> String {
     if !cfg.enabled {
-        return format!("hl.monitor({{ output = {:?}, disabled = true }})", cfg.output);
+        return format!(
+            "hl.monitor({{ output = {:?}, disabled = true }})",
+            cfg.output
+        );
     }
     let mode = cfg.mode.as_ref().map_or_else(
         || "preferred".to_string(),
@@ -194,7 +201,9 @@ fn conchy_transform(n: u16) -> conchy_ipc::Transform {
     }
 }
 
-fn monitors_from_conchy(outputs: std::collections::HashMap<String, conchy_ipc::Output>) -> Vec<Monitor> {
+fn monitors_from_conchy(
+    outputs: std::collections::HashMap<String, conchy_ipc::Output>,
+) -> Vec<Monitor> {
     let mut names: Vec<&String> = outputs.keys().collect();
     names.sort();
     names
@@ -375,7 +384,11 @@ mod tests {
         let cfg = OutputConfig {
             output: "eDP-1".into(),
             enabled: true,
-            mode: Some(OutputMode { width: 2880, height: 1800, refresh_rate: 59.99 }),
+            mode: Some(OutputMode {
+                width: 2880,
+                height: 1800,
+                refresh_rate: 59.99,
+            }),
             scale: 2.0,
             transform: 1,
             x: 0,
@@ -390,8 +403,14 @@ mod tests {
             hyprland_legacy(&cfg),
             "eDP-1,2880x1800@59.990,0x0,2,transform,1,vrr,0"
         );
-        let off = OutputConfig { enabled: false, ..cfg };
-        assert_eq!(hyprland_lua(&off), r#"hl.monitor({ output = "eDP-1", disabled = true })"#);
+        let off = OutputConfig {
+            enabled: false,
+            ..cfg
+        };
+        assert_eq!(
+            hyprland_lua(&off),
+            r#"hl.monitor({ output = "eDP-1", disabled = true })"#
+        );
         assert_eq!(hyprland_legacy(&off), "eDP-1,disable");
     }
 
@@ -404,7 +423,11 @@ mod tests {
         let cfg = OutputConfig {
             output: "eDP-1".into(),
             enabled: true,
-            mode: Some(OutputMode { width: 1920, height: 1080, refresh_rate: 144.0 }),
+            mode: Some(OutputMode {
+                width: 1920,
+                height: 1080,
+                refresh_rate: 144.0,
+            }),
             scale: 1.5,
             transform: 3,
             x: 1920,
@@ -414,7 +437,10 @@ mod tests {
         persist_conchy(&mut doc, &cfg).unwrap();
         let text = doc.to_string();
         let again = kdl_edit::parse(&text).unwrap();
-        assert!(text.contains("// mine") && text.contains("gaps 16"), "{text}");
+        assert!(
+            text.contains("// mine") && text.contains("gaps 16"),
+            "{text}"
+        );
         let out = &["output"];
         assert!(kdl_edit::node(&again, out).is_some());
         assert!(text.contains("scale 1.5"), "{text}");
@@ -425,7 +451,14 @@ mod tests {
         assert_eq!(text.matches("output \"eDP-1\"").count(), 1);
 
         // Off keeps the rest and adds the flag; turning VRR off drops its node.
-        persist_conchy(&mut doc, &OutputConfig { enabled: false, ..cfg.clone() }).unwrap();
+        persist_conchy(
+            &mut doc,
+            &OutputConfig {
+                enabled: false,
+                ..cfg.clone()
+            },
+        )
+        .unwrap();
         assert!(doc.to_string().contains("off"));
         persist_conchy(&mut doc, &OutputConfig { vrr: false, ..cfg }).unwrap();
         let text = doc.to_string();
@@ -445,8 +478,18 @@ mod tests {
                 serial: Some("S1".into()),
                 physical_size: None,
                 modes: vec![
-                    conchy_ipc::Mode { width: 3840, height: 2160, refresh_rate: 60000, is_preferred: true },
-                    conchy_ipc::Mode { width: 1920, height: 1080, refresh_rate: 59940, is_preferred: false },
+                    conchy_ipc::Mode {
+                        width: 3840,
+                        height: 2160,
+                        refresh_rate: 60000,
+                        is_preferred: true,
+                    },
+                    conchy_ipc::Mode {
+                        width: 1920,
+                        height: 1080,
+                        refresh_rate: 59940,
+                        is_preferred: false,
+                    },
                 ],
                 current_mode: Some(0),
                 is_custom_mode: false,

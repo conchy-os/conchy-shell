@@ -2,7 +2,9 @@
 //! inline under their own headings. Each control row comes with the keyboard's
 //! way into it, so the launcher can move between them.
 
-use gpui::{AnyElement, App, ElementId, FontWeight, IntoElement, SharedString, div, prelude::*, px};
+use gpui::{
+    AnyElement, App, ElementId, FontWeight, IntoElement, SharedString, div, prelude::*, px,
+};
 use ui::{
     ActiveTheme, Color, IconName, Label, LabelCommon, Radius, Slider, Spacing, Stepper, Switch,
     TextSize, h_flex, v_flex,
@@ -280,12 +282,7 @@ pub(super) fn labeled_row(label: Label, control: AnyElement) -> AnyElement {
         .w_full()
         .items_center()
         .gap(Spacing::Medium.pixels())
-        .child(
-            div()
-                .min_w(px(FORM_LABEL_WIDTH))
-                .flex_none()
-                .child(label),
-        )
+        .child(div().min_w(px(FORM_LABEL_WIDTH)).flex_none().child(label))
         .child(h_flex().flex_1().min_w(px(0.)).justify_end().child(control))
         .into_any_element()
 }
@@ -398,11 +395,7 @@ fn number_widget<S: Editable>(
         .items_baseline()
         .gap(Spacing::Small.pixels())
         .child(label)
-        .children(unit.map(|unit| {
-            Label::new(unit)
-                .size(TextSize::XSmall)
-                .color(Color::Muted)
-        }));
+        .children(unit.map(|unit| Label::new(unit).size(TextSize::XSmall).color(Color::Muted)));
 
     v_flex()
         .w_full()

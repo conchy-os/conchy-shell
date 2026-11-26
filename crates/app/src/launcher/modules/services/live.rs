@@ -8,11 +8,11 @@
 use std::time::Duration;
 
 use gpui::App;
+use services::mpris::PlaybackStatus;
+use services::upower::PowerProfile;
 use services::{
     ActiveConnectionInfo, BluetoothState, ConnectivityState, ServiceStatus, WallpaperEngine,
 };
-use services::mpris::PlaybackStatus;
-use services::upower::PowerProfile;
 use ui::Color;
 
 use crate::launcher::content::Metadata;
@@ -95,7 +95,10 @@ fn network(cx: &App) -> Vec<Metadata> {
         };
         rows.push(row(kind, format!("{} · {detail}", connection.name())));
     }
-    rows.push(row("Wi-Fi radio", if data.wifi_enabled { "On" } else { "Off" }));
+    rows.push(row(
+        "Wi-Fi radio",
+        if data.wifi_enabled { "On" } else { "Off" },
+    ));
     if data.wifi_enabled {
         rows.push(row(
             "Networks in range",
@@ -168,7 +171,10 @@ fn upower(cx: &App) -> Vec<Metadata> {
         None => rows.push(row("Battery", "None")),
     }
     if let Some(on_battery) = data.on_battery {
-        rows.push(row("Power source", if on_battery { "Battery" } else { "AC" }));
+        rows.push(row(
+            "Power source",
+            if on_battery { "Battery" } else { "AC" },
+        ));
     }
     if data.power_profiles_available {
         let profile = match data.power_profile {
@@ -356,7 +362,10 @@ fn brightness(cx: &App) -> Vec<Metadata> {
 
 fn clipboard(cx: &App) -> Vec<Metadata> {
     let data = AppState::clipboard(cx).get();
-    vec![row("History", plural(data.entries.len(), "entry", "entries"))]
+    vec![row(
+        "History",
+        plural(data.entries.len(), "entry", "entries"),
+    )]
 }
 
 fn vpnx(cx: &App) -> Vec<Metadata> {

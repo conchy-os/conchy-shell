@@ -87,14 +87,15 @@ impl BarWidget for Clock {
         let config = &cx.config().bar.modules.clock;
         let lines = Self::lines(&config.format_vertical, &config.format_horizontal);
 
-        let stack = style::stack(ctx)
-            .gap(ctx.metrics.gap)
-            .children(lines.into_iter().enumerate().map(|(idx, line)| {
-                // Hours and minutes carry the time; anything after (seconds,
-                // a date) is secondary and muted.
-                let color = if idx < 2 { ctx.ink.text } else { ctx.ink.muted };
-                style::text_line(ctx, style::label_in(ctx, line, color))
-            }));
+        let stack =
+            style::stack(ctx)
+                .gap(ctx.metrics.gap)
+                .children(lines.into_iter().enumerate().map(|(idx, line)| {
+                    // Hours and minutes carry the time; anything after (seconds,
+                    // a date) is secondary and muted.
+                    let color = if idx < 2 { ctx.ink.text } else { ctx.ink.muted };
+                    style::text_line(ctx, style::label_in(ctx, line, color))
+                }));
         Self::clickable(stack, cx)
     }
 

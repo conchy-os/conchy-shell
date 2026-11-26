@@ -6,8 +6,8 @@
 
 use gpui::{App, Context, FontWeight, div, prelude::*, px};
 use ui::{
-    ActiveTheme, Button, ButtonCommon, ButtonStyle, Clickable, Color, IconName, Label,
-    LabelCommon, Radius, Spacing, TextSize, h_flex, v_flex,
+    ActiveTheme, Button, ButtonCommon, ButtonStyle, Clickable, Color, IconName, Label, LabelCommon,
+    Radius, Spacing, TextSize, h_flex, v_flex,
 };
 
 use super::form::{add_field, add_groups, reset_action};
@@ -128,9 +128,7 @@ fn section_item(path: &ConfigPath<Config>, field: &Field<Config>, cx: &App) -> I
     }
 
     let panel = ActionPanel::new()
-        .action(
-            Action::new("Edit", |_, _| Outcome::FocusDetail).icon(IconName::ChevronRight),
-        )
+        .action(Action::new("Edit", |_, _| Outcome::FocusDetail).icon(IconName::ChevronRight))
         .action(reset_action(path, field, modified));
     item.actions(panel).detail(section_form(path, field))
 }

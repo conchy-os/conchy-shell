@@ -1,7 +1,7 @@
 use gpui::{App, ElementId, FontWeight, SharedString, div, prelude::*, px};
 use ui::{
-    ActiveTheme, Color, Icon, IconName, IconSize, Label, LabelCommon, Radius, Spacing, TextSize,
-    Switch, builtin_schemes, h_flex, v_flex,
+    ActiveTheme, Color, Icon, IconName, IconSize, Label, LabelCommon, Radius, Spacing, Switch,
+    TextSize, builtin_schemes, h_flex, v_flex,
 };
 
 use super::schema::{ConfigPath, Editable, Field};
@@ -11,8 +11,7 @@ use crate::launcher::content::Detail;
 use crate::launcher::modules::theme::{apply_palette, apply_theme, palette_is_active};
 use crate::launcher::modules::wallpaper::config::{WallpaperConfig, WallpaperScheme};
 use crate::launcher::modules::wallpaper::{
-    GenerationStatus, generated_palettes, generation_status, palette_chip,
-    regenerate_from_current,
+    GenerationStatus, generated_palettes, generation_status, palette_chip, regenerate_from_current,
 };
 
 fn wallpaper_path() -> ConfigPath<WallpaperConfig> {
@@ -58,41 +57,48 @@ fn wallpaper_card(cx: &App) -> gpui::AnyElement {
         })
     };
 
-    let schemes = h_flex()
-        .w_full()
-        .flex_wrap()
-        .gap(px(4.))
-        .children(WallpaperScheme::ALL.into_iter().map(|scheme| {
-            let selected = scheme == config.matugen_scheme;
-            let path = path.clone();
-            div()
-                .id(SharedString::from(format!("wp-scheme-{}", scheme.matugen_type())))
-                .px(Spacing::Medium.pixels())
-                .py(px(4.))
-                .rounded(Radius::Small.pixels())
-                .text_size(TextSize::Small.rems())
-                .cursor_pointer()
-                .when(selected, |this| {
-                    this.bg(colors.element_selected)
-                        .text_color(colors.text_accent)
-                        .font_weight(FontWeight::SEMIBOLD)
-                })
-                .when(!selected, |this| {
-                    this.text_color(colors.text_muted)
-                        .hover(|s| s.bg(colors.element_hover).text_color(colors.text))
-                })
-                .on_click(move |_, _, cx| {
-                    if let Some(field) = wallpaper_field("matugen_scheme") {
-                        path.write(&field, |s| s.matugen_scheme = scheme, cx);
-                    }
-                    let apply = path.read(cx).auto_theme;
-                    regenerate_from_current(apply, cx);
-                })
-                .child(scheme.label())
-        }));
+    let schemes =
+        h_flex()
+            .w_full()
+            .flex_wrap()
+            .gap(px(4.))
+            .children(WallpaperScheme::ALL.into_iter().map(|scheme| {
+                let selected = scheme == config.matugen_scheme;
+                let path = path.clone();
+                div()
+                    .id(SharedString::from(format!(
+                        "wp-scheme-{}",
+                        scheme.matugen_type()
+                    )))
+                    .px(Spacing::Medium.pixels())
+                    .py(px(4.))
+                    .rounded(Radius::Small.pixels())
+                    .text_size(TextSize::Small.rems())
+                    .cursor_pointer()
+                    .when(selected, |this| {
+                        this.bg(colors.element_selected)
+                            .text_color(colors.text_accent)
+                            .font_weight(FontWeight::SEMIBOLD)
+                    })
+                    .when(!selected, |this| {
+                        this.text_color(colors.text_muted)
+                            .hover(|s| s.bg(colors.element_hover).text_color(colors.text))
+                    })
+                    .on_click(move |_, _, cx| {
+                        if let Some(field) = wallpaper_field("matugen_scheme") {
+                            path.write(&field, |s| s.matugen_scheme = scheme, cx);
+                        }
+                        let apply = path.read(cx).auto_theme;
+                        regenerate_from_current(apply, cx);
+                    })
+                    .child(scheme.label())
+            }));
 
     let status_line = |text: SharedString, color: Color| {
-        Label::new(text).size(TextSize::XSmall).color(color).into_any_element()
+        Label::new(text)
+            .size(TextSize::XSmall)
+            .color(color)
+            .into_any_element()
     };
     let generate_button = |label: &'static str| {
         div()
@@ -241,19 +247,20 @@ pub fn themes_detail(_cx: &App) -> Detail {
             palette.base0e,
             palette.base0f,
         ];
-        let swatches = h_flex()
-            .w_full()
-            .gap(px(4.))
-            .children(swatch_colors.into_iter().enumerate().map(|(ix, col)| {
-                div()
-                    .id(ElementId::NamedInteger("swatch".into(), ix as u64))
-                    .flex_1()
-                    .h(px(18.))
-                    .rounded(Radius::Small.pixels())
-                    .bg(col)
-                    .border_1()
-                    .border_color(colors.border)
-            }));
+        let swatches =
+            h_flex()
+                .w_full()
+                .gap(px(4.))
+                .children(swatch_colors.into_iter().enumerate().map(|(ix, col)| {
+                    div()
+                        .id(ElementId::NamedInteger("swatch".into(), ix as u64))
+                        .flex_1()
+                        .h(px(18.))
+                        .rounded(Radius::Small.pixels())
+                        .bg(col)
+                        .border_1()
+                        .border_color(colors.border)
+                }));
 
         let active_theme_card = v_flex()
             .w_full()
@@ -264,24 +271,20 @@ pub fn themes_detail(_cx: &App) -> Detail {
             .border_color(colors.border_variant)
             .gap(Spacing::Medium.pixels())
             .child(
-                h_flex()
-                    .w_full()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        v_flex()
-                            .gap(px(2.))
-                            .child(
-                                Label::new("Current Palette")
-                                    .size(TextSize::Default)
-                                    .weight(FontWeight::SEMIBOLD),
-                            )
-                            .child(
-                                Label::new("Base16 color palette across all shell elements")
-                                    .size(TextSize::Small)
-                                    .color(Color::Muted),
-                            ),
-                    ),
+                h_flex().w_full().items_center().justify_between().child(
+                    v_flex()
+                        .gap(px(2.))
+                        .child(
+                            Label::new("Current Palette")
+                                .size(TextSize::Default)
+                                .weight(FontWeight::SEMIBOLD),
+                        )
+                        .child(
+                            Label::new("Base16 color palette across all shell elements")
+                                .size(TextSize::Small)
+                                .color(Color::Muted),
+                        ),
+                ),
             )
             .child(swatches);
 
@@ -294,35 +297,33 @@ pub fn themes_detail(_cx: &App) -> Detail {
             ("Pill", 2.0),
         ];
         let current_radius = current_theme.radius_scale;
-        let radius_row = h_flex()
-            .w_full()
-            .items_center()
-            .justify_between()
-            .child(
-                v_flex()
-                    .gap(px(2.))
-                    .child(
-                        Label::new("Corner radius")
-                            .size(TextSize::Small)
-                            .weight(FontWeight::MEDIUM),
-                    )
-                    .child(
-                        Label::new("Radius scale for cards and chips")
-                            .size(TextSize::XSmall)
-                            .color(Color::Muted),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap(px(4.))
-                    .p(px(3.))
-                    .rounded(Radius::Medium.pixels())
-                    .bg(colors.element_background)
-                    .children(
-                        radius_presets
-                            .into_iter()
-                            .enumerate()
-                            .map(|(ix, (lbl, val))| {
+        let radius_row =
+            h_flex()
+                .w_full()
+                .items_center()
+                .justify_between()
+                .child(
+                    v_flex()
+                        .gap(px(2.))
+                        .child(
+                            Label::new("Corner radius")
+                                .size(TextSize::Small)
+                                .weight(FontWeight::MEDIUM),
+                        )
+                        .child(
+                            Label::new("Radius scale for cards and chips")
+                                .size(TextSize::XSmall)
+                                .color(Color::Muted),
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .gap(px(4.))
+                        .p(px(3.))
+                        .rounded(Radius::Medium.pixels())
+                        .bg(colors.element_background)
+                        .children(radius_presets.into_iter().enumerate().map(
+                            |(ix, (lbl, val))| {
                                 let is_sel = (current_radius - val).abs() < 0.15;
                                 div()
                                     .id(ElementId::NamedInteger("radius-btn".into(), ix as u64))
@@ -347,9 +348,9 @@ pub fn themes_detail(_cx: &App) -> Detail {
                                         apply_theme(t, cx);
                                     })
                                     .child(lbl)
-                            }),
-                    ),
-            );
+                            },
+                        )),
+                );
 
         let opacity_presets: [(&'static str, f32); 5] = [
             ("50%", 0.5),
@@ -359,35 +360,33 @@ pub fn themes_detail(_cx: &App) -> Detail {
             ("100%", 1.0),
         ];
         let current_opacity = current_theme.opacity;
-        let opacity_row = h_flex()
-            .w_full()
-            .items_center()
-            .justify_between()
-            .child(
-                v_flex()
-                    .gap(px(2.))
-                    .child(
-                        Label::new("Surface opacity")
-                            .size(TextSize::Small)
-                            .weight(FontWeight::MEDIUM),
-                    )
-                    .child(
-                        Label::new("Base opacity for shell surfaces")
-                            .size(TextSize::XSmall)
-                            .color(Color::Muted),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap(px(4.))
-                    .p(px(3.))
-                    .rounded(Radius::Medium.pixels())
-                    .bg(colors.element_background)
-                    .children(
-                        opacity_presets
-                            .into_iter()
-                            .enumerate()
-                            .map(|(ix, (lbl, val))| {
+        let opacity_row =
+            h_flex()
+                .w_full()
+                .items_center()
+                .justify_between()
+                .child(
+                    v_flex()
+                        .gap(px(2.))
+                        .child(
+                            Label::new("Surface opacity")
+                                .size(TextSize::Small)
+                                .weight(FontWeight::MEDIUM),
+                        )
+                        .child(
+                            Label::new("Base opacity for shell surfaces")
+                                .size(TextSize::XSmall)
+                                .color(Color::Muted),
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .gap(px(4.))
+                        .p(px(3.))
+                        .rounded(Radius::Medium.pixels())
+                        .bg(colors.element_background)
+                        .children(opacity_presets.into_iter().enumerate().map(
+                            |(ix, (lbl, val))| {
                                 let is_sel = (current_opacity - val).abs() < 0.05;
                                 div()
                                     .id(ElementId::NamedInteger("opacity-btn".into(), ix as u64))
@@ -412,9 +411,9 @@ pub fn themes_detail(_cx: &App) -> Detail {
                                         apply_theme(t, cx);
                                     })
                                     .child(lbl)
-                            }),
-                    ),
-            );
+                            },
+                        )),
+                );
 
         let appearance_card = v_flex()
             .w_full()
@@ -430,84 +429,81 @@ pub fn themes_detail(_cx: &App) -> Detail {
 
         // Schemes list
         let schemes = builtin_schemes();
-        let schemes_list = v_flex()
-            .w_full()
-            .gap(Spacing::Small.pixels())
-            .children(schemes.into_iter().map(|scheme| {
-                let is_active = palette_is_active(&scheme.palette, &current_theme);
-                let p = scheme.palette;
-                let preview_colors = scheme.preview_colors();
+        let schemes_list =
+            v_flex()
+                .w_full()
+                .gap(Spacing::Small.pixels())
+                .children(schemes.into_iter().map(|scheme| {
+                    let is_active = palette_is_active(&scheme.palette, &current_theme);
+                    let p = scheme.palette;
+                    let preview_colors = scheme.preview_colors();
 
-                let name = scheme.name.clone();
-                v_flex()
-                    .id(SharedString::from(format!("scheme-{}", scheme.name)))
-                    .w_full()
-                    .p(Spacing::Medium.pixels())
-                    .rounded(Radius::Medium.pixels())
-                    .bg(colors.surface_background)
-                    .border_1()
-                    .border_color(if is_active {
-                        colors.accent
-                    } else {
-                        colors.border_variant
-                    })
-                    .cursor_pointer()
-                    .hover(|s| s.bg(colors.element_hover))
-                    .on_click(move |_, _, cx| {
-                        apply_palette(name.clone(), p, cx);
-                    })
-                    .gap(Spacing::Small.pixels())
-                    .child(
-                        h_flex()
-                            .w_full()
-                            .items_center()
-                            .justify_between()
-                            .child(
-                                h_flex()
-                                    .gap(Spacing::Small.pixels())
-                                    .items_center()
-                                    .child(
-                                        Label::new(scheme.name.clone())
-                                            .size(TextSize::Small)
-                                            .weight(FontWeight::SEMIBOLD)
-                                            .color(if is_active {
-                                                Color::Accent
-                                            } else {
-                                                Color::Default
-                                            }),
-                                    )
-                                    .child(
-                                        Label::new(scheme.description.clone())
-                                            .size(TextSize::XSmall)
-                                            .color(Color::Muted),
-                                    ),
-                            )
-                            .child(if is_active {
-                                Icon::new(IconName::Check)
-                                    .size(IconSize::Small)
-                                    .color(Color::Accent)
-                                    .into_any_element()
-                            } else {
-                                Label::new("Use")
-                                    .size(TextSize::XSmall)
-                                    .color(Color::Muted)
-                                    .into_any_element()
-                            }),
-                    )
-                    .child(
-                        h_flex()
-                            .w_full()
-                            .h(px(12.))
-                            .gap(px(2.))
-                            .children(preview_colors.into_iter().map(|col| {
+                    let name = scheme.name.clone();
+                    v_flex()
+                        .id(SharedString::from(format!("scheme-{}", scheme.name)))
+                        .w_full()
+                        .p(Spacing::Medium.pixels())
+                        .rounded(Radius::Medium.pixels())
+                        .bg(colors.surface_background)
+                        .border_1()
+                        .border_color(if is_active {
+                            colors.accent
+                        } else {
+                            colors.border_variant
+                        })
+                        .cursor_pointer()
+                        .hover(|s| s.bg(colors.element_hover))
+                        .on_click(move |_, _, cx| {
+                            apply_palette(name.clone(), p, cx);
+                        })
+                        .gap(Spacing::Small.pixels())
+                        .child(
+                            h_flex()
+                                .w_full()
+                                .items_center()
+                                .justify_between()
+                                .child(
+                                    h_flex()
+                                        .gap(Spacing::Small.pixels())
+                                        .items_center()
+                                        .child(
+                                            Label::new(scheme.name.clone())
+                                                .size(TextSize::Small)
+                                                .weight(FontWeight::SEMIBOLD)
+                                                .color(if is_active {
+                                                    Color::Accent
+                                                } else {
+                                                    Color::Default
+                                                }),
+                                        )
+                                        .child(
+                                            Label::new(scheme.description.clone())
+                                                .size(TextSize::XSmall)
+                                                .color(Color::Muted),
+                                        ),
+                                )
+                                .child(if is_active {
+                                    Icon::new(IconName::Check)
+                                        .size(IconSize::Small)
+                                        .color(Color::Accent)
+                                        .into_any_element()
+                                } else {
+                                    Label::new("Use")
+                                        .size(TextSize::XSmall)
+                                        .color(Color::Muted)
+                                        .into_any_element()
+                                }),
+                        )
+                        .child(h_flex().w_full().h(px(12.)).gap(px(2.)).children(
+                            preview_colors.into_iter().map(|col| {
                                 div()
                                     .flex_1()
                                     .h_full()
                                     .rounded(Radius::Small.pixels())
                                     .bg(col)
-                            })),
-                    )
-            }));
+                            }),
+                        ))
+                }));
 
         v_flex()
             .w_full()

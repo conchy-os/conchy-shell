@@ -425,8 +425,8 @@ impl Render for ControlCenter {
 /// Toggle the control center panel on the active output.
 pub fn toggle(cx: &mut App) {
     use crate::config::Config;
-    use gpui::layer_shell::Anchor;
     use crate::windows::{PanelConfig, PanelSize};
+    use gpui::layer_shell::Anchor;
     let config = Config::global(cx);
     let size = PanelSize::FitHeight {
         width: CONTROL_CENTER_PANEL_WIDTH,

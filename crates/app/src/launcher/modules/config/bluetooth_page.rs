@@ -89,14 +89,17 @@ fn bluetooth_form(form: &mut Form, cx: &App) {
         let (connected, trusted) = (dev.connected, dev.trusted);
         let connect = {
             let (service, path) = (service.clone(), dev.path.clone());
-            Action::new(if connected { "Disconnect" } else { "Connect" }, move |_, _| {
-                service.dispatch(if connected {
-                    BluetoothCommand::DisconnectDevice(path.clone())
-                } else {
-                    BluetoothCommand::ConnectDevice(path.clone())
-                });
-                Outcome::Stay
-            })
+            Action::new(
+                if connected { "Disconnect" } else { "Connect" },
+                move |_, _| {
+                    service.dispatch(if connected {
+                        BluetoothCommand::DisconnectDevice(path.clone())
+                    } else {
+                        BluetoothCommand::ConnectDevice(path.clone())
+                    });
+                    Outcome::Stay
+                },
+            )
             .icon(IconName::Bluetooth)
         };
         let trust = {

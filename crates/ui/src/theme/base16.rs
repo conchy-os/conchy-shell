@@ -126,18 +126,42 @@ impl Base16Palette {
         let is_light = self.base00.l > 0.5;
 
         let primary = accent;
-        let on_primary = if primary.l > 0.55 { self.base00 } else { self.base07 };
-        let primary_container = if is_light { accent.alpha(0.18) } else { accent.alpha(0.22) };
+        let on_primary = if primary.l > 0.55 {
+            self.base00
+        } else {
+            self.base07
+        };
+        let primary_container = if is_light {
+            accent.alpha(0.18)
+        } else {
+            accent.alpha(0.22)
+        };
         let on_primary_container = accent;
 
         let secondary = self.base0e;
-        let on_secondary = if secondary.l > 0.55 { self.base00 } else { self.base07 };
-        let secondary_container = if is_light { secondary.alpha(0.18) } else { secondary.alpha(0.22) };
+        let on_secondary = if secondary.l > 0.55 {
+            self.base00
+        } else {
+            self.base07
+        };
+        let secondary_container = if is_light {
+            secondary.alpha(0.18)
+        } else {
+            secondary.alpha(0.22)
+        };
         let on_secondary_container = secondary;
 
         let tertiary = self.base09;
-        let on_tertiary = if tertiary.l > 0.55 { self.base00 } else { self.base07 };
-        let tertiary_container = if is_light { tertiary.alpha(0.18) } else { tertiary.alpha(0.22) };
+        let on_tertiary = if tertiary.l > 0.55 {
+            self.base00
+        } else {
+            self.base07
+        };
+        let tertiary_container = if is_light {
+            tertiary.alpha(0.18)
+        } else {
+            tertiary.alpha(0.22)
+        };
         let on_tertiary_container = tertiary;
 
         let surface_container_low = self.base00;

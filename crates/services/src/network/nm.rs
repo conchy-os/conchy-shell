@@ -66,21 +66,21 @@ async fn fetch_ip4_details(
     let gateway = proxy.gateway().await.ok().filter(|s| !s.is_empty());
 
     let mut address = None;
-    if let Ok(addrs) = proxy.address_data().await {
-        if let Some(first) = addrs.first() {
-            let addr_str = first
-                .get("address")
-                .and_then(|v| String::try_from(v.clone()).ok());
-            let prefix = first
-                .get("prefix")
-                .and_then(|v| u32::try_from(v.clone()).ok());
-            if let Some(a) = addr_str {
-                address = Some(if let Some(p) = prefix {
-                    format!("{a}/{p}")
-                } else {
-                    a
-                });
-            }
+    if let Ok(addrs) = proxy.address_data().await
+        && let Some(first) = addrs.first()
+    {
+        let addr_str = first
+            .get("address")
+            .and_then(|v| String::try_from(v.clone()).ok());
+        let prefix = first
+            .get("prefix")
+            .and_then(|v| u32::try_from(v.clone()).ok());
+        if let Some(a) = addr_str {
+            address = Some(if let Some(p) = prefix {
+                format!("{a}/{p}")
+            } else {
+                a
+            });
         }
     }
 
@@ -90,10 +90,9 @@ async fn fetch_ip4_details(
             if let Some(a) = d
                 .get("address")
                 .and_then(|v| String::try_from(v.clone()).ok())
+                && !dns.contains(&a)
             {
-                if !dns.contains(&a) {
-                    dns.push(a);
-                }
+                dns.push(a);
             }
         }
     }
@@ -112,21 +111,21 @@ async fn fetch_ip6_address(conn: &zbus::Connection, ip6_path: &OwnedObjectPath) 
         return None;
     };
 
-    if let Ok(addrs) = proxy.address_data().await {
-        if let Some(first) = addrs.first() {
-            let addr_str = first
-                .get("address")
-                .and_then(|v| String::try_from(v.clone()).ok());
-            let prefix = first
-                .get("prefix")
-                .and_then(|v| u32::try_from(v.clone()).ok());
-            if let Some(a) = addr_str {
-                return Some(if let Some(p) = prefix {
-                    format!("{a}/{p}")
-                } else {
-                    a
-                });
-            }
+    if let Ok(addrs) = proxy.address_data().await
+        && let Some(first) = addrs.first()
+    {
+        let addr_str = first
+            .get("address")
+            .and_then(|v| String::try_from(v.clone()).ok());
+        let prefix = first
+            .get("prefix")
+            .and_then(|v| u32::try_from(v.clone()).ok());
+        if let Some(a) = addr_str {
+            return Some(if let Some(p) = prefix {
+                format!("{a}/{p}")
+            } else {
+                a
+            });
         }
     }
 
@@ -245,15 +244,11 @@ impl<'a> NetworkManager<'a> {
                                 let f = ap_proxy.frequency().await.unwrap_or_default();
                                 if f > 0 {
                                     frequency = Some(f);
-                                    let ch = if f >= 2412 && f <= 2484 {
-                                        if f == 2484 {
-                                            14
-                                        } else {
-                                            (f - 2407) / 5
-                                        }
-                                    } else if f >= 5170 && f <= 5825 {
+                                    let ch = if (2412..=2484).contains(&f) {
+                                        if f == 2484 { 14 } else { (f - 2407) / 5 }
+                                    } else if (5170..=5825).contains(&f) {
                                         (f - 5000) / 5
-                                    } else if f >= 5955 && f <= 7115 {
+                                    } else if (5955..=7115).contains(&f) {
                                         (f - 5950) / 5
                                     } else {
                                         0
@@ -270,10 +265,10 @@ impl<'a> NetworkManager<'a> {
                             }
                         }
 
-                        if let Ok(br) = wireless_device.bitrate().await {
-                            if br > 0 {
-                                bitrate = Some(br);
-                            }
+                        if let Ok(br) = wireless_device.bitrate().await
+                            && br > 0
+                        {
+                            bitrate = Some(br);
                         }
 
                         info.push(ActiveConnectionInfo::WiFi {

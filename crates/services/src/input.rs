@@ -827,7 +827,11 @@ mod tests {
             Change::PointerSpeed(-0.3),
             Change::KeyboardRepeatRate(40),
             Change::TouchpadTapAndDrag(false),
-            Change::KeyboardLayouts(XkbSet::from_strings("us,de", ",nodeadkeys", "grp:alt_shift_toggle")),
+            Change::KeyboardLayouts(XkbSet::from_strings(
+                "us,de",
+                ",nodeadkeys",
+                "grp:alt_shift_toggle",
+            )),
         ];
         let mut expect = read_kdl(&doc);
         for change in &changes {
@@ -848,7 +852,10 @@ mod tests {
         write_kdl(&mut doc, Setting::TouchpadSpeed, &Val::Num(0.0)).unwrap();
         assert!(!kdl_edit::has(&doc, &["input", "touchpad", "accel-speed"]));
         write_kdl(&mut doc, Setting::XkbOptions, &Val::Text(String::new())).unwrap();
-        assert!(!kdl_edit::has(&doc, &["input", "keyboard", "xkb", "options"]));
+        assert!(!kdl_edit::has(
+            &doc,
+            &["input", "keyboard", "xkb", "options"]
+        ));
     }
 
     #[test]

@@ -137,7 +137,8 @@ impl ManagedService for MicSubscriber {
     }
 
     fn memory_bytes(&self) -> usize {
-        size_of::<MicData>() + self.data.lock_ref().settings.user_presets.len() * size_of::<Preset>()
+        size_of::<MicData>()
+            + self.data.lock_ref().settings.user_presets.len() * size_of::<Preset>()
     }
 
     fn start(&self) {

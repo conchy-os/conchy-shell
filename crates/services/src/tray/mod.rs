@@ -281,11 +281,7 @@ async fn fetch_icon(proxy: &StatusNotifierItemProxy<'_>) -> Option<TrayIcon> {
     // path (Flutter, Electron and Qt apps do this), or a file in the item's
     // own `IconThemePath`.
     let name = proxy.icon_name().await.ok().filter(|n| !n.is_empty())?;
-    let theme_path = proxy
-        .icon_theme_path()
-        .await
-        .ok()
-        .filter(|p| !p.is_empty());
+    let theme_path = proxy.icon_theme_path().await.ok().filter(|p| !p.is_empty());
 
     Some(match resolve_icon_file(&name, theme_path.as_deref()) {
         Some(path) => TrayIcon::Path(path),

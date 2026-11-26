@@ -152,9 +152,7 @@ impl Group {
     fn running(self, data: &MicData) -> bool {
         let stages = chain::stages(&data.settings.voice, &data.plugins);
         match self {
-            Group::Noise => {
-                stages.contains(&Stage::RnNoise) || stages.contains(&Stage::DeepFilter)
-            }
+            Group::Noise => stages.contains(&Stage::RnNoise) || stages.contains(&Stage::DeepFilter),
             Group::Rumble => stages.contains(&Stage::Highpass),
             Group::Gate => stages.contains(&Stage::Gate),
             Group::Equalizer => stages.contains(&Stage::Equalizer),
@@ -304,9 +302,8 @@ impl MicModule {
             .metadata(Metadata::label("Chain", self.chain_summary()));
         let missing = self.data.missing_packages();
         if !missing.is_empty() {
-            detail = detail.metadata(
-                Metadata::label("Missing", missing.join(", ")).color(Color::Warning),
-            );
+            detail = detail
+                .metadata(Metadata::label("Missing", missing.join(", ")).color(Color::Warning));
         }
         if let MicEngineState::Failed(reason) = &self.data.engine {
             detail = detail.metadata(Metadata::label("Error", reason.clone()).color(Color::Error));
@@ -341,7 +338,10 @@ impl MicModule {
         Item::new(format!("group:{}", group.id()), group.title())
             .subtitle(group.about())
             .icon(group.icon())
-            .keywords(format!("{} microphone effect", group.title().to_lowercase()))
+            .keywords(format!(
+                "{} microphone effect",
+                group.title().to_lowercase()
+            ))
             .accessory(tag)
             .detail(Detail::new().form(move |form, cx| group_form(form, group, &subscriber, cx)))
             .actions(self.common(system::edit(), cx))
@@ -489,14 +489,21 @@ impl MicModule {
                             .size(TextSize::Default)
                             .weight(FontWeight::MEDIUM),
                     )
-                    .child(Label::new(status).size(TextSize::XSmall).color(status_color)),
+                    .child(
+                        Label::new(status)
+                            .size(TextSize::XSmall)
+                            .color(status_color),
+                    ),
             )
             .child(power);
 
         // The chain, left to right: a stage that is on is lit, one waiting
         // for a plugin is a warning.
-        let strip = h_flex().w_full().flex_wrap().gap(Spacing::Small.pixels()).children(
-            Group::ALL.iter().map(|group| {
+        let strip = h_flex()
+            .w_full()
+            .flex_wrap()
+            .gap(Spacing::Small.pixels())
+            .children(Group::ALL.iter().map(|group| {
                 let on = group.on(data);
                 let color = match (on, group.running(data)) {
                     (false, _) => Color::Disabled,
@@ -508,9 +515,12 @@ impl MicModule {
                     .py(px(2.))
                     .rounded(Radius::Medium.pixels())
                     .bg(theme.colors.element_background)
-                    .child(Label::new(group.short()).size(TextSize::XSmall).color(color))
-            }),
-        );
+                    .child(
+                        Label::new(group.short())
+                            .size(TextSize::XSmall)
+                            .color(color),
+                    )
+            }));
 
         let footer = h_flex()
             .w_full()
@@ -525,9 +535,13 @@ impl MicModule {
                 .color(Color::Accent),
             )
             .child(
-                Label::new(data.input_description().unwrap_or("No microphone").to_string())
-                    .size(TextSize::XSmall)
-                    .color(Color::Muted),
+                Label::new(
+                    data.input_description()
+                        .unwrap_or("No microphone")
+                        .to_string(),
+                )
+                .size(TextSize::XSmall)
+                .color(Color::Muted),
             );
 
         div()
@@ -653,33 +667,164 @@ fn group_form(form: &mut Form, group: Group, subscriber: &MicSubscriber, cx: &Ap
             }
         }
         Group::Rumble => {
-            switch(form, subscriber, Param::HighpassOn, "Rumble filter", "Cut everything below the frequency", cx);
-            number(form, subscriber, Param::HighpassHz, "Cutoff", "Voices rarely go below 80 Hz", "Hz", cx);
+            switch(
+                form,
+                subscriber,
+                Param::HighpassOn,
+                "Rumble filter",
+                "Cut everything below the frequency",
+                cx,
+            );
+            number(
+                form,
+                subscriber,
+                Param::HighpassHz,
+                "Cutoff",
+                "Voices rarely go below 80 Hz",
+                "Hz",
+                cx,
+            );
         }
         Group::Gate => {
-            switch(form, subscriber, Param::GateOn, "Noise gate", "Quiet the microphone when nobody speaks", cx);
-            number(form, subscriber, Param::GateThreshold, "Threshold", "The gate opens above this level", "dB", cx);
-            number(form, subscriber, Param::GateReduction, "Closed level", "How far the sound drops while the gate is closed", "dB", cx);
+            switch(
+                form,
+                subscriber,
+                Param::GateOn,
+                "Noise gate",
+                "Quiet the microphone when nobody speaks",
+                cx,
+            );
+            number(
+                form,
+                subscriber,
+                Param::GateThreshold,
+                "Threshold",
+                "The gate opens above this level",
+                "dB",
+                cx,
+            );
+            number(
+                form,
+                subscriber,
+                Param::GateReduction,
+                "Closed level",
+                "How far the sound drops while the gate is closed",
+                "dB",
+                cx,
+            );
         }
         Group::Equalizer => {
-            switch(form, subscriber, Param::EqOn, "Equalizer", "Shape the tone of the voice", cx);
-            number(form, subscriber, Param::EqLow, "Warmth", "Body of the voice, around 120 Hz", "dB", cx);
-            number(form, subscriber, Param::EqMud, "Mud", "Boxy, muffled sound, around 300 Hz. Cut it to clear the voice", "dB", cx);
-            number(form, subscriber, Param::EqPresence, "Presence", "Clarity and intelligibility, around 3.5 kHz", "dB", cx);
-            number(form, subscriber, Param::EqAir, "Air", "Brightness above 10 kHz", "dB", cx);
+            switch(
+                form,
+                subscriber,
+                Param::EqOn,
+                "Equalizer",
+                "Shape the tone of the voice",
+                cx,
+            );
+            number(
+                form,
+                subscriber,
+                Param::EqLow,
+                "Warmth",
+                "Body of the voice, around 120 Hz",
+                "dB",
+                cx,
+            );
+            number(
+                form,
+                subscriber,
+                Param::EqMud,
+                "Mud",
+                "Boxy, muffled sound, around 300 Hz. Cut it to clear the voice",
+                "dB",
+                cx,
+            );
+            number(
+                form,
+                subscriber,
+                Param::EqPresence,
+                "Presence",
+                "Clarity and intelligibility, around 3.5 kHz",
+                "dB",
+                cx,
+            );
+            number(
+                form,
+                subscriber,
+                Param::EqAir,
+                "Air",
+                "Brightness above 10 kHz",
+                "dB",
+                cx,
+            );
         }
         Group::Compressor => {
-            switch(form, subscriber, Param::CompOn, "Compressor", "Bring loud and quiet speech closer together", cx);
-            number(form, subscriber, Param::CompThreshold, "Threshold", "Sound above this level is compressed", "dB", cx);
-            number(form, subscriber, Param::CompRatio, "Ratio", "How hard the loud part is pushed down", ":1", cx);
-            number(form, subscriber, Param::CompMakeup, "Makeup gain", "Brings the level back up afterwards", "dB", cx);
+            switch(
+                form,
+                subscriber,
+                Param::CompOn,
+                "Compressor",
+                "Bring loud and quiet speech closer together",
+                cx,
+            );
+            number(
+                form,
+                subscriber,
+                Param::CompThreshold,
+                "Threshold",
+                "Sound above this level is compressed",
+                "dB",
+                cx,
+            );
+            number(
+                form,
+                subscriber,
+                Param::CompRatio,
+                "Ratio",
+                "How hard the loud part is pushed down",
+                ":1",
+                cx,
+            );
+            number(
+                form,
+                subscriber,
+                Param::CompMakeup,
+                "Makeup gain",
+                "Brings the level back up afterwards",
+                "dB",
+                cx,
+            );
         }
         Group::Limiter => {
-            switch(form, subscriber, Param::LimiterOn, "Limiter", "Nothing gets louder than the ceiling", cx);
-            number(form, subscriber, Param::LimiterCeiling, "Ceiling", "The loudest the voice may get", "dB", cx);
+            switch(
+                form,
+                subscriber,
+                Param::LimiterOn,
+                "Limiter",
+                "Nothing gets louder than the ceiling",
+                cx,
+            );
+            number(
+                form,
+                subscriber,
+                Param::LimiterCeiling,
+                "Ceiling",
+                "The loudest the voice may get",
+                "dB",
+                cx,
+            );
         }
         Group::Gain => {
-            number(form, subscriber, Param::OutputGain, "Output gain", "Volume of the voice after all the effects", "dB", cx);
+            number(
+                form,
+                subscriber,
+                Param::OutputGain,
+                "Output gain",
+                "Volume of the voice after all the effects",
+                "dB",
+                cx,
+            );
         }
     }
 
@@ -687,7 +832,13 @@ fn group_form(form: &mut Form, group: Group, subscriber: &MicSubscriber, cx: &Ap
 }
 
 /// What to install when the group asks for a plugin that is not there.
-fn missing_note(form: &mut Form, group: Group, data: &MicData, subscriber: &MicSubscriber, cx: &App) {
+fn missing_note(
+    form: &mut Form,
+    group: Group,
+    data: &MicData,
+    subscriber: &MicSubscriber,
+    cx: &App,
+) {
     if !group.on(data) || group.running(data) {
         return;
     }
@@ -721,7 +872,8 @@ impl LauncherPage for MicModule {
     fn content(&mut self, _query: &str, cx: &mut Context<Self>) -> Content {
         let settings = &self.data.settings;
         let active = settings.active_preset();
-        let (builtin, user): (Vec<_>, Vec<_>) = settings.presets().partition(|preset| preset.builtin);
+        let (builtin, user): (Vec<_>, Vec<_>) =
+            settings.presets().partition(|preset| preset.builtin);
 
         let mut list = List::new()
             .show_detail(true)
@@ -744,7 +896,9 @@ impl LauncherPage for MicModule {
                 Section::new("Presets").items(
                     builtin
                         .iter()
-                        .map(|preset| self.preset_item(preset, active.as_deref() == Some(&preset.name), cx))
+                        .map(|preset| {
+                            self.preset_item(preset, active.as_deref() == Some(&preset.name), cx)
+                        })
                         .collect::<Vec<_>>(),
                 ),
             );
@@ -752,7 +906,9 @@ impl LauncherPage for MicModule {
             list = list.section(
                 Section::new("My Presets").items(
                     user.iter()
-                        .map(|preset| self.preset_item(preset, active.as_deref() == Some(&preset.name), cx))
+                        .map(|preset| {
+                            self.preset_item(preset, active.as_deref() == Some(&preset.name), cx)
+                        })
                         .collect::<Vec<_>>(),
                 ),
             );
@@ -771,7 +927,11 @@ impl LauncherPage for MicModule {
         list.into()
     }
 
-    fn render_header(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+    fn render_header(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         Some(self.card(cx))
     }
 }

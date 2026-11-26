@@ -130,7 +130,10 @@ impl Autostart {
                 .collect();
             files.sort();
             for path in files {
-                let Some(id) = path.file_name().and_then(|n| n.to_str()).map(str::to_string)
+                let Some(id) = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(str::to_string)
                 else {
                     continue;
                 };
@@ -174,8 +177,8 @@ impl Autostart {
             None
         };
 
-        let shadows_system = origin == Origin::User
-            && self.system.iter().any(|dir| dir.join(id).is_file());
+        let shadows_system =
+            origin == Origin::User && self.system.iter().any(|dir| dir.join(id).is_file());
 
         Some(Entry {
             id: id.to_string(),
@@ -214,9 +217,13 @@ impl Autostart {
     /// once the switch is cleared: dropping the file loses nothing.
     fn is_pure_override(&self, id: &str, cleared_user_text: &str) -> bool {
         let strip = |text: &str| {
-            set_key(&set_key(text, "Hidden", None), "X-GNOME-Autostart-enabled", None)
-                .trim()
-                .to_string()
+            set_key(
+                &set_key(text, "Hidden", None),
+                "X-GNOME-Autostart-enabled",
+                None,
+            )
+            .trim()
+            .to_string()
         };
         self.system
             .iter()
@@ -245,7 +252,11 @@ impl Autostart {
             .with_context(|| format!("Failed to read {}", entry.path.display()))?;
 
         if enabled {
-            let cleared = set_key(&set_key(&text, "Hidden", None), "X-GNOME-Autostart-enabled", None);
+            let cleared = set_key(
+                &set_key(&text, "Hidden", None),
+                "X-GNOME-Autostart-enabled",
+                None,
+            );
             // An override that only existed to say "off" goes away with it.
             if entry.origin == Origin::User
                 && entry.shadows_system
@@ -305,7 +316,10 @@ impl Autostart {
             .find(|e| e.id == id)
             .ok_or_else(|| anyhow!("no autostart entry {id}"))?;
         if !entry.removable() {
-            bail!("{} comes from the system; switch it off instead", entry.name);
+            bail!(
+                "{} comes from the system; switch it off instead",
+                entry.name
+            );
         }
         // `remove_file` on a symlink removes the link and leaves the file it
         // points at, which is what a dotfiles repository wants.
@@ -370,9 +384,8 @@ fn program_exists(program: &str) -> bool {
     if path.is_absolute() {
         return path.is_file();
     }
-    std::env::var_os("PATH").is_some_and(|paths| {
-        std::env::split_paths(&paths).any(|dir| dir.join(program).is_file())
-    })
+    std::env::var_os("PATH")
+        .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(program).is_file()))
 }
 
 /// A file name for `name`: lower case letters and digits, dashes between.
@@ -386,7 +399,11 @@ fn slug(name: &str) -> String {
         }
     }
     let out = out.trim_end_matches('-').to_string();
-    if out.is_empty() { "startup".to_string() } else { out }
+    if out.is_empty() {
+        "startup".to_string()
+    } else {
+        out
+    }
 }
 
 /// `text` with `key` in its `[Desktop Entry]` group set to `value`, or the
@@ -437,7 +454,10 @@ mod tests {
         assert!(!off.enabled());
         assert!(root.path().join("user/blueman.desktop").is_file());
         // The system file is never touched.
-        assert_eq!(fs::read_to_string(root.path().join("etc/blueman.desktop")).unwrap(), APP);
+        assert_eq!(
+            fs::read_to_string(root.path().join("etc/blueman.desktop")).unwrap(),
+            APP
+        );
 
         a.set_enabled("blueman.desktop", true).unwrap();
         let on = &a.list()[0];
@@ -456,7 +476,12 @@ mod tests {
         std::os::unix::fs::symlink(&repo, &link).unwrap();
 
         a.set_enabled("app.desktop", false).unwrap();
-        assert!(fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+        assert!(
+            fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         assert!(fs::read_to_string(&repo).unwrap().contains("Hidden=true"));
         assert!(!a.list()[0].enabled());
 
@@ -513,7 +538,8 @@ mod tests {
 
     #[test]
     fn set_key_keeps_everything_else() {
-        let text = "# c\n[Desktop Entry]\nName=A\nHidden=false\nExec=x\n\n[Desktop Action Y]\nName=Y\n";
+        let text =
+            "# c\n[Desktop Entry]\nName=A\nHidden=false\nExec=x\n\n[Desktop Action Y]\nName=Y\n";
         let out = set_key(text, "Hidden", Some("true"));
         assert!(out.contains("# c"));
         assert!(out.contains("Hidden=true"));

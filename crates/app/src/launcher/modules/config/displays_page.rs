@@ -77,7 +77,11 @@ fn displays_form(form: &mut Form, model: &Entity<DisplayModel>, cx: &App) {
     let m = model.read(cx);
     if !m.supported() {
         rows::title(form, "Displays & Monitors", "");
-        rows::note(form, "Mango has no way to change display settings from outside.", Color::Warning);
+        rows::note(
+            form,
+            "Mango has no way to change display settings from outside.",
+            Color::Warning,
+        );
         return;
     }
     match &m.state {
@@ -88,12 +92,20 @@ fn displays_form(form: &mut Form, model: &Entity<DisplayModel>, cx: &App) {
         }
         State::Failed(err) => {
             rows::title(form, "Displays & Monitors", "");
-            rows::note(form, format!("Could not read the displays: {err}"), Color::Error);
+            rows::note(
+                form,
+                format!("Could not read the displays: {err}"),
+                Color::Error,
+            );
             return;
         }
         State::Ready(monitors) if monitors.is_empty() => {
             rows::title(form, "Displays & Monitors", "");
-            rows::note(form, "The compositor reported no video outputs.", Color::Muted);
+            rows::note(
+                form,
+                "The compositor reported no video outputs.",
+                Color::Muted,
+            );
             return;
         }
         State::Ready(_) => {}
@@ -129,7 +141,10 @@ fn displays_form(form: &mut Form, model: &Entity<DisplayModel>, cx: &App) {
         );
         rows::note(
             form,
-            format!("Going back in {} s unless you keep them.", revert.seconds_left),
+            format!(
+                "Going back in {} s unless you keep them.",
+                revert.seconds_left
+            ),
             Color::Warning,
         );
     }
@@ -212,7 +227,11 @@ fn profiles_form(form: &mut Form, model: &Entity<DisplayModel>, cx: &App) {
             let (model, name, auto) = (model.clone(), name.clone(), profile.auto);
             actions.push(
                 Action::new(
-                    if auto { "Stop applying automatically" } else { "Apply automatically" },
+                    if auto {
+                        "Stop applying automatically"
+                    } else {
+                        "Apply automatically"
+                    },
                     move |_, cx| {
                         model.update(cx, |m, cx| m.set_profile_auto(&name, !auto, cx));
                         Outcome::Stay
@@ -245,7 +264,11 @@ fn profiles_form(form: &mut Form, model: &Entity<DisplayModel>, cx: &App) {
             );
         }
 
-        let outputs: Vec<&str> = profile.outputs.iter().map(|o| o.config.output.as_str()).collect();
+        let outputs: Vec<&str> = profile
+            .outputs
+            .iter()
+            .map(|o| o.config.output.as_str())
+            .collect();
         let tag = if applied {
             Some(("Active".into(), Color::Success))
         } else if !fits {
@@ -261,7 +284,11 @@ fn profiles_form(form: &mut Form, model: &Entity<DisplayModel>, cx: &App) {
                 subtitle: format!(
                     "{}{}",
                     outputs.join(", "),
-                    if profile.auto { " • applied automatically" } else { "" }
+                    if profile.auto {
+                        " • applied automatically"
+                    } else {
+                        ""
+                    }
                 )
                 .into(),
                 tag,
@@ -276,9 +303,17 @@ fn profiles_form(form: &mut Form, model: &Entity<DisplayModel>, cx: &App) {
 
 /// A display's size in the compositor's coordinates: scaled and turned.
 pub(super) fn logical_size(m: &Monitor) -> (i32, i32) {
-    let scale = if m.scale > 0.0 { f64::from(m.scale) } else { 1.0 };
+    let scale = if m.scale > 0.0 {
+        f64::from(m.scale)
+    } else {
+        1.0
+    };
     let (w, h) = (f64::from(m.width) / scale, f64::from(m.height) / scale);
-    let (w, h) = if matches!(m.transform, 1 | 3 | 5 | 7) { (h, w) } else { (w, h) };
+    let (w, h) = if matches!(m.transform, 1 | 3 | 5 | 7) {
+        (h, w)
+    } else {
+        (w, h)
+    };
     (w.round() as i32, h.round() as i32)
 }
 
@@ -324,7 +359,11 @@ fn monitor_form(form: &mut Form, model: &Entity<DisplayModel>, name: &str, cx: &
     rows::title(
         form,
         &title_of(mon),
-        if mon.is_focused { "Focused display" } else { "" },
+        if mon.is_focused {
+            "Focused display"
+        } else {
+            ""
+        },
     );
 
     let on_off = {
@@ -352,10 +391,18 @@ fn monitor_form(form: &mut Form, model: &Entity<DisplayModel>, name: &str, cx: &
             cx,
         );
     } else {
-        rows::note(form, "This is the only display on, so it cannot be turned off.", Color::Muted);
+        rows::note(
+            form,
+            "This is the only display on, so it cannot be turned off.",
+            Color::Muted,
+        );
     }
     if mon.is_disabled {
-        rows::note(form, "Turn the display on to change its settings.", Color::Muted);
+        rows::note(
+            form,
+            "Turn the display on to change its settings.",
+            Color::Muted,
+        );
         footer(form, m);
         return;
     }
@@ -374,7 +421,9 @@ fn monitor_form(form: &mut Form, model: &Entity<DisplayModel>, name: &str, cx: &
             .iter()
             .map(|(w, h)| SharedString::from(format!("{w} × {h}")))
             .collect();
-        let selected = sizes.iter().position(|&(w, h)| (w, h) == (mon.width, mon.height));
+        let selected = sizes
+            .iter()
+            .position(|&(w, h)| (w, h) == (mon.width, mon.height));
         let pick_size = {
             let (model, name, sizes) = (model.clone(), name.to_string(), sizes.clone());
             move |ix: usize, cx: &mut App| {
@@ -387,10 +436,9 @@ fn monitor_form(form: &mut Form, model: &Entity<DisplayModel>, name: &str, cx: &
                         move |c, mon| {
                             // The same refresh rate when the new size has it.
                             let rates = mon.refresh_rates(w, h);
-                            let keep = c
-                                .mode
-                                .as_ref()
-                                .and_then(|m| rates.iter().find(|r| (**r - m.refresh_rate).abs() < 0.05));
+                            let keep = c.mode.as_ref().and_then(|m| {
+                                rates.iter().find(|r| (**r - m.refresh_rate).abs() < 0.05)
+                            });
                             let rate = keep.or(rates.first()).copied().unwrap_or(60.0);
                             c.mode = Some(services::OutputMode {
                                 width: w,
@@ -419,7 +467,9 @@ fn monitor_form(form: &mut Form, model: &Entity<DisplayModel>, name: &str, cx: &
             .iter()
             .map(|r| SharedString::from(format!("{r:.2} Hz")))
             .collect();
-        let rate_selected = rates.iter().position(|r| (r - mon.refresh_rate).abs() < 0.05);
+        let rate_selected = rates
+            .iter()
+            .position(|r| (r - mon.refresh_rate).abs() < 0.05);
         let pick_rate = {
             let (model, name, rates) = (model.clone(), name.to_string(), rates.clone());
             move |ix: usize, cx: &mut App| {
@@ -484,7 +534,9 @@ fn monitor_form(form: &mut Form, model: &Entity<DisplayModel>, name: &str, cx: &
         format!("disp-rot-{name}"),
         "Rotation",
         "Turn the picture for a screen that stands on its side",
-        (0..4).map(|t| SharedString::from(rotation_label(t))).collect(),
+        (0..4)
+            .map(|t| SharedString::from(rotation_label(t)))
+            .collect(),
         (mon.transform < 4).then_some(mon.transform as usize),
         {
             let (model, name) = (model.clone(), name.to_string());
@@ -573,7 +625,11 @@ fn monitor_form(form: &mut Form, model: &Entity<DisplayModel>, name: &str, cx: &
             cx,
         );
     } else {
-        rows::note(form, "This display does not support variable refresh rate.", Color::Muted);
+        rows::note(
+            form,
+            "This display does not support variable refresh rate.",
+            Color::Muted,
+        );
     }
     footer(form, m);
 }
@@ -583,7 +639,11 @@ fn footer(form: &mut Form, m: &DisplayModel) {
         rows::note(
             form,
             notice.text.clone(),
-            if notice.error { Color::Error } else { Color::Muted },
+            if notice.error {
+                Color::Error
+            } else {
+                Color::Muted
+            },
         );
     }
 }
@@ -607,9 +667,18 @@ mod tests {
 
     #[test]
     fn logical_size_is_scaled_and_turned() {
-        assert_eq!(logical_size(&mon("a", 2880, 1800, 2.0, 0, 0, 0)), (1440, 900));
-        assert_eq!(logical_size(&mon("a", 1920, 1080, 1.0, 1, 0, 0)), (1080, 1920));
-        assert_eq!(logical_size(&mon("a", 3840, 2160, 1.5, 0, 0, 0)), (2560, 1440));
+        assert_eq!(
+            logical_size(&mon("a", 2880, 1800, 2.0, 0, 0, 0)),
+            (1440, 900)
+        );
+        assert_eq!(
+            logical_size(&mon("a", 1920, 1080, 1.0, 1, 0, 0)),
+            (1080, 1920)
+        );
+        assert_eq!(
+            logical_size(&mon("a", 3840, 2160, 1.5, 0, 0, 0)),
+            (2560, 1440)
+        );
     }
 
     #[test]

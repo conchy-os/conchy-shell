@@ -12,12 +12,12 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use futures_signals::signal::Mutable;
-use itertools::Itertools;
 use conchy_ipc::{
     Action, Event, Reply, Request, WorkspaceReferenceArg,
     state::{EventStreamState, EventStreamStatePart},
 };
+use futures_signals::signal::Mutable;
+use itertools::Itertools;
 use tracing::{debug, info, warn};
 
 use crate::lifecycle::RunToken;
@@ -74,15 +74,14 @@ pub fn execute_command(cmd: CompositorCommand) -> Result<()> {
             Action::CloseWindow { id: Some(id) }
         }
         CompositorCommand::ToggleMinimizeWindow(id) => {
-            let id = if let Some(id_str) = id {
-                Some(
-                    id_str
-                        .parse()
-                        .map_err(|_| anyhow!("Invalid window id '{}' for Conchy backend", id_str))?,
-                )
-            } else {
-                None
-            };
+            let id =
+                if let Some(id_str) = id {
+                    Some(id_str.parse().map_err(|_| {
+                        anyhow!("Invalid window id '{}' for Conchy backend", id_str)
+                    })?)
+                } else {
+                    None
+                };
             Action::ToggleWindowMinimized { id }
         }
         CompositorCommand::ToggleOverview => Action::ToggleOverview {},
@@ -110,10 +109,14 @@ pub fn execute_command(cmd: CompositorCommand) -> Result<()> {
                 3 => conchy_ipc::Transform::_270,
                 _ => conchy_ipc::Transform::Normal,
             };
-            return send_output_action(output, conchy_ipc::OutputAction::Transform { transform: t });
+            return send_output_action(
+                output,
+                conchy_ipc::OutputAction::Transform { transform: t },
+            );
         }
         CompositorCommand::SetOutputPosition { output, x, y } => {
-            let position = conchy_ipc::PositionToSet::Specific(conchy_ipc::ConfiguredPosition { x, y });
+            let position =
+                conchy_ipc::PositionToSet::Specific(conchy_ipc::ConfiguredPosition { x, y });
             return send_output_action(output, conchy_ipc::OutputAction::Position { position });
         }
         CompositorCommand::SetOutputVrr { output, enabled } => {
@@ -279,7 +282,9 @@ fn connect() -> Result<UnixStream> {
     let socket_path = env::var_os("CONCHY_SOCKET")
         .or_else(|| env::var_os("NIRI_SOCKET"))
         .or_else(|| env::var_os("NIRI_SOCKET_PATH"))
-        .ok_or_else(|| anyhow!("CONCHY_SOCKET, NIRI_SOCKET or NIRI_SOCKET_PATH environment variable not set"))?;
+        .ok_or_else(|| {
+            anyhow!("CONCHY_SOCKET, NIRI_SOCKET or NIRI_SOCKET_PATH environment variable not set")
+        })?;
 
     UnixStream::connect(socket_path).context("Failed to connect to Conchy WM socket")
 }

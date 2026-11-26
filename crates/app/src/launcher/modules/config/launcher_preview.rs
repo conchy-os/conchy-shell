@@ -86,6 +86,9 @@ pub fn launcher_preview(path: &ConfigPath<LauncherConfig>, cx: &App) -> AnyEleme
     };
     frame(
         screen(cx).child(area),
-        format!("{:.0} × {:.0} px · {placement}", config.width, config.height),
+        format!(
+            "{:.0} × {:.0} px · {placement}",
+            config.width, config.height
+        ),
     )
 }

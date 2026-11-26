@@ -53,7 +53,9 @@ async fn main() {
             Some("set") => {
                 let param = words.next().and_then(Param::from_key);
                 let value = words.next().and_then(|w| w.parse().ok());
-                param.zip(value).map(|(param, value)| MicCommand::Set(param, value))
+                param
+                    .zip(value)
+                    .map(|(param, value)| MicCommand::Set(param, value))
             }
             Some("preset") => rest().map(MicCommand::ApplyPreset),
             Some("save") => rest().map(MicCommand::SavePreset),

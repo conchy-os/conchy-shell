@@ -231,7 +231,13 @@ mod tests {
     #[test]
     fn strings_round_trip() {
         let set = XkbSet::from_strings("us, ru", ",phonetic", "grp:win_space_toggle");
-        assert_eq!(set.layouts, vec![LayoutEntry::new("us", ""), LayoutEntry::new("ru", "phonetic")]);
+        assert_eq!(
+            set.layouts,
+            vec![
+                LayoutEntry::new("us", ""),
+                LayoutEntry::new("ru", "phonetic")
+            ]
+        );
         assert_eq!(set.layout_string(), "us,ru");
         assert_eq!(set.variant_string(), ",phonetic");
         assert_eq!(set.switch_option(), Some("grp:win_space_toggle"));

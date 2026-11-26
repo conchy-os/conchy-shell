@@ -98,7 +98,8 @@ fn network_form(form: &mut Form, cx: &App) {
                     },
                     vec![
                         Action::new("Disconnect", move |_, _| {
-                            disconnect.dispatch(NetworkCommand::Disconnect(disconnect_name.clone()));
+                            disconnect
+                                .dispatch(NetworkCommand::Disconnect(disconnect_name.clone()));
                             Outcome::Stay
                         })
                         .icon(IconName::WifiOff),
@@ -164,19 +165,17 @@ fn network_form(form: &mut Form, cx: &App) {
             );
         }
         for ap in around {
-            let mut actions = vec![
-                {
-                    let (service, ssid) = (service.clone(), ap.ssid.clone());
-                    Action::new("Connect", move |_, _| {
-                        service.dispatch(NetworkCommand::Connect {
-                            ssid: ssid.clone(),
-                            password: None,
-                        });
-                        Outcome::Stay
-                    })
-                    .icon(IconName::Wifi)
-                },
-            ];
+            let mut actions = vec![{
+                let (service, ssid) = (service.clone(), ap.ssid.clone());
+                Action::new("Connect", move |_, _| {
+                    service.dispatch(NetworkCommand::Connect {
+                        ssid: ssid.clone(),
+                        password: None,
+                    });
+                    Outcome::Stay
+                })
+                .icon(IconName::Wifi)
+            }];
             if ap.known {
                 let (service, ssid) = (service.clone(), ap.ssid.clone());
                 actions.push(
@@ -201,7 +200,11 @@ fn network_form(form: &mut Form, cx: &App) {
                     subtitle: format!(
                         "{} • {} • channel {}",
                         ap.band(),
-                        if ap.public { "open" } else { ap.security.as_str() },
+                        if ap.public {
+                            "open"
+                        } else {
+                            ap.security.as_str()
+                        },
                         ap.channel()
                     )
                     .into(),
@@ -255,7 +258,11 @@ fn details_rows(form: &mut Form, conn: &ActiveConnectionInfo) {
                 );
             }
             if let Some(b) = bitrate {
-                rows::info(form, "Link speed", format!("{:.1} Mbps", f64::from(*b) / 1000.0));
+                rows::info(
+                    form,
+                    "Link speed",
+                    format!("{:.1} Mbps", f64::from(*b) / 1000.0),
+                );
             }
             rows::info(
                 form,

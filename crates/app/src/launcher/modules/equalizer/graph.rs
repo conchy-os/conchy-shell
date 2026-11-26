@@ -69,7 +69,10 @@ impl EqGraph {
     }
 
     /// Called with a band and its new gain whenever the pointer sets one.
-    pub fn on_change(mut self, handler: impl Fn(usize, f32, &mut Window, &mut App) + 'static) -> Self {
+    pub fn on_change(
+        mut self,
+        handler: impl Fn(usize, f32, &mut Window, &mut App) + 'static,
+    ) -> Self {
         self.on_change = Some(Rc::new(handler));
         self
     }
@@ -109,9 +112,8 @@ pub fn gain_label(gain: f32) -> String {
 impl RenderOnce for EqGraph {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let colors = *cx.theme().colors();
-        let dragging = window.use_keyed_state((self.id.clone(), "eq-drag"), cx, |_, _| {
-            Dragging::default()
-        });
+        let dragging =
+            window.use_keyed_state((self.id.clone(), "eq-drag"), cx, |_, _| Dragging::default());
 
         // A grabbed band shows where the pointer is, not where the service
         // last said it was.
@@ -214,22 +216,19 @@ impl RenderOnce for EqGraph {
         });
 
         let gain_row = h_flex().w_full().children((0..BAND_COUNT).map(|band| {
-            div()
-                .flex_1()
-                .flex()
-                .justify_center()
-                .child(
-                    Label::new(gain_label(gains[band]))
-                        .size(TextSize::XSmall)
-                        .color(if band == self.selected {
-                            Color::Accent
-                        } else {
-                            Color::Muted
-                        }),
-                )
+            div().flex_1().flex().justify_center().child(
+                Label::new(gain_label(gains[band]))
+                    .size(TextSize::XSmall)
+                    .color(if band == self.selected {
+                        Color::Accent
+                    } else {
+                        Color::Muted
+                    }),
+            )
         }));
-        let freq_row = h_flex().w_full().children(dsp::LABELS.iter().enumerate().map(
-            |(band, label)| {
+        let freq_row = h_flex()
+            .w_full()
+            .children(dsp::LABELS.iter().enumerate().map(|(band, label)| {
                 div().flex_1().flex().justify_center().child(
                     Label::new(*label)
                         .size(TextSize::XSmall)
@@ -239,8 +238,7 @@ impl RenderOnce for EqGraph {
                             Color::Muted
                         }),
                 )
-            },
-        ));
+            }));
 
         let mut area = div()
             .id(self.id.clone())

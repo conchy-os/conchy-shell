@@ -20,7 +20,11 @@ pub fn item(info: &std::rc::Rc<SystemInfo>) -> Item {
 }
 
 fn about_form(form: &mut Form, info: &SystemInfo, cx: &App) {
-    rows::title(form, "About System", "What this computer is and what it runs");
+    rows::title(
+        form,
+        "About System",
+        "What this computer is and what it runs",
+    );
 
     rows::heading(form, "Operating system");
     rows::info(form, "System", info.os_name.clone());
@@ -40,7 +44,13 @@ fn about_form(form: &mut Form, info: &SystemInfo, cx: &App) {
 
     let summary: SharedString = format!(
         "OS: {}\nKernel: {}\nHost: {}\nCPU: {}\nMemory: {}\nCompositor: {}\nUptime: {}",
-        info.os_name, info.kernel, info.hostname, info.cpu, info.memory, info.compositor, info.uptime
+        info.os_name,
+        info.kernel,
+        info.hostname,
+        info.cpu,
+        info.memory,
+        info.compositor,
+        info.uptime
     )
     .into();
     rows::heading(form, "Share");

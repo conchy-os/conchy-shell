@@ -15,16 +15,16 @@ pub mod row;
 use std::ops::Range;
 
 use gpui::{
-    AnyElement, App, Bounds, ClickEvent, Context, EntityId, FocusHandle, Focusable,
-    MouseButton, Pixels, Point, ScrollHandle, SharedString, Size, Subscription, Window,
+    AnyElement, App, Bounds, ClickEvent, Context, EntityId, FocusHandle, Focusable, MouseButton,
+    Pixels, Point, ScrollHandle, SharedString, Size, Subscription, Window,
     WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div, layer_shell::*,
     prelude::*, px, relative, size,
 };
 use ui::patterns::{LauncherFrame, footer_hints};
 use ui::{
-    ActiveTheme, Color, Icon, IconSize, InputBuffer, Label, LabelCommon, Radius,
-    ScrollStrategy, Scrollbar, Spacing, TextSize, ThumbnailCache, VirtualList,
-    VirtualListScrollHandle, render_input_line,
+    ActiveTheme, Color, Icon, IconSize, InputBuffer, Label, LabelCommon, Radius, ScrollStrategy,
+    Scrollbar, Spacing, TextSize, ThumbnailCache, VirtualList, VirtualListScrollHandle,
+    render_input_line,
 };
 
 use self::action::{Action, ActionPanel, Outcome};
@@ -53,7 +53,10 @@ enum Layout {
         show_detail: bool,
         click_selects: bool,
     },
-    Grid { columns: usize, aspect_ratio: f32 },
+    Grid {
+        columns: usize,
+        aspect_ratio: f32,
+    },
 }
 
 /// A page's content with the list/grid distinction folded into [`Layout`].
@@ -66,12 +69,15 @@ enum Body {
 impl From<Content> for Body {
     fn from(content: Content) -> Self {
         match content {
-            Content::List(list) => Body::Collection(
-                list.map_layout(|ListLayout { show_detail, click_selects }| Layout::List {
+            Content::List(list) => Body::Collection(list.map_layout(
+                |ListLayout {
+                     show_detail,
+                     click_selects,
+                 }| Layout::List {
                     show_detail,
                     click_selects,
-                }),
-            ),
+                },
+            )),
             Content::Grid(grid) => Body::Collection(grid.map_layout(
                 |GridLayout {
                      columns,
@@ -466,7 +472,10 @@ impl Launcher {
     /// view's when it has none.
     fn current_actions(&self) -> Option<&ActionPanel> {
         if let Some(focus) = &self.detail_focus {
-            return focus.controls.get(focus.index).map(|control| &control.actions);
+            return focus
+                .controls
+                .get(focus.index)
+                .map(|control| &control.actions);
         }
         self.selected_item()
             .map(|item| &item.actions)
@@ -1089,15 +1098,20 @@ impl Launcher {
                         .into_any_element();
                 };
                 let selected_detail = self.selected_item().and_then(|item| item.detail.as_ref());
-                let form = selected_detail.and_then(|detail| detail.form.as_ref()).map(|build| {
-                    let mut form = Form::new(self.detail_focus.as_ref().map(|focus| focus.index));
-                    build(&mut form, cx);
-                    // Scrolls in this frame's prepaint, once the rows have bounds.
-                    if self.reveal_focus && let Some(row) = form.focused_row {
-                        self.detail_scroll.scroll_to_item(row);
-                    }
-                    form.rows
-                });
+                let form = selected_detail
+                    .and_then(|detail| detail.form.as_ref())
+                    .map(|build| {
+                        let mut form =
+                            Form::new(self.detail_focus.as_ref().map(|focus| focus.index));
+                        build(&mut form, cx);
+                        // Scrolls in this frame's prepaint, once the rows have bounds.
+                        if self.reveal_focus
+                            && let Some(row) = form.focused_row
+                        {
+                            self.detail_scroll.scroll_to_item(row);
+                        }
+                        form.rows
+                    });
                 let detail = match form {
                     Some(_) => None,
                     None => selected_detail.map(|detail| detail::render_detail(detail, cx)),
@@ -1293,8 +1307,14 @@ pub fn launcher_target_size(
     let (mod_width, mod_height) = match module_id {
         "config" => (config.modules.config.width, config.modules.config.height),
         "apps" => (config.modules.apps.width, config.modules.apps.height),
-        "clipboard" => (config.modules.clipboard.width, config.modules.clipboard.height),
-        "wallpaper" => (config.modules.wallpaper.width, config.modules.wallpaper.height),
+        "clipboard" => (
+            config.modules.clipboard.width,
+            config.modules.clipboard.height,
+        ),
+        "wallpaper" => (
+            config.modules.wallpaper.width,
+            config.modules.wallpaper.height,
+        ),
         "themes" => (config.modules.themes.width, config.modules.themes.height),
         "shell" => (config.modules.shell.width, config.modules.shell.height),
         _ => (None, None),

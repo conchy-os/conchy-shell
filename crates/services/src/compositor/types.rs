@@ -31,7 +31,10 @@ pub struct OutputMode {
 
 impl OutputMode {
     pub fn label(&self) -> String {
-        format!("{}x{} @ {:.1} Hz", self.width, self.height, self.refresh_rate)
+        format!(
+            "{}x{} @ {:.1} Hz",
+            self.width, self.height, self.refresh_rate
+        )
     }
 
     /// `2880x1800@59.99Hz`, as Hyprland lists modes.
@@ -84,7 +87,11 @@ impl OutputConfig {
             output: m.name.clone(),
             enabled: !m.is_disabled,
             mode,
-            scale: if m.scale > 0.0 { f64::from(m.scale) } else { 1.0 },
+            scale: if m.scale > 0.0 {
+                f64::from(m.scale)
+            } else {
+                1.0
+            },
             transform: m.transform,
             x: m.x,
             y: m.y,
@@ -348,31 +355,15 @@ pub enum CompositorCommand {
         refresh_rate: f64,
     },
     /// Set an output scale factor.
-    SetOutputScale {
-        output: String,
-        scale: f64,
-    },
+    SetOutputScale { output: String, scale: f64 },
     /// Set an output transform / rotation (0 = 0°, 1 = 90°, 2 = 180°, 3 = 270°).
-    SetOutputTransform {
-        output: String,
-        transform: u16,
-    },
+    SetOutputTransform { output: String, transform: u16 },
     /// Set an output position.
-    SetOutputPosition {
-        output: String,
-        x: i32,
-        y: i32,
-    },
+    SetOutputPosition { output: String, x: i32, y: i32 },
     /// Set an output VRR (variable refresh rate).
-    SetOutputVrr {
-        output: String,
-        enabled: bool,
-    },
+    SetOutputVrr { output: String, enabled: bool },
     /// Set an output power on/off.
-    SetOutputPower {
-        output: String,
-        on: bool,
-    },
+    SetOutputPower { output: String, on: bool },
     /// Set up an output completely: mode, scale, rotation, position, VRR and
     /// whether it is on. One change for the display, not one per field.
     ApplyOutput(OutputConfig),

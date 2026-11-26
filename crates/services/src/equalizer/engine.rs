@@ -39,7 +39,7 @@ use tracing::{debug, info, warn};
 
 use super::dsp::{self, BAND_COUNT};
 use super::model::{self, Settings};
-use super::{EqualizerCommand, EqualizerData, EngineState, OutputDevice};
+use super::{EngineState, EqualizerCommand, EqualizerData, OutputDevice};
 use crate::jobs::JobReceiver;
 use crate::lifecycle::RunToken;
 use crate::pwutil::{self, default_name as default_sink_name, params_pod, quoted, runtime_file};
@@ -338,10 +338,12 @@ impl Engine {
     }
 
     pub fn on_wake(&self, jobs: &Mutex<JobReceiver<EqualizerCommand>>) {
-        jobs.lock().unwrap_or_else(PoisonError::into_inner).drain(|command| {
-            self.apply(command);
-            Ok(())
-        });
+        jobs.lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .drain(|command| {
+                self.apply(command);
+                Ok(())
+            });
     }
 
     pub fn on_tick(&self) {
@@ -474,7 +476,10 @@ impl Engine {
             return;
         };
 
-        if running_output.as_ref().is_some_and(|current| *current != output) {
+        if running_output
+            .as_ref()
+            .is_some_and(|current| *current != output)
+        {
             info!("Output changed to {output}, rebuilding the equalizer chain");
             self.stop_chain();
         }
@@ -825,7 +830,9 @@ mod tests {
         assert!(text.contains("target.object = \"alsa_output.pci-0000_00_1b.0.analog-stereo\""));
         // The first band starts at its gain, so there is no jump when the
         // live update arrives.
-        assert!(text.contains("name = band_0 label = bq_lowshelf control = { Freq = 31.25 Q = 0.80 Gain = 4.0 }"));
+        assert!(text.contains(
+            "name = band_0 label = bq_lowshelf control = { Freq = 31.25 Q = 0.80 Gain = 4.0 }"
+        ));
     }
 
     #[test]
@@ -846,6 +853,4 @@ mod tests {
         assert!((controls[0].1 - 0.501).abs() < 0.01);
         assert_eq!(controls[4], ("band_3:Gain".to_string(), -2.5));
     }
-
-
 }

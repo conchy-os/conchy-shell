@@ -6,8 +6,8 @@ use gpui::{App, AppContext, Context, Entity, SharedString, div, prelude::*, px};
 use services::input::{Change, InputBackend};
 use services::xkb::{LayoutEntry, XkbCatalog, XkbSet};
 use ui::{
-    Color, IconButton, IconName, IconSize, Label, LabelCommon, Spacing, TextSize, h_flex,
-    ButtonCommon, Clickable, Tooltip,
+    ButtonCommon, Clickable, Color, IconButton, IconName, IconSize, Label, LabelCommon, Spacing,
+    TextSize, Tooltip, h_flex,
 };
 
 use super::form::{control_frame, labeled_row};
@@ -15,7 +15,9 @@ use super::input_model::{InputModel, State};
 use super::select::select;
 use super::settings_form::{self as rows, Number};
 use crate::launcher::action::{Action, ActionPanel, Outcome};
-use crate::launcher::content::{Accessory, Content, Control, Detail, EmptyView, Form, Item, List, Section};
+use crate::launcher::content::{
+    Accessory, Content, Control, Detail, EmptyView, Form, Item, List, Section,
+};
 use crate::launcher::page::{LauncherPage, Page};
 
 /// The row of the layouts and of typing, with their form beside it.
@@ -29,7 +31,11 @@ pub fn item(model: &Entity<InputModel>, cx: &App) -> Item {
             .iter()
             .map(|e| e.layout.to_uppercase())
             .collect();
-        (names.join(" · "), l.settings.keyboard.repeat_delay, l.settings.keyboard.repeat_rate)
+        (
+            names.join(" · "),
+            l.settings.keyboard.repeat_delay,
+            l.settings.keyboard.repeat_rate,
+        )
     });
     Item::new("keyboard", "Keyboard")
         .icon(IconName::Keyboard)
@@ -79,7 +85,11 @@ fn layouts_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
             return;
         }
         State::Failed(err) => {
-            rows::note(form, format!("Could not read the settings: {err}"), Color::Error);
+            rows::note(
+                form,
+                format!("Could not read the settings: {err}"),
+                Color::Error,
+            );
             return;
         }
         State::Ready(_) => {}
@@ -111,7 +121,10 @@ fn layouts_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
         labels.extend(options.iter().map(|o| SharedString::from(o.name.clone())));
         let selected = match xkb.switch_option() {
             None => Some(0),
-            Some(current) => options.iter().position(|o| o.code == current).map(|i| i + 1),
+            Some(current) => options
+                .iter()
+                .position(|o| o.code == current)
+                .map(|i| i + 1),
         };
         let codes: Vec<String> = options.iter().map(|o| o.code.clone()).collect();
         rows::choice(
@@ -126,7 +139,11 @@ fn layouts_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
                 let xkb = xkb.clone();
                 move |ix, cx| {
                     let mut set = xkb.clone();
-                    set.set_switch_option(ix.checked_sub(1).and_then(|i| codes.get(i)).map(String::as_str));
+                    set.set_switch_option(
+                        ix.checked_sub(1)
+                            .and_then(|i| codes.get(i))
+                            .map(String::as_str),
+                    );
                     model.update(cx, |m, cx| m.change(Change::KeyboardLayouts(set), cx));
                 }
             },
@@ -192,7 +209,10 @@ fn layout_row(
     let selected = if entry.variant.is_empty() {
         Some(0)
     } else {
-        codes.iter().position(|c| *c == entry.variant).map(|i| i + 1)
+        codes
+            .iter()
+            .position(|c| *c == entry.variant)
+            .map(|i| i + 1)
     };
 
     let set_variant = {
@@ -292,18 +312,25 @@ fn layout_row(
     let step = |forward: bool| {
         let set_variant = set_variant.clone();
         let total = labels.len();
-        Action::new(if forward { "Next variant" } else { "Previous variant" }, move |_, cx| {
-            if total > 1 {
-                let current = selected.unwrap_or(0);
-                let next = if forward {
-                    (current + 1) % total
-                } else {
-                    (current + total - 1) % total
-                };
-                set_variant(next, cx);
-            }
-            Outcome::Stay
-        })
+        Action::new(
+            if forward {
+                "Next variant"
+            } else {
+                "Previous variant"
+            },
+            move |_, cx| {
+                if total > 1 {
+                    let current = selected.unwrap_or(0);
+                    let next = if forward {
+                        (current + 1) % total
+                    } else {
+                        (current + total - 1) % total
+                    };
+                    set_variant(next, cx);
+                }
+                Outcome::Stay
+            },
+        )
     };
     let mut panel = ActionPanel::new().action(step(true).icon(IconName::ListTree));
     if index > 0 {
@@ -345,11 +372,7 @@ fn layout_row(
 
 fn typing_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
     let m = model.read(cx);
-    rows::title(
-        form,
-        "Typing",
-        "What happens when a key is held down",
-    );
+    rows::title(form, "Typing", "What happens when a key is held down");
     if m.backend == InputBackend::Unsupported {
         rows::note(form, m.backend.persistence_note(), Color::Warning);
         return;
@@ -381,7 +404,9 @@ fn typing_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
         {
             let model = model.clone();
             move |v, cx| {
-                model.update(cx, |m, cx| m.change(Change::KeyboardRepeatDelay(v as u32), cx))
+                model.update(cx, |m, cx| {
+                    m.change(Change::KeyboardRepeatDelay(v as u32), cx)
+                })
             }
         },
         cx,
@@ -402,7 +427,9 @@ fn typing_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
         {
             let model = model.clone();
             move |v, cx| {
-                model.update(cx, |m, cx| m.change(Change::KeyboardRepeatRate(v as u32), cx))
+                model.update(cx, |m, cx| {
+                    m.change(Change::KeyboardRepeatRate(v as u32), cx)
+                })
             }
         },
         cx,
@@ -447,7 +474,10 @@ impl CapsLock {
     fn of(set: &XkbSet) -> Self {
         Self::ALL
             .into_iter()
-            .find(|c| c.option().is_some_and(|o| set.options.iter().any(|x| x == o)))
+            .find(|c| {
+                c.option()
+                    .is_some_and(|o| set.options.iter().any(|x| x == o))
+            })
             .unwrap_or(Self::Default)
     }
 
@@ -482,7 +512,9 @@ impl LauncherPage for LayoutPicker {
             .placeholder("Search languages…");
         let Some(loaded) = self.model.read(cx).loaded() else {
             return list
-                .empty(EmptyView::new("The keyboard settings are not loaded").icon(IconName::Keyboard))
+                .empty(
+                    EmptyView::new("The keyboard settings are not loaded").icon(IconName::Keyboard),
+                )
                 .into();
         };
         let catalog = loaded.catalog.clone();
@@ -508,7 +540,11 @@ impl LauncherPage for LayoutPicker {
                 item = item.accessory(Accessory::tag("in use").color(Color::Accent));
             }
             item.actions(ActionPanel::new().action(Action::new(
-                if has_variants { "Choose variant…" } else { "Add" },
+                if has_variants {
+                    "Choose variant…"
+                } else {
+                    "Add"
+                },
                 {
                     let catalog = catalog.clone();
                     move |_, cx| {
@@ -532,7 +568,11 @@ impl LauncherPage for LayoutPicker {
 }
 
 fn add_layout(model: &Entity<InputModel>, entry: LayoutEntry, cx: &mut App) {
-    let Some(mut set) = model.read(cx).loaded().map(|l| l.settings.keyboard.xkb.clone()) else {
+    let Some(mut set) = model
+        .read(cx)
+        .loaded()
+        .map(|l| l.settings.keyboard.xkb.clone())
+    else {
         return;
     };
     if set.contains(&entry.layout, &entry.variant) {
@@ -555,7 +595,11 @@ impl VariantPicker {
         layout: String,
         cx: &mut App,
     ) -> Page {
-        Page::new(cx.new(|_| Self { model, catalog, layout }))
+        Page::new(cx.new(|_| Self {
+            model,
+            catalog,
+            layout,
+        }))
     }
 }
 
@@ -568,7 +612,11 @@ impl LauncherPage for VariantPicker {
             .to_string();
         let choose = |model: Entity<InputModel>, layout: String, variant: String| {
             Action::new("Add", move |_, cx| {
-                add_layout(&model, LayoutEntry::new(layout.clone(), variant.clone()), cx);
+                add_layout(
+                    &model,
+                    LayoutEntry::new(layout.clone(), variant.clone()),
+                    cx,
+                );
                 // Past the variants and the layouts.
                 Outcome::PopMany(2)
             })

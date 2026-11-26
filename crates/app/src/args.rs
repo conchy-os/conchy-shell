@@ -56,22 +56,28 @@ impl Args {
                 "close-window" => {
                     command = Some(IpcCommand::CloseWindow);
                 }
-                "osd" | "action" => {
-                    if i + 1 < raw_args.len() {
-                        i += 1;
-                        match raw_args[i].as_str() {
-                            "volume-up" | "volume+5" => command = Some(IpcCommand::AudioVolumeUp),
-                            "volume-down" | "volume-5" => command = Some(IpcCommand::AudioVolumeDown),
-                            "volume-mute" | "mute" => command = Some(IpcCommand::AudioVolumeMute),
-                            "brightness-up" | "brightness+5" => command = Some(IpcCommand::BrightnessUp),
-                            "brightness-down" | "brightness-5" => command = Some(IpcCommand::BrightnessDown),
-                            "toggle-launcher" => command = Some(IpcCommand::LauncherToggle { input: None }),
-                            "toggle-control-center" | "toggle-cc" => command = Some(IpcCommand::ControlCenterToggle),
-                            "toggle-overview" => command = Some(IpcCommand::OverviewToggle),
-                            "toggle-minimize" => command = Some(IpcCommand::MinimizeToggle),
-                            other => {
-                                eprintln!("Unknown sub-action: {}", other);
-                            }
+                "osd" | "action" if i + 1 < raw_args.len() => {
+                    i += 1;
+                    match raw_args[i].as_str() {
+                        "volume-up" | "volume+5" => command = Some(IpcCommand::AudioVolumeUp),
+                        "volume-down" | "volume-5" => command = Some(IpcCommand::AudioVolumeDown),
+                        "volume-mute" | "mute" => command = Some(IpcCommand::AudioVolumeMute),
+                        "brightness-up" | "brightness+5" => {
+                            command = Some(IpcCommand::BrightnessUp)
+                        }
+                        "brightness-down" | "brightness-5" => {
+                            command = Some(IpcCommand::BrightnessDown)
+                        }
+                        "toggle-launcher" => {
+                            command = Some(IpcCommand::LauncherToggle { input: None })
+                        }
+                        "toggle-control-center" | "toggle-cc" => {
+                            command = Some(IpcCommand::ControlCenterToggle)
+                        }
+                        "toggle-overview" => command = Some(IpcCommand::OverviewToggle),
+                        "toggle-minimize" => command = Some(IpcCommand::MinimizeToggle),
+                        other => {
+                            eprintln!("Unknown sub-action: {}", other);
                         }
                     }
                 }

@@ -202,7 +202,9 @@ pub(crate) fn generate_theme(
 
     cx.spawn(async move |cx| {
         let result = cx
-            .background_spawn(async move { Base16Palette::generate_from_wallpaper(&path, scheme.matugen_type()) })
+            .background_spawn(async move {
+                Base16Palette::generate_from_wallpaper(&path, scheme.matugen_type())
+            })
             .await;
         cx.update(|cx| {
             if cx.global::<GeneratedTheme>().id != id {
@@ -275,8 +277,8 @@ pub(crate) fn sync_theme_with_wallpaper(cx: &mut App) {
         cx.update(|cx| {
             let name = wallpaper_name(&path);
             let theme = cx.theme();
-            let follows_wallpaper =
-                theme.name == Theme::default().name || wallpaper_of_theme_name(&theme.name).is_some();
+            let follows_wallpaper = theme.name == Theme::default().name
+                || wallpaper_of_theme_name(&theme.name).is_some();
             let up_to_date = wallpaper_of_theme_name(&theme.name) == Some(name.as_ref());
             if follows_wallpaper && !up_to_date {
                 generate_theme(path, name, scheme, true, cx);
@@ -300,7 +302,13 @@ pub(crate) fn palette_chip(
     let swatch = |color: Hsla| div().size(px(10.)).rounded(Radius::Full.pixels()).bg(color);
 
     let swatches = if let Some(m) = material {
-        vec![m.primary, m.secondary, m.tertiary, m.surface_container, m.error]
+        vec![
+            m.primary,
+            m.secondary,
+            m.tertiary,
+            m.surface_container,
+            m.error,
+        ]
     } else {
         vec![
             palette.base05,
@@ -321,13 +329,18 @@ pub(crate) fn palette_chip(
         .rounded(Radius::Small.pixels())
         .bg(palette.base00)
         .border_1()
-        .border_color(if active { colors.primary } else { colors.border })
+        .border_color(if active {
+            colors.primary
+        } else {
+            colors.border
+        })
         .cursor_pointer()
         .hover(|s| s.border_color(colors.primary))
         .child(
-            div().flex().gap(px(2.)).children(
-                swatches.into_iter().map(swatch),
-            ),
+            div()
+                .flex()
+                .gap(px(2.))
+                .children(swatches.into_iter().map(swatch)),
         )
         .child(
             div()

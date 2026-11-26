@@ -58,17 +58,27 @@ pub(super) struct CastPending {
 
 impl CastPending {
     pub fn refuse(self) {
-        let _ = self.reply.send((response::CANCELLED, CastPickResult::default()));
+        let _ = self
+            .reply
+            .send((response::CANCELLED, CastPickResult::default()));
     }
 }
 
 /// Gather monitors and windows, then queue the picker.
 pub(super) fn request(id: String, req: CastPickRequest, reply: Reply, cx: &mut App) {
-    let monitors = if req.types & SOURCE_MONITOR != 0 { monitors(cx) } else { Vec::new() };
+    let monitors = if req.types & SOURCE_MONITOR != 0 {
+        monitors(cx)
+    } else {
+        Vec::new()
+    };
     let want_windows = req.types & SOURCE_WINDOW != 0;
     let (tx, rx) = oneshot::channel();
     tokio::spawn(async move {
-        let _ = tx.send(if want_windows { fetch_windows().await } else { Vec::new() });
+        let _ = tx.send(if want_windows {
+            fetch_windows().await
+        } else {
+            Vec::new()
+        });
     });
     cx.spawn(async move |cx| {
         let raw = rx.await.unwrap_or_default();
@@ -82,7 +92,16 @@ pub(super) fn request(id: String, req: CastPickRequest, reply: Reply, cx: &mut A
                     app_id,
                 })
                 .collect();
-            enqueue(Pending::Cast(CastPending { id, req, reply, monitors, windows }), cx);
+            enqueue(
+                Pending::Cast(CastPending {
+                    id,
+                    req,
+                    reply,
+                    monitors,
+                    windows,
+                }),
+                cx,
+            );
         });
     })
     .detach();
@@ -105,13 +124,18 @@ fn monitors(cx: &App) -> Vec<MonitorItem> {
         .unwrap_or_default()
         .split(',')
         .filter_map(|m| m.split_once(':'))
-        .map(|(n, size)| MonitorItem { connector: n.to_string(), label: format!("{n}  ({size})") })
+        .map(|(n, size)| MonitorItem {
+            connector: n.to_string(),
+            label: format!("{n}  ({size})"),
+        })
         .collect()
 }
 
 /// `(window id, title, app id)` from `Shell.Introspect.GetWindows`, titles sorted.
 async fn fetch_windows() -> Vec<(u64, String, String)> {
-    let Ok(conn) = services::bus::session().await else { return Vec::new() };
+    let Ok(conn) = services::bus::session().await else {
+        return Vec::new();
+    };
     let Ok(proxy) = zbus::Proxy::new(
         &conn,
         "org.gnome.Shell.Introspect",
@@ -122,22 +146,29 @@ async fn fetch_windows() -> Vec<(u64, String, String)> {
     else {
         return Vec::new();
     };
-    let windows: HashMap<u64, HashMap<String, OwnedValue>> = match proxy.call("GetWindows", &()).await {
-        Ok(w) => w,
-        Err(err) => {
-            tracing::warn!("Shell.Introspect.GetWindows failed: {err}");
-            return Vec::new();
-        }
-    };
+    let windows: HashMap<u64, HashMap<String, OwnedValue>> =
+        match proxy.call("GetWindows", &()).await {
+            Ok(w) => w,
+            Err(err) => {
+                tracing::warn!("Shell.Introspect.GetWindows failed: {err}");
+                return Vec::new();
+            }
+        };
     let text = |m: &HashMap<String, OwnedValue>, key: &str| {
-        m.get(key).and_then(|v| String::try_from(v.clone()).ok()).unwrap_or_default()
+        m.get(key)
+            .and_then(|v| String::try_from(v.clone()).ok())
+            .unwrap_or_default()
     };
     let mut out: Vec<_> = windows
         .iter()
         .map(|(id, m)| (*id, text(m, "title"), text(m, "app-id")))
         .filter(|(_, title, _)| title != DYNAMIC_TARGET_TITLE)
         .collect();
-    out.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()).then(a.0.cmp(&b.0)));
+    out.sort_by(|a, b| {
+        a.1.to_lowercase()
+            .cmp(&b.1.to_lowercase())
+            .then(a.0.cmp(&b.0))
+    });
     out
 }
 
@@ -211,7 +242,11 @@ impl CastPicker {
             dialog_closed(cx);
         })
         .detach();
-        let tab = if c.req.types & SOURCE_MONITOR != 0 { Tab::Screens } else { Tab::Windows };
+        let tab = if c.req.types & SOURCE_MONITOR != 0 {
+            Tab::Screens
+        } else {
+            Tab::Windows
+        };
         Self {
             id: c.id,
             req: c.req,
@@ -241,7 +276,13 @@ impl CastPicker {
             Tab::Screens => self
                 .monitors
                 .iter()
-                .map(|m| (Key::Monitor(m.connector.clone()), m.label.clone(), String::new()))
+                .map(|m| {
+                    (
+                        Key::Monitor(m.connector.clone()),
+                        m.label.clone(),
+                        String::new(),
+                    )
+                })
                 .collect(),
             Tab::Windows => self
                 .windows
@@ -270,13 +311,17 @@ impl CastPicker {
                     connector: c.clone(),
                     ..Default::default()
                 }),
-                Key::Window(id) => self.windows.iter().find(|w| w.id == *id).map(|w| CastSource {
-                    kind: SOURCE_WINDOW,
-                    window_id: w.id,
-                    title: w.title.clone(),
-                    app_id: w.app_id.clone(),
-                    ..Default::default()
-                }),
+                Key::Window(id) => self
+                    .windows
+                    .iter()
+                    .find(|w| w.id == *id)
+                    .map(|w| CastSource {
+                        kind: SOURCE_WINDOW,
+                        window_id: w.id,
+                        title: w.title.clone(),
+                        app_id: w.app_id.clone(),
+                        ..Default::default()
+                    }),
             })
             .collect()
     }
@@ -304,7 +349,11 @@ impl CastPicker {
     }
 
     fn switch_tab(&mut self) {
-        let other = if self.tab == Tab::Screens { Tab::Windows } else { Tab::Screens };
+        let other = if self.tab == Tab::Screens {
+            Tab::Windows
+        } else {
+            Tab::Screens
+        };
         if self.has_tab(other) {
             self.tab = other;
             self.cursor = 0;
@@ -377,10 +426,18 @@ impl Render for CastPicker {
         }
 
         let rows = self.rows();
-        let mut list = v_flex().id("cast-list").max_h(px(320.)).overflow_y_scroll().gap(px(2.));
+        let mut list = v_flex()
+            .id("cast-list")
+            .max_h(px(320.))
+            .overflow_y_scroll()
+            .gap(px(2.));
         for (i, (key, title, sub)) in rows.iter().enumerate() {
             let on = self.selected.contains(key);
-            let label = if sub.is_empty() { title.clone() } else { format!("{title} — {sub}") };
+            let label = if sub.is_empty() {
+                title.clone()
+            } else {
+                format!("{title} — {sub}")
+            };
             let key = key.clone();
             let cursor = i == self.cursor;
             list = list.child(

@@ -11,9 +11,7 @@ mod graph;
 
 use gpui::{AnyElement, Context, FontWeight, Window, div, prelude::*, px};
 use services::equalizer::dsp::{self, BAND_COUNT, MAX_PREAMP_DB};
-use services::{
-    EqualizerCommand, EqualizerData, EqualizerEngineState, EqualizerSubscriber,
-};
+use services::{EqualizerCommand, EqualizerData, EqualizerEngineState, EqualizerSubscriber};
 use ui::{
     ActiveTheme, Color, IconName, Label, LabelCommon, Radius, Spacing, Switch, TextSize, h_flex,
     v_flex,
@@ -78,12 +76,7 @@ impl EqualizerModule {
 
     /// An action that changes the equalizer and keeps the launcher open;
     /// the service answers through the subscription.
-    fn command(
-        &self,
-        title: &'static str,
-        icon: IconName,
-        command: EqualizerCommand,
-    ) -> Action {
+    fn command(&self, title: &'static str, icon: IconName, command: EqualizerCommand) -> Action {
         let subscriber = self.subscriber.clone();
         Action::new(title, move |_, _| {
             subscriber.dispatch(command.clone());
@@ -127,7 +120,8 @@ impl EqualizerModule {
 
     fn nudge_preamp(cx: &Context<Self>, title: &'static str, delta: f32) -> Action {
         Action::listener(title, cx, move |this, _, _| {
-            let db = (this.data.settings.curve.preamp_db + delta).clamp(-MAX_PREAMP_DB, MAX_PREAMP_DB);
+            let db =
+                (this.data.settings.curve.preamp_db + delta).clamp(-MAX_PREAMP_DB, MAX_PREAMP_DB);
             this.send(EqualizerCommand::SetPreamp(db));
             Outcome::Stay
         })
@@ -185,8 +179,7 @@ impl EqualizerModule {
                 "Preamp",
                 [
                     Self::nudge_preamp(cx, "Raise Preamp", PREAMP_STEP).shortcut("alt-shift-up"),
-                    Self::nudge_preamp(cx, "Lower Preamp", -PREAMP_STEP)
-                        .shortcut("alt-shift-down"),
+                    Self::nudge_preamp(cx, "Lower Preamp", -PREAMP_STEP).shortcut("alt-shift-down"),
                     self.command(
                         if self.data.settings.auto_preamp {
                             "Turn Off Clipping Guard"
@@ -233,17 +226,15 @@ impl EqualizerModule {
             (_, None) => "No output device".to_string(),
         };
 
-        let panel = ActionPanel::new().action(
-            self.command(
-                if enabled {
-                    "Turn Off Equalizer"
-                } else {
-                    "Turn On Equalizer"
-                },
-                IconName::Power,
-                EqualizerCommand::SetEnabled(!enabled),
-            ),
-        );
+        let panel = ActionPanel::new().action(self.command(
+            if enabled {
+                "Turn Off Equalizer"
+            } else {
+                "Turn On Equalizer"
+            },
+            IconName::Power,
+            EqualizerCommand::SetEnabled(!enabled),
+        ));
 
         Item::new("power", "Equalizer")
             .subtitle(subtitle)
@@ -295,13 +286,11 @@ impl EqualizerModule {
         cx: &Context<Self>,
     ) -> Item {
         let name = preset.name.clone();
-        let mut panel = ActionPanel::new().action(
-            self.command(
-                "Apply Preset",
-                IconName::Check,
-                EqualizerCommand::ApplyPreset(name.clone()),
-            ),
-        );
+        let mut panel = ActionPanel::new().action(self.command(
+            "Apply Preset",
+            IconName::Check,
+            EqualizerCommand::ApplyPreset(name.clone()),
+        ));
         if !preset.builtin {
             panel = panel.action(
                 self.command(
@@ -359,11 +348,14 @@ impl EqualizerModule {
             IconName::Volume,
             EqualizerCommand::SetOutput(device.name.clone()),
         ));
-        let mut item = Item::new(format!("output:{}", device.name), device.description.clone())
-            .subtitle(device.name.clone())
-            .icon(IconName::Volume)
-            .keywords("output device speakers headphones sink")
-            .actions(self.common(panel, cx));
+        let mut item = Item::new(
+            format!("output:{}", device.name),
+            device.description.clone(),
+        )
+        .subtitle(device.name.clone())
+        .icon(IconName::Volume)
+        .keywords("output device speakers headphones sink")
+        .actions(self.common(panel, cx));
         if current {
             item = item.accessory(
                 Accessory::tag("Current")
@@ -427,15 +419,13 @@ impl EqualizerModule {
                             .size(TextSize::Default)
                             .weight(FontWeight::MEDIUM),
                     )
-                    .child(
-                        Label::new(status)
-                            .size(TextSize::XSmall)
-                            .color(if running || settings.enabled {
-                                status_color
-                            } else {
-                                Color::Muted
-                            }),
-                    ),
+                    .child(Label::new(status).size(TextSize::XSmall).color(
+                        if running || settings.enabled {
+                            status_color
+                        } else {
+                            Color::Muted
+                        },
+                    )),
             )
             .child(power);
 
@@ -475,7 +465,8 @@ impl LauncherPage for EqualizerModule {
         let settings = &self.data.settings;
         let active = settings.active_preset();
 
-        let (builtin, user): (Vec<_>, Vec<_>) = settings.presets().partition(|preset| preset.builtin);
+        let (builtin, user): (Vec<_>, Vec<_>) =
+            settings.presets().partition(|preset| preset.builtin);
 
         let mut list = List::new()
             .show_detail(true)
@@ -490,7 +481,9 @@ impl LauncherPage for EqualizerModule {
                 Section::new("Presets").items(
                     builtin
                         .iter()
-                        .map(|preset| self.preset_item(preset, active.as_deref() == Some(&preset.name), cx))
+                        .map(|preset| {
+                            self.preset_item(preset, active.as_deref() == Some(&preset.name), cx)
+                        })
                         .collect::<Vec<_>>(),
                 ),
             );

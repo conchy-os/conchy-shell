@@ -42,7 +42,9 @@ impl AutostartPage {
     }
 
     fn toggle(&mut self, id: &str, enabled: bool, cx: &mut Context<Self>) {
-        let Some(autostart) = &self.autostart else { return };
+        let Some(autostart) = &self.autostart else {
+            return;
+        };
         self.notice = match autostart.set_enabled(id, enabled) {
             Ok(()) => None,
             Err(err) => Some((format!("{err:#}"), true)),
@@ -52,7 +54,9 @@ impl AutostartPage {
     }
 
     fn remove(&mut self, id: &str, cx: &mut Context<Self>) {
-        let Some(autostart) = &self.autostart else { return };
+        let Some(autostart) = &self.autostart else {
+            return;
+        };
         self.notice = match autostart.remove(id) {
             Ok(()) => Some(("Removed from startup.".into(), false)),
             Err(err) => Some((format!("{err:#}"), true)),
@@ -62,7 +66,9 @@ impl AutostartPage {
     }
 
     fn add(&mut self, command: &str, cx: &mut Context<Self>) {
-        let Some(autostart) = &self.autostart else { return };
+        let Some(autostart) = &self.autostart else {
+            return;
+        };
         let name = program_name(command);
         self.notice = match autostart.add(&name, command) {
             Ok(_) => Some((format!("{name} will start at login."), false)),
@@ -112,7 +118,11 @@ fn startup_form(form: &mut Form, page: &Entity<AutostartPage>, cx: &App) {
         "Programs the session starts when you log in",
     );
     if let Some(err) = &this.error {
-        rows::note(form, format!("Cannot find the autostart folders: {err}"), Color::Error);
+        rows::note(
+            form,
+            format!("Cannot find the autostart folders: {err}"),
+            Color::Error,
+        );
         return;
     }
 
@@ -145,7 +155,11 @@ fn startup_form(form: &mut Form, page: &Entity<AutostartPage>, cx: &App) {
         cx,
     );
     if let Some((text, error)) = &this.notice {
-        rows::note(form, text.clone(), if *error { Color::Error } else { Color::Muted });
+        rows::note(
+            form,
+            text.clone(),
+            if *error { Color::Error } else { Color::Muted },
+        );
     }
 
     let row_of = |entry: &Entry, form: &mut Form| {
@@ -155,13 +169,21 @@ fn startup_form(form: &mut Form, page: &Entity<AutostartPage>, cx: &App) {
             let (page, id) = (page.clone(), entry.id.clone());
             actions.push(
                 Action::new(
-                    if enabled { "Don't start at login" } else { "Start at login" },
+                    if enabled {
+                        "Don't start at login"
+                    } else {
+                        "Start at login"
+                    },
                     move |_, cx| {
                         page.update(cx, |page, cx| page.toggle(&id, !enabled, cx));
                         Outcome::Stay
                     },
                 )
-                .icon(if enabled { IconName::Stop } else { IconName::Play }),
+                .icon(if enabled {
+                    IconName::Stop
+                } else {
+                    IconName::Play
+                }),
             );
         }
         if entry.removable() {
@@ -173,7 +195,11 @@ fn startup_form(form: &mut Form, page: &Entity<AutostartPage>, cx: &App) {
             .icon(IconName::Trash)
             .destructive();
             // Enter and Shift+Enter are taken by the first two; this one has a key of its own.
-            actions.push(if actions.is_empty() { remove } else { remove.shortcut("ctrl-d") });
+            actions.push(if actions.is_empty() {
+                remove
+            } else {
+                remove.shortcut("ctrl-d")
+            });
         }
         let subtitle = if entry.comment.is_empty() {
             entry.exec.clone()
@@ -183,7 +209,11 @@ fn startup_form(form: &mut Form, page: &Entity<AutostartPage>, cx: &App) {
         rows::entry(
             form,
             Row {
-                icon: if enabled { IconName::Play } else { IconName::Pause },
+                icon: if enabled {
+                    IconName::Play
+                } else {
+                    IconName::Pause
+                },
                 title: entry.name.clone().into(),
                 subtitle: subtitle.into(),
                 tag: Some(state_label(entry)),
@@ -193,8 +223,16 @@ fn startup_form(form: &mut Form, page: &Entity<AutostartPage>, cx: &App) {
         );
     };
 
-    let mine: Vec<&Entry> = this.entries.iter().filter(|e| e.origin == Origin::User).collect();
-    let system: Vec<&Entry> = this.entries.iter().filter(|e| e.origin == Origin::System).collect();
+    let mine: Vec<&Entry> = this
+        .entries
+        .iter()
+        .filter(|e| e.origin == Origin::User)
+        .collect();
+    let system: Vec<&Entry> = this
+        .entries
+        .iter()
+        .filter(|e| e.origin == Origin::System)
+        .collect();
     if mine.is_empty() && system.is_empty() {
         rows::note(form, "Nothing starts at login yet.", Color::Muted);
     }

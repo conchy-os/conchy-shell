@@ -4,8 +4,8 @@
 
 use chrono::{Datelike, Duration, Local, NaiveDate, Weekday};
 use gpui::{
-    App, Context, DisplayId, FocusHandle, Focusable, FontWeight, IntoElement, MouseButton,
-    Pixels, Point, Render, Window, div, prelude::*, px, layer_shell::Anchor,
+    App, Context, DisplayId, FocusHandle, Focusable, FontWeight, IntoElement, MouseButton, Pixels,
+    Point, Render, Window, div, layer_shell::Anchor, prelude::*, px,
 };
 use ui::patterns::PanelSurface;
 use ui::{ActiveTheme, Color, Icon, IconName, IconSize, Radius, Spacing, TextSize};
@@ -174,7 +174,9 @@ impl CalendarPanel {
 
     pub fn select_date(&mut self, date: NaiveDate, cx: &mut Context<Self>) {
         self.selected_date = date;
-        if date.month() != self.displayed_month.month() || date.year() != self.displayed_month.year() {
+        if date.month() != self.displayed_month.month()
+            || date.year() != self.displayed_month.year()
+        {
             self.displayed_month =
                 NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date);
         }
@@ -313,11 +315,8 @@ impl Render for CalendarPanel {
                     ),
             );
 
-        let weekdays_header = div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .children(RUSSIAN_WEEKDAYS_SHORT.iter().map(|name| {
+        let weekdays_header = div().flex().items_center().justify_between().children(
+            RUSSIAN_WEEKDAYS_SHORT.iter().map(|name| {
                 div()
                     .w(px(36.))
                     .text_center()
@@ -325,7 +324,8 @@ impl Render for CalendarPanel {
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(colors.text_muted)
                     .child(*name)
-            }));
+            }),
+        );
 
         let day_rows = (0..6).map(|row_idx| {
             div()
@@ -401,26 +401,16 @@ impl Render for CalendarPanel {
             .flex_col()
             .gap(Spacing::Small.pixels())
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_size(TextSize::Small.rems())
-                            .text_color(colors.text_muted)
-                            .child(format_subtitle(self.today)),
-                    ),
+                div().flex().items_center().justify_between().child(
+                    div()
+                        .text_size(TextSize::Small.rems())
+                        .text_color(colors.text_muted)
+                        .child(format_subtitle(self.today)),
+                ),
             )
             .child(nav_bar)
             .child(weekdays_header)
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(3.))
-                    .children(day_rows),
-            );
+            .child(div().flex().flex_col().gap(px(3.)).children(day_rows));
 
         let agenda_card = div()
             .id("calendar-agenda-card")

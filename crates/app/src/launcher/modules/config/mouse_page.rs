@@ -44,7 +44,11 @@ fn status(form: &mut Form, model: &InputModel) -> bool {
             false
         }
         State::Failed(err) => {
-            rows::note(form, format!("Could not read the settings: {err}"), Color::Error);
+            rows::note(
+                form,
+                format!("Could not read the settings: {err}"),
+                Color::Error,
+            );
             false
         }
         State::Ready(_) => true,
@@ -92,7 +96,9 @@ fn pointer_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) -> bool {
     if !status(form, m) {
         return false;
     }
-    let Some(loaded) = m.loaded() else { return false };
+    let Some(loaded) = m.loaded() else {
+        return false;
+    };
     let p = &loaded.settings.pointer;
 
     rows::heading(form, "Movement");
@@ -125,7 +131,9 @@ fn pointer_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) -> bool {
         {
             let model = model.clone();
             move |ix, cx| {
-                model.update(cx, |m, cx| m.change(Change::PointerAccel(accel_from(ix)), cx))
+                model.update(cx, |m, cx| {
+                    m.change(Change::PointerAccel(accel_from(ix)), cx)
+                })
             }
         },
         cx,
@@ -245,7 +253,9 @@ fn touchpad_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
                 } else {
                     ClickMethod::ButtonAreas
                 };
-                model.update(cx, |m, cx| m.change(Change::TouchpadClickMethod(method), cx))
+                model.update(cx, |m, cx| {
+                    m.change(Change::TouchpadClickMethod(method), cx)
+                })
             }
         },
         cx,
@@ -259,7 +269,9 @@ fn touchpad_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
         {
             let model = model.clone();
             move |v, cx| {
-                model.update(cx, |m, cx| m.change(Change::TouchpadDisableWhileTyping(v), cx))
+                model.update(cx, |m, cx| {
+                    m.change(Change::TouchpadDisableWhileTyping(v), cx)
+                })
             }
         },
         cx,
@@ -295,7 +307,9 @@ fn touchpad_form(form: &mut Form, model: &Entity<InputModel>, cx: &App) {
         {
             let model = model.clone();
             move |ix, cx| {
-                model.update(cx, |m, cx| m.change(Change::TouchpadAccel(accel_from(ix)), cx))
+                model.update(cx, |m, cx| {
+                    m.change(Change::TouchpadAccel(accel_from(ix)), cx)
+                })
             }
         },
         cx,

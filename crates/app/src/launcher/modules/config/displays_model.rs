@@ -8,8 +8,8 @@
 use std::time::Duration;
 
 use gpui::{Context, prelude::*};
-use services::display_profiles::{Profile, ProfileStore};
 use services::compositor::outputs::query_monitors;
+use services::display_profiles::{Profile, ProfileStore};
 use services::{CompositorBackend, CompositorCommand, CompositorSubscriber, Monitor, OutputConfig};
 
 use crate::state::{AppState, watch};

@@ -44,7 +44,11 @@ impl Plugins {
         let lsp = lv2.iter().any(|dir| {
             ["gate_mono", "compressor_mono", "limiter_mono"]
                 .iter()
-                .all(|name| dir.join("lsp-plugins.lv2").join(format!("{name}.ttl")).is_file())
+                .all(|name| {
+                    dir.join("lsp-plugins.lv2")
+                        .join(format!("{name}.ttl"))
+                        .is_file()
+                })
         });
         let has = |file: &str| ladspa.iter().any(|dir| dir.join(file).is_file());
         Self {
@@ -98,7 +102,11 @@ fn lv2_dirs() -> Vec<PathBuf> {
 fn ladspa_dirs() -> Vec<PathBuf> {
     search_path(
         "LADSPA_PATH",
-        &["/usr/lib/ladspa", "/usr/lib64/ladspa", "/usr/local/lib/ladspa"],
+        &[
+            "/usr/lib/ladspa",
+            "/usr/lib64/ladspa",
+            "/usr/local/lib/ladspa",
+        ],
         ".ladspa",
     )
 }
@@ -162,7 +170,10 @@ fn builtin(name: &str, label: &str, controls: &str) -> String {
 }
 
 fn lv2(name: &str, plugin: &str, controls: &str) -> String {
-    format!("{{ type = lv2 name = {name} plugin = {} control = {{ {controls} }} }}", quoted(plugin))
+    format!(
+        "{{ type = lv2 name = {name} plugin = {} control = {{ {controls} }} }}",
+        quoted(plugin)
+    )
 }
 
 fn piece(stage: Stage, voice: &Voice) -> Piece {
@@ -204,10 +215,26 @@ fn piece(stage: Stage, voice: &Voice) -> Piece {
         },
         Stage::Equalizer => Piece {
             nodes: vec![
-                builtin("eq_low", "bq_lowshelf", &format!("Freq = 120.0 Q = 0.7 Gain = {:.1}", get(Param::EqLow))),
-                builtin("eq_mud", "bq_peaking", &format!("Freq = 300.0 Q = 1.0 Gain = {:.1}", get(Param::EqMud))),
-                builtin("eq_presence", "bq_peaking", &format!("Freq = 3500.0 Q = 0.9 Gain = {:.1}", get(Param::EqPresence))),
-                builtin("eq_air", "bq_highshelf", &format!("Freq = 10000.0 Q = 0.7 Gain = {:.1}", get(Param::EqAir))),
+                builtin(
+                    "eq_low",
+                    "bq_lowshelf",
+                    &format!("Freq = 120.0 Q = 0.7 Gain = {:.1}", get(Param::EqLow)),
+                ),
+                builtin(
+                    "eq_mud",
+                    "bq_peaking",
+                    &format!("Freq = 300.0 Q = 1.0 Gain = {:.1}", get(Param::EqMud)),
+                ),
+                builtin(
+                    "eq_presence",
+                    "bq_peaking",
+                    &format!("Freq = 3500.0 Q = 0.9 Gain = {:.1}", get(Param::EqPresence)),
+                ),
+                builtin(
+                    "eq_air",
+                    "bq_highshelf",
+                    &format!("Freq = 10000.0 Q = 0.7 Gain = {:.1}", get(Param::EqAir)),
+                ),
             ],
             path: vec![
                 ("eq_low", "In", "Out"),
@@ -233,7 +260,10 @@ fn piece(stage: Stage, voice: &Voice) -> Piece {
             nodes: vec![lv2(
                 "lim",
                 LSP_LIMITER,
-                &format!("th = {:.6} boost = 0", db_to_linear(get(Param::LimiterCeiling))),
+                &format!(
+                    "th = {:.6} boost = 0",
+                    db_to_linear(get(Param::LimiterCeiling))
+                ),
             )],
             path: vec![("lim", "in", "out")],
         },
@@ -241,7 +271,10 @@ fn piece(stage: Stage, voice: &Voice) -> Piece {
             nodes: vec![builtin(
                 "out",
                 "linear",
-                &format!("Mult = {:.6} Add = 0.0", db_to_linear(get(Param::OutputGain))),
+                &format!(
+                    "Mult = {:.6} Add = 0.0",
+                    db_to_linear(get(Param::OutputGain))
+                ),
             )],
             path: vec![("out", "In", "Out")],
         },
@@ -439,17 +472,18 @@ mod tests {
             stages(&voice, &NONE),
             vec![Stage::Highpass, Stage::Equalizer, Stage::Gain]
         );
-        assert_eq!(
-            NONE.missing(&voice),
-            vec![PACKAGE_RNNOISE, PACKAGE_LSP]
-        );
+        assert_eq!(NONE.missing(&voice), vec![PACKAGE_RNNOISE, PACKAGE_LSP]);
         assert!(ALL.missing(&voice).is_empty());
         assert!(NONE.missing(&Voice::default()).is_empty());
         // The other noise remover brings its own package.
         let mut deep = voice;
         deep.set(Param::Denoiser, 2.0);
         assert_eq!(
-            Plugins { deepfilter: false, ..ALL }.missing(&deep),
+            Plugins {
+                deepfilter: false,
+                ..ALL
+            }
+            .missing(&deep),
             vec![PACKAGE_DEEPFILTER]
         );
     }
@@ -497,7 +531,10 @@ mod tests {
         let ladspa = root.join("ladspa");
         std::fs::create_dir_all(lv2.join("lsp-plugins.lv2")).unwrap();
         std::fs::create_dir_all(&ladspa).unwrap();
-        assert_eq!(Plugins::detect_in(&[lv2.clone()], &[ladspa.clone()]), NONE);
+        assert_eq!(
+            Plugins::detect_in(std::slice::from_ref(&lv2), std::slice::from_ref(&ladspa)),
+            NONE
+        );
 
         for name in ["gate_mono", "compressor_mono", "limiter_mono"] {
             std::fs::write(lv2.join("lsp-plugins.lv2").join(format!("{name}.ttl")), "").unwrap();

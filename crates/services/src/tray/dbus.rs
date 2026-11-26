@@ -185,7 +185,11 @@ impl StatusNotifierWatcher {
             service.to_string()
         };
 
-        if self.items.iter().any(|(s, str_svc)| s == &sender || str_svc == &service) {
+        if self
+            .items
+            .iter()
+            .any(|(s, str_svc)| s == &sender || str_svc == &service)
+        {
             return;
         }
 

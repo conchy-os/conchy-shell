@@ -300,7 +300,10 @@ fn save_current(path: &Path) {
         return;
     }
     if let Err(err) = std::fs::write(&file, path.to_string_lossy().as_bytes()) {
-        warn!("Could not remember the wallpaper in {}: {err}", file.display());
+        warn!(
+            "Could not remember the wallpaper in {}: {err}",
+            file.display()
+        );
     }
 }
 
@@ -317,7 +320,10 @@ mod tests {
     #[test]
     fn query_picks_the_image_path() {
         let exe = std::env::current_exe().unwrap();
-        let line = format!(": eDP-1: 1920x1080, scale: 1, currently displaying: image: {}", exe.display());
+        let line = format!(
+            ": eDP-1: 1920x1080, scale: 1, currently displaying: image: {}",
+            exe.display()
+        );
         assert_eq!(parse_query(&line), Some(exe));
     }
 
@@ -331,8 +337,14 @@ mod tests {
 
     #[test]
     fn query_ignores_color_fills_and_missing_files() {
-        assert_eq!(parse_query(": DP-1: 2560x1440, scale: 1, currently displaying: color: 000000"), None);
-        assert_eq!(parse_query(": DP-1: 1x1, scale: 1, currently displaying: image: /nope/x.png"), None);
+        assert_eq!(
+            parse_query(": DP-1: 2560x1440, scale: 1, currently displaying: color: 000000"),
+            None
+        );
+        assert_eq!(
+            parse_query(": DP-1: 1x1, scale: 1, currently displaying: image: /nope/x.png"),
+            None
+        );
         assert_eq!(parse_query(""), None);
     }
 }

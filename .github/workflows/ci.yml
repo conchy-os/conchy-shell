@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Void glibc (fmt, clippy, test)
+    runs-on: ubuntu-latest
+    container: ghcr.io/void-linux/void-glibc-full:latest
+
+    steps:
+      - name: Install Void Linux toolchain and build dependencies
+        shell: sh
+        run: xbps-install -Suy xbps && xbps-install -uy && xbps-install -y rust cargo git bash zstd pkg-config gcc clang cmake nasm perl pipewire-devel pulseaudio-devel eudev-libudev-devel wayland-devel libxkbcommon-devel libxcb-devel xcb-util-devel xcb-util-wm-devel xcb-util-keysyms-devel xcb-util-renderutil-devel xcb-util-image-devel libX11-devel libXext-devel libXcursor-devel libXi-devel libXrandr-devel fontconfig-devel freetype-devel vulkan-loader-devel && git config --global --add safe.directory '*'
+
+      - name: Checkout conchy-shell
+        uses: actions/checkout@v4
+        with:
+          path: conchy-shell
+
+      - name: Checkout conchy-config
+        uses: actions/checkout@v4
+        with:
+          repository: conchy-os/conchy-config
+          path: conchy-config
+
+      - name: Checkout conchy-wm
+        uses: actions/checkout@v4
+        with:
+          repository: conchy-os/conchy-wm
+          path: conchy-wm
+
+      - name: Checkout conchy-vpnx
+        uses: actions/checkout@v4
+        with:
+          repository: conchy-os/conchy-vpnx
+          path: conchy-vpnx
+
+      - name: Checkout conchy-portal
+        uses: actions/checkout@v4
+        with:
+          repository: conchy-os/conchy-portal
+          path: conchy-portal
+
+      - name: Link sibling workspace symlinks
+        shell: sh
+        run: ln -sfn conchy-config config && ln -sfn conchy-wm compositor && ln -sfn conchy-vpnx vpnx
+
+      - name: Cache Cargo registry and build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            conchy-shell/target
+          key: void-glibc-${{ runner.os }}-${{ hashFiles('conchy-shell/Cargo.lock') }}
+          restore-keys: |
+            void-glibc-${{ runner.os }}-
+
+      - name: Format, clippy, and test
+        working-directory: conchy-shell
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace

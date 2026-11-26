@@ -157,12 +157,16 @@ impl ProfileStore {
     }
 
     pub fn standard() -> anyhow::Result<Self> {
-        Ok(Self::new(fsutil::config_home()?.join("conchy/displays.kdl")))
+        Ok(Self::new(
+            fsutil::config_home()?.join("conchy/displays.kdl"),
+        ))
     }
 
     pub fn load(&self) -> anyhow::Result<Vec<Profile>> {
         match fsutil::read_optional(&self.path)? {
-            Some(text) => parse(&text).with_context(|| format!("{} does not parse", self.path.display())),
+            Some(text) => {
+                parse(&text).with_context(|| format!("{} does not parse", self.path.display()))
+            }
             None => Ok(Vec::new()),
         }
     }
@@ -225,7 +229,9 @@ fn parse(text: &str) -> anyhow::Result<Vec<Profile>> {
         let name = first_arg(node)
             .ok_or_else(|| anyhow!("a profile has no name"))?
             .to_string();
-        let auto = prop(node, "auto").and_then(|v| v.as_bool()).unwrap_or(false);
+        let auto = prop(node, "auto")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let mut outputs = Vec::new();
         for out in node
             .children()
@@ -236,7 +242,11 @@ fn parse(text: &str) -> anyhow::Result<Vec<Profile>> {
             let output = first_arg(out)
                 .ok_or_else(|| anyhow!("an output of profile {name} has no name"))?
                 .to_string();
-            let s = |key: &str| prop(out, key).and_then(|v| v.as_string()).map(str::to_string);
+            let s = |key: &str| {
+                prop(out, key)
+                    .and_then(|v| v.as_string())
+                    .map(str::to_string)
+            };
             let f = |key: &str| {
                 prop(out, key).and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)))
             };
@@ -258,7 +268,11 @@ fn parse(text: &str) -> anyhow::Result<Vec<Profile>> {
                 },
             });
         }
-        profiles.push(Profile { name, auto, outputs });
+        profiles.push(Profile {
+            name,
+            auto,
+            outputs,
+        });
     }
     Ok(profiles)
 }
@@ -299,7 +313,10 @@ mod tests {
 
     #[test]
     fn profiles_survive_the_file() {
-        let monitors = vec![monitor("HDMI-A-1", "S1", 0, 1.5), monitor("DP-1", "S2", 3840, 1.0)];
+        let monitors = vec![
+            monitor("HDMI-A-1", "S1", 0, 1.5),
+            monitor("DP-1", "S2", 3840, 1.0),
+        ];
         let profiles = vec![
             Profile::snapshot("Docked \"desk\"", true, &monitors),
             Profile::snapshot("Alone", false, &monitors[..1]),
@@ -310,15 +327,24 @@ mod tests {
 
     #[test]
     fn a_profile_fits_the_same_monitors_in_any_port() {
-        let at_desk = vec![monitor("HDMI-A-1", "S1", 0, 1.5), monitor("DP-1", "S2", 3840, 1.0)];
+        let at_desk = vec![
+            monitor("HDMI-A-1", "S1", 0, 1.5),
+            monitor("DP-1", "S2", 3840, 1.0),
+        ];
         let profile = Profile::snapshot("Docked", true, &at_desk);
         // The cables were swapped.
-        let swapped = vec![monitor("DP-1", "S1", 0, 1.0), monitor("HDMI-A-1", "S2", 0, 1.0)];
+        let swapped = vec![
+            monitor("DP-1", "S1", 0, 1.0),
+            monitor("HDMI-A-1", "S2", 0, 1.0),
+        ];
         assert!(profile.fits(&swapped));
         let plan = profile.plan(&swapped).unwrap();
         let for_s1 = plan.iter().find(|c| c.output == "DP-1").unwrap();
         assert_eq!(for_s1.scale, 1.5);
-        assert_eq!(plan.iter().find(|c| c.output == "HDMI-A-1").unwrap().x, 3840);
+        assert_eq!(
+            plan.iter().find(|c| c.output == "HDMI-A-1").unwrap().x,
+            3840
+        );
         // One monitor is not the pair.
         assert!(!profile.fits(&swapped[..1]));
         assert!(profile.plan(&swapped[..1]).is_none());
@@ -326,8 +352,14 @@ mod tests {
 
     #[test]
     fn lookalike_monitors_keep_their_own_ports() {
-        let a = Monitor { serial: None, ..monitor("DP-1", "", 0, 1.0) };
-        let b = Monitor { serial: None, ..monitor("DP-2", "", 1920, 2.0) };
+        let a = Monitor {
+            serial: None,
+            ..monitor("DP-1", "", 0, 1.0)
+        };
+        let b = Monitor {
+            serial: None,
+            ..monitor("DP-2", "", 1920, 2.0)
+        };
         let profile = Profile::snapshot("Pair", true, &[a.clone(), b.clone()]);
         let plan = profile.plan(&[a, b]).unwrap();
         assert_eq!(plan.iter().find(|c| c.output == "DP-1").unwrap().scale, 1.0);
@@ -343,10 +375,18 @@ mod tests {
 
         let changed = vec![monitor("HDMI-A-1", "S1", 0, 1.0)];
         assert!(!profile.is_applied(&changed));
-        assert_eq!(pending_auto(std::slice::from_ref(&profile), &changed).unwrap().name, "Docked");
+        assert_eq!(
+            pending_auto(std::slice::from_ref(&profile), &changed)
+                .unwrap()
+                .name,
+            "Docked"
+        );
 
         // A manual profile is never pending.
-        let manual = Profile { auto: false, ..profile };
+        let manual = Profile {
+            auto: false,
+            ..profile
+        };
         assert!(pending_auto(&[manual], &changed).is_none());
     }
 

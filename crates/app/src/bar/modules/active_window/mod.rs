@@ -5,8 +5,8 @@ pub use config::ActiveWindowConfig;
 
 use chrono::Local;
 use gpui::{AnyElement, Context, Window, prelude::*};
-use std::time::Duration;
 use services::CompositorState;
+use std::time::Duration;
 use ui::{IconName, LabelCommon};
 
 use super::{BarCtx, BarWidget, BarWidgetDescriptor, BarWidgetMeta, boxed, style};
@@ -52,7 +52,9 @@ impl ActiveWindow {
         // Idle, the widget shows the date, which has to roll over at midnight.
         cx.spawn(async move |this, cx| {
             loop {
-                cx.background_executor().timer(Duration::from_secs(60)).await;
+                cx.background_executor()
+                    .timer(Duration::from_secs(60))
+                    .await;
                 if this.update(cx, |_, cx| cx.notify()).is_err() {
                     break;
                 }
@@ -296,9 +298,11 @@ impl BarWidget for ActiveWindow {
     ) -> AnyElement {
         let config = &cx.config().bar.modules.active_window;
         if !self.has_window_content() {
-            let date =
-                Self::idle_lines(&config.idle_format_horizontal, &config.idle_format_horizontal)
-                    .join(" ");
+            let date = Self::idle_lines(
+                &config.idle_format_horizontal,
+                &config.idle_format_horizontal,
+            )
+            .join(" ");
             return style::stack(ctx)
                 .id("active-window")
                 .justify_center()

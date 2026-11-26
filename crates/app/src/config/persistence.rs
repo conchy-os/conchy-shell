@@ -152,11 +152,7 @@ pub(super) fn parse_document(text: &str) -> anyhow::Result<KdlDocument> {
                 .rposition(|b| *b == b'\n')
                 .map_or(0, |i| i + 1)
             + 1;
-        let label = err
-            .label
-            .as_deref()
-            .map(|l| format!(": {l}"))
-            .unwrap_or_default();
+        let label = err.label.map(|l| format!(": {l}")).unwrap_or_default();
         anyhow!("{} at line {line}, column {column}{label}", err.kind)
     })
 }
@@ -338,10 +334,20 @@ mod tests {
 
         let dir = tempfile::tempdir().expect("tempdir");
         let kdl = dir.path().join("theme.kdl");
-        fs::write(dir.path().join("theme.toml"), "opacity = 0.9\nname = \"dusk\"\n").unwrap();
+        fs::write(
+            dir.path().join("theme.toml"),
+            "opacity = 0.9\nname = \"dusk\"\n",
+        )
+        .unwrap();
 
         let first: Option<Theme> = parse_kdl(&kdl).expect("migrates");
-        assert_eq!(first, Some(Theme { opacity: 0.9, name: "dusk".into() }));
+        assert_eq!(
+            first,
+            Some(Theme {
+                opacity: 0.9,
+                name: "dusk".into()
+            })
+        );
         assert!(kdl.exists());
         assert!(dir.path().join("theme.toml.migrated").exists());
         assert!(!dir.path().join("theme.toml").exists());

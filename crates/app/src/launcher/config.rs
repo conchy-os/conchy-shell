@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 
 use super::modules::{
-    apps::config::AppsConfig, calculator::config::CalculatorConfig, calendar::config::CalendarConfig,
-    clipboard::config::ClipboardConfig, config::config::ConfigEditorConfig,
-    equalizer::config::EqualizerConfig, mic::config::MicConfig, help::config::HelpConfig, mpris::config::MprisConfig, services::config::ServicesConfig,
-    shell::config::ShellConfig, sysinfo::config::SysInfoConfig, theme::config::ThemesConfig,
-    wallpaper::config::WallpaperConfig, web::config::WebConfig,
+    apps::config::AppsConfig, calculator::config::CalculatorConfig,
+    calendar::config::CalendarConfig, clipboard::config::ClipboardConfig,
+    config::config::ConfigEditorConfig, equalizer::config::EqualizerConfig,
+    help::config::HelpConfig, mic::config::MicConfig, mpris::config::MprisConfig,
+    services::config::ServicesConfig, shell::config::ShellConfig, sysinfo::config::SysInfoConfig,
+    theme::config::ThemesConfig, wallpaper::config::WallpaperConfig, web::config::WebConfig,
 };
 
 /// Launcher window configuration.

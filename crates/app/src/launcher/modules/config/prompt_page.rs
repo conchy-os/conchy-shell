@@ -65,10 +65,12 @@ impl LauncherPage for PromptPage {
                 list.item(
                     Item::new("submit", format!("{} “{text}”", self.verb))
                         .icon(IconName::Check)
-                        .actions(ActionPanel::new().action(Action::new(
-                            self.verb.clone(),
-                            move |_, cx| submit(value.clone(), cx),
-                        ))),
+                        .actions(
+                            ActionPanel::new()
+                                .action(Action::new(self.verb.clone(), move |_, cx| {
+                                    submit(value.clone(), cx)
+                                })),
+                        ),
                 )
                 .into()
             }

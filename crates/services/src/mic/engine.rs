@@ -251,10 +251,12 @@ impl Engine {
     }
 
     pub fn on_wake(&self, jobs: &Mutex<JobReceiver<MicCommand>>) {
-        jobs.lock().unwrap_or_else(PoisonError::into_inner).drain(|command| {
-            self.apply(command);
-            Ok(())
-        });
+        jobs.lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .drain(|command| {
+                self.apply(command);
+                Ok(())
+            });
     }
 
     pub fn on_tick(&self) {
@@ -270,10 +272,12 @@ impl Engine {
             self.save();
         }
 
-        let problem = {
-            let mut state = self.state.borrow_mut();
-            let starting = state.mic_node.is_none();
-            state.chain.as_mut().and_then(|chain| match chain.child.try_wait() {
+        let problem =
+            {
+                let mut state = self.state.borrow_mut();
+                let starting = state.mic_node.is_none();
+                state.chain.as_mut().and_then(|chain| {
+                    match chain.child.try_wait() {
                 Ok(Some(status)) => Some(format!(
                     "the filter-chain exited ({status}; see $XDG_RUNTIME_DIR/conchy/mic-chain.log)"
                 )),
@@ -283,8 +287,9 @@ impl Engine {
                 ),
                 Ok(None) => None,
                 Err(err) => Some(format!("watching the filter-chain: {err}")),
-            })
-        };
+            }
+                })
+            };
         if let Some(problem) = problem {
             self.fail(problem);
             return;
@@ -422,10 +427,7 @@ impl Engine {
     /// for a moment, and that is not a pick.
     fn refresh_system_input(&self) {
         let mut state = self.state.borrow_mut();
-        let configured = state
-            .configured
-            .clone()
-            .filter(|name| name != SOURCE_NAME);
+        let configured = state.configured.clone().filter(|name| name != SOURCE_NAME);
         let pick = configured.or_else(|| {
             let kept = state.system_input.clone();
             kept.or_else(|| state.actual.clone().filter(|name| name != SOURCE_NAME))
@@ -444,8 +446,11 @@ impl Engine {
         }
         {
             let state = self.state.borrow();
-            std::fs::write(&conf, chain::chain_config(input, &state.settings.voice, &state.plugins))
-                .context("writing the filter-chain config")?;
+            std::fs::write(
+                &conf,
+                chain::chain_config(input, &state.settings.voice, &state.plugins),
+            )
+            .context("writing the filter-chain config")?;
         }
         let child = pwutil::spawn_chain(&conf, &log)?;
         info!("Microphone chain started for {input} (pid {})", child.id());
@@ -509,7 +514,8 @@ impl Engine {
     fn push_params(&self) {
         let mut state = self.state.borrow_mut();
         let Some(node) = &state.mic_node else { return };
-        let Some(bytes) = params_pod(&chain::controls(&state.settings.voice, &state.plugins)) else {
+        let Some(bytes) = params_pod(&chain::controls(&state.settings.voice, &state.plugins))
+        else {
             warn!("Could not build the microphone controls");
             return;
         };

@@ -32,8 +32,12 @@ pub struct ShellHost {
 /// name. Otherwise any process in the session could pop up a "permission" prompt in the name
 /// of another app, or dismiss a real one.
 async fn from_daemon(conn: &zbus::Connection, header: &zbus::message::Header<'_>) -> bool {
-    let Some(sender) = header.sender() else { return false };
-    let Ok(bus) = zbus::fdo::DBusProxy::new(conn).await else { return false };
+    let Some(sender) = header.sender() else {
+        return false;
+    };
+    let Ok(bus) = zbus::fdo::DBusProxy::new(conn).await else {
+        return false;
+    };
     let Ok(name) = zbus::names::BusName::try_from(conchy_portal_proto::DAEMON_BUS_NAME) else {
         return false;
     };
@@ -55,7 +59,11 @@ impl ShellHost {
             return (response::OTHER, AccessResult::default());
         }
         let (reply, rx) = oneshot::channel();
-        let event = HostEvent::Access { id, req: Box::new(req), reply };
+        let event = HostEvent::Access {
+            id,
+            req: Box::new(req),
+            reply,
+        };
         if self.tx.unbounded_send(event).is_err() {
             return (response::OTHER, AccessResult::default());
         }
@@ -74,7 +82,11 @@ impl ShellHost {
             return (response::OTHER, CastPickResult::default());
         }
         let (reply, rx) = oneshot::channel();
-        let event = HostEvent::PickCast { id, req: Box::new(req), reply };
+        let event = HostEvent::PickCast {
+            id,
+            req: Box::new(req),
+            reply,
+        };
         if self.tx.unbounded_send(event).is_err() {
             return (response::OTHER, CastPickResult::default());
         }

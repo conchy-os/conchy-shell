@@ -28,11 +28,21 @@ use crate::dock::config::{
 };
 use crate::launcher::config::{LauncherConfig, ModulesConfig as LauncherModulesConfig};
 use crate::launcher::modules::{
-    self, apps::config::AppsConfig, calculator::config::CalculatorConfig,
-    calendar::config::CalendarConfig, clipboard::config::ClipboardConfig,
-    equalizer::config::EqualizerConfig, mic::config::MicConfig, help::config::HelpConfig, mpris::config::MprisConfig, services::config::ServicesConfig,
-    shell::config::ShellConfig, sysinfo::config::SysInfoConfig, theme::config::ThemesConfig,
-    wallpaper::config::{WallpaperConfig, WallpaperScheme}, web::config::WebConfig,
+    self,
+    apps::config::AppsConfig,
+    calculator::config::CalculatorConfig,
+    calendar::config::CalendarConfig,
+    clipboard::config::ClipboardConfig,
+    equalizer::config::EqualizerConfig,
+    help::config::HelpConfig,
+    mic::config::MicConfig,
+    mpris::config::MprisConfig,
+    services::config::ServicesConfig,
+    shell::config::ShellConfig,
+    sysinfo::config::SysInfoConfig,
+    theme::config::ThemesConfig,
+    wallpaper::config::{WallpaperConfig, WallpaperScheme},
+    web::config::WebConfig,
 };
 use crate::notification::{NotificationConfig, NotificationPopupPosition};
 use crate::osd::{OsdConfig, OsdPosition};
@@ -153,9 +163,7 @@ fn bar_look_field() -> Field<BarConfig> {
     )
     .icon(IconName::Sparkles)
     .describe("Blocky, rounded or floating: presets for bar style, borders and corner radius")
-    .preview(|path: &ConfigPath<BarConfig>, cx: &App| {
-        look_preview(path, cx)
-    })
+    .preview(|path: &ConfigPath<BarConfig>, cx: &App| look_preview(path, cx))
 }
 
 impl Editable for BarConfig {
@@ -274,30 +282,32 @@ impl Editable for FrameConfig {
     }
 
     fn groups() -> Vec<Group<Self>> {
-        vec![Group::new(
-            "",
-            vec![
-                Field::toggle("enabled", "Enabled", lens!(enabled)).describe(
-                    "A band around the work area. An attached bar and a taskbar dock \
+        vec![
+            Group::new(
+                "",
+                vec![
+                    Field::toggle("enabled", "Enabled", lens!(enabled)).describe(
+                        "A band around the work area. An attached bar and a taskbar dock \
                      become its sides; a floating bar or dock sits inside it",
-                ),
-                Field::number("thickness", "Thickness", lens!(thickness as f64))
-                    .range(0.0, 32.0)
+                    ),
+                    Field::number("thickness", "Thickness", lens!(thickness as f64))
+                        .range(0.0, 32.0)
+                        .unit("px")
+                        .describe("Width of the band on the edges nothing sits on"),
+                    Field::number(
+                        "radius",
+                        "Corner radius",
+                        lens!(radius or f64::from(FrameConfig::RADIUS.base())),
+                    )
+                    .range(0.0, 48.0)
                     .unit("px")
-                    .describe("Width of the band on the edges nothing sits on"),
-                Field::number(
-                    "radius",
-                    "Corner radius",
-                    lens!(radius or f64::from(FrameConfig::RADIUS.base())),
-                )
-                .range(0.0, 48.0)
-                .unit("px")
-                .describe(RADIUS_FOLLOWS_THEME),
-                opacity_field("Opacity", lens!(opacity or 1.0))
-                    .describe("Unset, the band matches the bar's background"),
-            ],
-        )
-        .preview(frame_preview)]
+                    .describe(RADIUS_FOLLOWS_THEME),
+                    opacity_field("Opacity", lens!(opacity or 1.0))
+                        .describe("Unset, the band matches the bar's background"),
+                ],
+            )
+            .preview(frame_preview),
+        ]
     }
 }
 
@@ -581,14 +591,10 @@ impl Editable for LauncherConfig {
                         .unit("px")
                         .describe("Distance from screen top")
                         .preview(launcher_preview),
-                    Field::number(
-                        "margin_right",
-                        "Margin right",
-                        lens!(margin_right as f64),
-                    )
-                    .range(0.0, 1000.0)
-                    .unit("px")
-                    .preview(launcher_preview),
+                    Field::number("margin_right", "Margin right", lens!(margin_right as f64))
+                        .range(0.0, 1000.0)
+                        .unit("px")
+                        .preview(launcher_preview),
                     Field::number(
                         "margin_bottom",
                         "Margin bottom",
@@ -601,8 +607,7 @@ impl Editable for LauncherConfig {
                         .range(0.0, 1000.0)
                         .unit("px")
                         .preview(launcher_preview),
-                    opacity_field("Opacity", lens!(opacity or 1.0))
-                        .preview(launcher_preview),
+                    opacity_field("Opacity", lens!(opacity or 1.0)).preview(launcher_preview),
                 ],
             )
             .preview(launcher_preview),
@@ -929,15 +934,11 @@ impl Editable for NotificationConfig {
                         .unit("px")
                         .describe("Width of notification cards")
                         .preview(notification_preview),
-                    Field::number(
-                        "popup_height",
-                        "Stack height",
-                        lens!(popup_height as f64),
-                    )
-                    .range(100.0, 1200.0)
-                    .unit("px")
-                    .describe("Most the stack of popups may take at rest")
-                    .preview(notification_preview),
+                    Field::number("popup_height", "Stack height", lens!(popup_height as f64))
+                        .range(100.0, 1200.0)
+                        .unit("px")
+                        .describe("Most the stack of popups may take at rest")
+                        .preview(notification_preview),
                     Field::integer(
                         "popup_stack_limit",
                         "Stack limit",

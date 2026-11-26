@@ -35,7 +35,9 @@ pub enum IpcCommand {
 }
 
 pub fn command_for_secondary(args: &Args) -> IpcCommand {
-    args.command.clone().unwrap_or(IpcCommand::LauncherToggle { input: None })
+    args.command
+        .clone()
+        .unwrap_or(IpcCommand::LauncherToggle { input: None })
 }
 
 pub fn encode_command(command: &IpcCommand) -> String {
@@ -118,8 +120,7 @@ pub(super) fn handle_message(message: IpcMessage, cx: &mut App) {
         }
         IpcCommand::AudioVolumeUp => {
             tracing::info!("Processing audio volume up: id={}", message.id);
-            crate::state::AppState::audio(cx)
-                .dispatch(services::AudioCommand::AdjustSinkVolume(5));
+            crate::state::AppState::audio(cx).dispatch(services::AudioCommand::AdjustSinkVolume(5));
         }
         IpcCommand::AudioVolumeDown => {
             tracing::info!("Processing audio volume down: id={}", message.id);
@@ -128,8 +129,7 @@ pub(super) fn handle_message(message: IpcMessage, cx: &mut App) {
         }
         IpcCommand::AudioVolumeMute => {
             tracing::info!("Processing audio mute: id={}", message.id);
-            crate::state::AppState::audio(cx)
-                .dispatch(services::AudioCommand::ToggleSinkMute);
+            crate::state::AppState::audio(cx).dispatch(services::AudioCommand::ToggleSinkMute);
         }
         IpcCommand::BrightnessUp => {
             tracing::info!("Processing brightness up: id={}", message.id);

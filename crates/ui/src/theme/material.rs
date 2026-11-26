@@ -9,15 +9,15 @@ use std::path::Path;
 use gpui::{Hsla, Rgba};
 use image::GenericImageView;
 use material_colors::color::Rgb;
+use material_colors::dynamic_color::Variant;
 use material_colors::image::extract_color;
 use material_colors::scheme::Scheme;
-use material_colors::dynamic_color::Variant;
 use material_colors::theme::ThemeBuilder;
 use serde::{Deserialize, Serialize};
 
+use super::Appearance;
 use super::base16::Base16Palette;
 use super::colors::{StatusColors, ThemeColors};
-use super::Appearance;
 
 /// Fully transparent color slot.
 const TRANSPARENT: Hsla = Hsla {
@@ -327,9 +327,18 @@ mod tests {
 
     #[test]
     fn scheme_names_map_to_variants() {
-        assert!(matches!(variant_from_scheme("scheme-content"), Variant::Content));
-        assert!(matches!(variant_from_scheme("Fruit-Salad"), Variant::FruitSalad));
-        assert!(matches!(variant_from_scheme("scheme-tonal-spot"), Variant::TonalSpot));
+        assert!(matches!(
+            variant_from_scheme("scheme-content"),
+            Variant::Content
+        ));
+        assert!(matches!(
+            variant_from_scheme("Fruit-Salad"),
+            Variant::FruitSalad
+        ));
+        assert!(matches!(
+            variant_from_scheme("scheme-tonal-spot"),
+            Variant::TonalSpot
+        ));
         assert!(matches!(variant_from_scheme("junk"), Variant::TonalSpot));
     }
 

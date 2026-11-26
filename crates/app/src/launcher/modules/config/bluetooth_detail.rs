@@ -38,4 +38,3 @@ pub fn device_icon(dev: &BluetoothDevice) -> IconName {
         }
     }
 }
-

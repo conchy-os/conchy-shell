@@ -62,11 +62,14 @@ pub fn get_system_info() -> SystemInfo {
     let os_name = std::fs::read_to_string("/etc/os-release")
         .ok()
         .and_then(|content| {
-            content.lines().find(|l| l.starts_with("PRETTY_NAME=")).map(|l| {
-                l.trim_start_matches("PRETTY_NAME=")
-                    .trim_matches('"')
-                    .to_string()
-            })
+            content
+                .lines()
+                .find(|l| l.starts_with("PRETTY_NAME="))
+                .map(|l| {
+                    l.trim_start_matches("PRETTY_NAME=")
+                        .trim_matches('"')
+                        .to_string()
+                })
         })
         .unwrap_or_else(|| "Conchy OS (Linux)".to_string());
 

@@ -28,7 +28,8 @@ use crate::state::{AppState, watch};
 
 /// What Enter does on a row of the list: the keyboard goes into its form.
 pub fn edit() -> ActionPanel {
-    ActionPanel::new().action(Action::new("Edit", |_, _| Outcome::FocusDetail).icon(IconName::ChevronRight))
+    ActionPanel::new()
+        .action(Action::new("Edit", |_, _| Outcome::FocusDetail).icon(IconName::ChevronRight))
 }
 
 pub struct System {

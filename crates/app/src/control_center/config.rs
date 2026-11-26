@@ -14,9 +14,12 @@ pub struct PowerActionsConfig {
 impl Default for PowerActionsConfig {
     fn default() -> Self {
         Self {
-            sleep: "loginctl suspend 2>/dev/null || zzz 2>/dev/null || systemctl suspend".to_string(),
-            reboot: "loginctl reboot 2>/dev/null || reboot 2>/dev/null || systemctl reboot".to_string(),
-            poweroff: "loginctl poweroff 2>/dev/null || poweroff 2>/dev/null || systemctl poweroff".to_string(),
+            sleep: "loginctl suspend 2>/dev/null || zzz 2>/dev/null || systemctl suspend"
+                .to_string(),
+            reboot: "loginctl reboot 2>/dev/null || reboot 2>/dev/null || systemctl reboot"
+                .to_string(),
+            poweroff: "loginctl poweroff 2>/dev/null || poweroff 2>/dev/null || systemctl poweroff"
+                .to_string(),
         }
     }
 }

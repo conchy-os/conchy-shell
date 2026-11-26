@@ -5,9 +5,7 @@ use std::mem::Discriminant;
 use std::rc::Rc;
 
 use gpui::{Context, prelude::*};
-use services::appearance::{
-    self, AppearanceSettings, Change, FontFamilies, FontRole, Paths,
-};
+use services::appearance::{self, AppearanceSettings, Change, FontFamilies, FontRole, Paths};
 
 use super::change_queue::{ChangeQueue, Supersedes, kind_of};
 use crate::state::AppState;

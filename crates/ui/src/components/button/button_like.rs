@@ -220,29 +220,27 @@ impl ButtonStyle {
                 background: colors.primary.fade(Opacity::Muted),
                 border: transparent_black(),
             },
-            ButtonStyle::Tinted(tint) => {
-                match tint {
-                    TintColor::Accent | TintColor::Primary => ButtonLikeStyles {
-                        background: colors.primary_container.fade(Opacity::Muted),
-                        border: colors.primary.alpha(0.7),
-                    },
-                    TintColor::Secondary => ButtonLikeStyles {
-                        background: colors.secondary_container.fade(Opacity::Muted),
-                        border: colors.secondary.alpha(0.7),
-                    },
-                    TintColor::Tertiary => ButtonLikeStyles {
-                        background: colors.tertiary_container.fade(Opacity::Muted),
-                        border: colors.tertiary.alpha(0.7),
-                    },
-                    _ => {
-                        let fg = tint.foreground(cx);
-                        ButtonLikeStyles {
-                            background: fg.fade(Opacity::Muted),
-                            border: fg.fade(Opacity::Soft),
-                        }
+            ButtonStyle::Tinted(tint) => match tint {
+                TintColor::Accent | TintColor::Primary => ButtonLikeStyles {
+                    background: colors.primary_container.fade(Opacity::Muted),
+                    border: colors.primary.alpha(0.7),
+                },
+                TintColor::Secondary => ButtonLikeStyles {
+                    background: colors.secondary_container.fade(Opacity::Muted),
+                    border: colors.secondary.alpha(0.7),
+                },
+                TintColor::Tertiary => ButtonLikeStyles {
+                    background: colors.tertiary_container.fade(Opacity::Muted),
+                    border: colors.tertiary.alpha(0.7),
+                },
+                _ => {
+                    let fg = tint.foreground(cx);
+                    ButtonLikeStyles {
+                        background: fg.fade(Opacity::Muted),
+                        border: fg.fade(Opacity::Soft),
                     }
                 }
-            }
+            },
             ButtonStyle::Outlined => ButtonLikeStyles {
                 background: colors.ghost_element_active,
                 border: colors.border_selected,
@@ -309,15 +307,15 @@ impl ButtonStyle {
             ButtonStyle::Filled => {
                 Some(crate::theme::Color::Custom(cx.theme().colors().on_primary))
             }
-            ButtonStyle::Tinted(TintColor::Accent | TintColor::Primary) => {
-                Some(crate::theme::Color::Custom(cx.theme().colors().on_primary_container))
-            }
-            ButtonStyle::Tinted(TintColor::Secondary) => {
-                Some(crate::theme::Color::Custom(cx.theme().colors().on_secondary_container))
-            }
-            ButtonStyle::Tinted(TintColor::Tertiary) => {
-                Some(crate::theme::Color::Custom(cx.theme().colors().on_tertiary_container))
-            }
+            ButtonStyle::Tinted(TintColor::Accent | TintColor::Primary) => Some(
+                crate::theme::Color::Custom(cx.theme().colors().on_primary_container),
+            ),
+            ButtonStyle::Tinted(TintColor::Secondary) => Some(crate::theme::Color::Custom(
+                cx.theme().colors().on_secondary_container,
+            )),
+            ButtonStyle::Tinted(TintColor::Tertiary) => Some(crate::theme::Color::Custom(
+                cx.theme().colors().on_tertiary_container,
+            )),
             _ => None,
         }
     }

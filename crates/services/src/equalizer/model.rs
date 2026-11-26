@@ -70,16 +70,40 @@ pub struct Preset {
 pub fn builtin_presets() -> Vec<Preset> {
     const TABLE: [(&str, [f32; BAND_COUNT]); 11] = [
         ("Flat", [0.0; BAND_COUNT]),
-        ("Bass Boost", [6.0, 5.0, 4.0, 2.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
-        ("Bass Reducer", [-6.0, -5.0, -4.0, -2.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
-        ("Treble Boost", [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 4.0, 5.0, 6.0]),
-        ("Vocal", [-2.0, -2.0, -1.0, 1.0, 3.0, 4.0, 4.0, 3.0, 1.0, 0.0]),
+        (
+            "Bass Boost",
+            [6.0, 5.0, 4.0, 2.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        ),
+        (
+            "Bass Reducer",
+            [-6.0, -5.0, -4.0, -2.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        ),
+        (
+            "Treble Boost",
+            [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 4.0, 5.0, 6.0],
+        ),
+        (
+            "Vocal",
+            [-2.0, -2.0, -1.0, 1.0, 3.0, 4.0, 4.0, 3.0, 1.0, 0.0],
+        ),
         ("Rock", [5.0, 4.0, 3.0, 1.0, -1.0, -1.0, 1.0, 3.0, 4.0, 5.0]),
-        ("Pop", [-1.0, 1.0, 3.0, 4.0, 3.0, 0.0, -1.0, -1.0, -1.0, -1.0]),
+        (
+            "Pop",
+            [-1.0, 1.0, 3.0, 4.0, 3.0, 0.0, -1.0, -1.0, -1.0, -1.0],
+        ),
         ("Jazz", [4.0, 3.0, 1.0, 2.0, -2.0, -2.0, 0.0, 1.0, 3.0, 4.0]),
-        ("Classical", [4.0, 3.0, 3.0, 2.0, -1.0, -1.0, 0.0, 2.0, 3.0, 4.0]),
-        ("Electronic", [5.0, 4.0, 1.0, 0.0, -2.0, 2.0, 1.0, 1.0, 4.0, 5.0]),
-        ("Loudness", [6.0, 4.0, 0.0, 0.0, -2.0, 0.0, 0.0, -1.0, 3.0, 5.0]),
+        (
+            "Classical",
+            [4.0, 3.0, 3.0, 2.0, -1.0, -1.0, 0.0, 2.0, 3.0, 4.0],
+        ),
+        (
+            "Electronic",
+            [5.0, 4.0, 1.0, 0.0, -2.0, 2.0, 1.0, 1.0, 4.0, 5.0],
+        ),
+        (
+            "Loudness",
+            [6.0, 4.0, 0.0, 0.0, -2.0, 0.0, 0.0, -1.0, 3.0, 5.0],
+        ),
     ];
     TABLE
         .into_iter()
@@ -208,7 +232,9 @@ pub fn path() -> anyhow::Result<PathBuf> {
 pub fn load() -> anyhow::Result<Settings> {
     let path = path()?;
     match fsutil::read_optional(&path)? {
-        Some(text) => from_kdl(&text).with_context(|| format!("Failed to parse {}", path.display())),
+        Some(text) => {
+            from_kdl(&text).with_context(|| format!("Failed to parse {}", path.display()))
+        }
         None => Ok(Settings::default()),
     }
 }
@@ -258,9 +284,7 @@ fn read_bands(node: &kdl::KdlNode) -> Option<[f32; BAND_COUNT]> {
         .filter(|entry| entry.name().is_none())
         .filter_map(|entry| {
             let value = entry.value();
-            value
-                .as_f64()
-                .or_else(|| value.as_i64().map(|i| i as f64))
+            value.as_f64().or_else(|| value.as_i64().map(|i| i as f64))
         })
         .map(|v| v as f32)
         .collect();
@@ -331,11 +355,7 @@ mod tests {
         let presets = builtin_presets();
         for preset in &presets {
             assert!(
-                preset
-                    .curve
-                    .gains
-                    .iter()
-                    .all(|g| g.abs() <= MAX_GAIN_DB),
+                preset.curve.gains.iter().all(|g| g.abs() <= MAX_GAIN_DB),
                 "{}",
                 preset.name
             );
@@ -426,7 +446,8 @@ mod tests {
 
     #[test]
     fn a_hand_edited_file_is_read_leniently() {
-        let text = "enabled true\nbands 99 0 0 0 0 0 0 0 0 -99\npreset \"Broken\" {\n    bands 1 2 3\n}\n";
+        let text =
+            "enabled true\nbands 99 0 0 0 0 0 0 0 0 -99\npreset \"Broken\" {\n    bands 1 2 3\n}\n";
         let settings = from_kdl(text).unwrap();
         assert!(settings.enabled);
         assert_eq!(settings.curve.gains[0], MAX_GAIN_DB);

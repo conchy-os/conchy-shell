@@ -135,7 +135,9 @@ impl Biquad {
         let den_im = -(self.a1 * s1 + self.a2 * s2);
         let num = num_re * num_re + num_im * num_im;
         let den = den_re * den_re + den_im * den_im;
-        10.0 * (num / den.max(f32::MIN_POSITIVE)).max(f32::MIN_POSITIVE).log10()
+        10.0 * (num / den.max(f32::MIN_POSITIVE))
+            .max(f32::MIN_POSITIVE)
+            .log10()
     }
 }
 
@@ -184,9 +186,7 @@ pub fn curve(gains: &[f32; BAND_COUNT], points: usize) -> Vec<f32> {
 /// when they only cut. Taking this off the preamp keeps a boosted mix from
 /// clipping.
 pub fn headroom_db(gains: &[f32; BAND_COUNT]) -> f32 {
-    curve(gains, 200)
-        .into_iter()
-        .fold(0.0f32, f32::max)
+    curve(gains, 200).into_iter().fold(0.0f32, f32::max)
 }
 
 #[cfg(test)]

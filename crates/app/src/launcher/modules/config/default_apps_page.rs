@@ -20,9 +20,7 @@ use ui::{Color, IconName};
 
 use super::settings_form as rows;
 use crate::launcher::action::{Action, ActionPanel, Outcome};
-use crate::launcher::content::{
-    Accessory, Content, Detail, Form, Item, ItemIcon, List, Section,
-};
+use crate::launcher::content::{Accessory, Content, Detail, Form, Item, ItemIcon, List, Section};
 use crate::launcher::page::LauncherPage;
 use crate::state::AppState;
 
@@ -334,7 +332,6 @@ impl DefaultAppsPage {
             cx,
         )
     }
-
 }
 
 /// The row beside which the form of default applications is drawn.
@@ -356,7 +353,11 @@ fn default_apps_form(form: &mut Form, page: &Entity<DefaultAppsPage>, cx: &App) 
         "Which program opens links, folders, images and other files",
     );
     if let Some(reason) = &this.load_error {
-        rows::note(form, format!("mimeapps.list could not be read: {reason}"), Color::Error);
+        rows::note(
+            form,
+            format!("mimeapps.list could not be read: {reason}"),
+            Color::Error,
+        );
         return;
     }
 
@@ -447,7 +448,10 @@ fn default_apps_form(form: &mut Form, page: &Entity<DefaultAppsPage>, cx: &App) 
     if missing > 0 {
         rows::note(
             form,
-            format!("{missing} entries in {} name applications that are not installed.", tilde(this.store.path())),
+            format!(
+                "{missing} entries in {} name applications that are not installed.",
+                tilde(this.store.path())
+            ),
             Color::Warning,
         );
     }

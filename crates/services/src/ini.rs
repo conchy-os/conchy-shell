@@ -82,7 +82,8 @@ pub fn get_key(text: &str, group: &str, key: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    const GTK: &str = "[Settings]\ngtk-theme-name=Foo\ngtk-font-name=Bar 10\n# note\ngtk-cursor-theme-size=24\n";
+    const GTK: &str =
+        "[Settings]\ngtk-theme-name=Foo\ngtk-font-name=Bar 10\n# note\ngtk-cursor-theme-size=24\n";
 
     #[test]
     fn a_value_is_replaced_in_place() {

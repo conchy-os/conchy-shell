@@ -2,13 +2,13 @@
 //! [`registry`].
 
 pub mod apps;
-pub mod calendar;
 pub mod calculator;
+pub mod calendar;
 pub mod clipboard;
 pub mod config;
 pub mod equalizer;
-pub mod mic;
 pub mod help;
+pub mod mic;
 pub mod mpris;
 pub mod services;
 pub mod shell;

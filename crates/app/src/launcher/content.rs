@@ -7,7 +7,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::SystemTime;
 
-use gpui::{AnyElement, AnyView, App, Context, Hsla, IntoElement, SharedString, Window, div, prelude::*};
+use gpui::{
+    AnyElement, AnyView, App, Context, Hsla, IntoElement, SharedString, Window, div, prelude::*,
+};
 use ui::{Color, IconName, IconSource};
 
 use super::action::{Action, ActionPanel};

@@ -14,7 +14,9 @@ pub struct BluetoothDbus<'a> {
 }
 
 fn get_str(props: &HashMap<String, OwnedValue>, key: &str) -> Option<String> {
-    props.get(key).and_then(|v| String::try_from(v.clone()).ok())
+    props
+        .get(key)
+        .and_then(|v| String::try_from(v.clone()).ok())
 }
 
 fn get_bool(props: &HashMap<String, OwnedValue>, key: &str) -> bool {

@@ -190,7 +190,10 @@ async fn set_bluetooth_power(target_powered: bool) -> anyhow::Result<()> {
             if let Ok(bt) = BluetoothDbus::new(&conn).await {
                 match bt.set_powered(true).await {
                     Ok(()) => {
-                        debug!("Bluetooth powered on successfully on attempt {}", attempt + 1);
+                        debug!(
+                            "Bluetooth powered on successfully on attempt {}",
+                            attempt + 1
+                        );
                         return Ok(());
                     }
                     Err(e) => {

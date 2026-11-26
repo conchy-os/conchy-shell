@@ -64,7 +64,11 @@ impl InputModel {
         let backend = self.backend;
         let task = cx.background_spawn(async move {
             let settings = backend.load().map_err(|err| format!("{err:#}"))?;
-            Ok::<_, String>((settings, services::input::has_touchpad(), XkbCatalog::load()))
+            Ok::<_, String>((
+                settings,
+                services::input::has_touchpad(),
+                XkbCatalog::load(),
+            ))
         });
         cx.spawn(async move |this, cx| {
             let result = task.await;

@@ -278,10 +278,10 @@ fn open_all_bar_windows(cx: &mut App) -> usize {
         for d in &displays {
             if let Some(target) = &filter {
                 let target_uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_DNS, target.as_bytes());
-                if let Ok(u) = d.uuid() {
-                    if u != target_uuid {
-                        continue;
-                    }
+                if let Ok(u) = d.uuid()
+                    && u != target_uuid
+                {
+                    continue;
                 }
             }
             tracing::info!("Opening bar on display {:?}", d.id());

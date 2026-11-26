@@ -7,9 +7,9 @@ use ui::{
     IconName, IconSize, Label, LabelCommon, Radius, Spacing, TextSize, Tooltip, h_flex, v_flex,
 };
 
-use super::schema::{ConfigPath, to_value};
 use super::config_page::watch_revision;
 use super::form::form_heading;
+use super::schema::{ConfigPath, to_value};
 use crate::bar::config::{BarConfig, BarItem};
 use crate::bar::modules::{self as widgets, BarWidgetMeta};
 use crate::launcher::action::{Action, ActionPanel, Outcome};
