@@ -1,7 +1,7 @@
 //! Wallpaper service with pluggable engine support.
 //!
-//! Manages wallpaper setting via external tools: `awww` when it is installed,
-//! else `hyprpaper`. Starts the daemon on startup and provides commands to
+//! Manages wallpaper setting via external tools: `awww`, or `hyprpaper` when
+//! only it is installed and the shell is built with the `hyprland` feature. Starts the daemon on startup and provides commands to
 //! set wallpapers.
 
 use std::path::{Path, PathBuf};
@@ -13,25 +13,42 @@ use tracing::{debug, warn};
 use crate::jobs::JobQueue;
 use crate::lifecycle::{Lifecycle, ManagedService, RunToken};
 
+#[cfg(feature = "hyprland")]
+mod hyprpaper;
+
 /// Supported wallpaper engines.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum WallpaperEngine {
     #[default]
     Awww,
+    /// Built only with the `hyprland` cargo feature: hyprpaper is driven
+    /// through `hyprctl`.
+    #[cfg(feature = "hyprland")]
     Hyprpaper,
 }
 
 impl WallpaperEngine {
-    /// The engine this machine has: awww if installed, else hyprpaper.
+    /// The engine this machine has: awww if installed, else hyprpaper (with
+    /// the `hyprland` feature).
     pub fn detect() -> Self {
-        if in_path("awww") || !in_path("hyprpaper") {
-            Self::Awww
-        } else {
-            Self::Hyprpaper
+        #[cfg(feature = "hyprland")]
+        if !in_path("awww") && in_path("hyprpaper") {
+            return Self::Hyprpaper;
+        }
+        Self::Awww
+    }
+
+    /// The engine's program name, for the services page.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Awww => "awww",
+            #[cfg(feature = "hyprland")]
+            Self::Hyprpaper => "hyprpaper",
         }
     }
 }
 
+#[cfg(feature = "hyprland")]
 fn in_path(program: &str) -> bool {
     std::env::var_os("PATH")
         .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(program).is_file()))
@@ -92,7 +109,8 @@ impl WallpaperSubscriber {
                 let engine = self.data.lock_ref().engine;
                 tokio::task::spawn_blocking(move || match engine {
                     WallpaperEngine::Awww => set_wallpaper_awww(&shown),
-                    WallpaperEngine::Hyprpaper => set_wallpaper_hyprpaper(&shown),
+                    #[cfg(feature = "hyprland")]
+                    WallpaperEngine::Hyprpaper => hyprpaper::set_wallpaper(&shown),
                 })
                 .await??;
                 save_current(&path);
@@ -137,7 +155,8 @@ impl ManagedService for WallpaperSubscriber {
 
         match engine {
             WallpaperEngine::Awww => start_daemon(token),
-            WallpaperEngine::Hyprpaper => start_hyprpaper(token),
+            #[cfg(feature = "hyprland")]
+            WallpaperEngine::Hyprpaper => hyprpaper::start(token),
         }
     }
 }
@@ -172,46 +191,6 @@ fn start_daemon(token: RunToken) {
     });
 }
 
-/// hyprpaper is normally started by the session; start it only if it isn't up.
-fn start_hyprpaper(token: RunToken) {
-    thread::spawn(move || {
-        let running = Command::new("pgrep")
-            .args(["-x", "hyprpaper"])
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
-        if running {
-            token.active();
-            return;
-        }
-        match Command::new("hyprpaper").spawn() {
-            Ok(_) => token.active(),
-            Err(e) => {
-                warn!("Failed to start hyprpaper: {e}");
-                token.error(e.to_string());
-            }
-        }
-    });
-}
-
-/// Set wallpaper through hyprpaper's IPC on every monitor.
-fn set_wallpaper_hyprpaper(path: &Path) -> anyhow::Result<()> {
-    let output = Command::new("hyprctl")
-        .args(["hyprpaper", "wallpaper"])
-        .arg(format!(",{},cover", path.display()))
-        .output()?;
-    let reply = String::from_utf8_lossy(&output.stdout);
-    // Silence and "ok" are both success; hyprpaper words its errors.
-    let reply_ok = matches!(reply.trim(), "" | "ok" | "OK");
-    anyhow::ensure!(
-        output.status.success() && reply_ok,
-        "hyprctl hyprpaper wallpaper: {}",
-        reply.trim()
-    );
-    debug!("Wallpaper set to: {}", path.display());
-    Ok(())
-}
-
 /// Set wallpaper using awww, waiting for it so the child is reaped and a
 /// failure is reported instead of assumed away.
 fn set_wallpaper_awww(path: &std::path::Path) -> anyhow::Result<()> {
@@ -236,31 +215,14 @@ fn set_wallpaper_awww(path: &std::path::Path) -> anyhow::Result<()> {
 /// Blocks on a subprocess; call it off the UI thread.
 pub fn current_wallpaper() -> Option<PathBuf> {
     let queried = match WallpaperEngine::detect() {
-        WallpaperEngine::Awww => query_awww().or_else(query_hyprpaper),
-        WallpaperEngine::Hyprpaper => query_hyprpaper().or_else(query_awww),
+        #[cfg(feature = "hyprland")]
+        WallpaperEngine::Awww => query_awww().or_else(hyprpaper::query),
+        #[cfg(not(feature = "hyprland"))]
+        WallpaperEngine::Awww => query_awww(),
+        #[cfg(feature = "hyprland")]
+        WallpaperEngine::Hyprpaper => hyprpaper::query().or_else(query_awww),
     };
     queried.or_else(load_current)
-}
-
-fn query_hyprpaper() -> Option<PathBuf> {
-    let output = Command::new("hyprctl")
-        .args(["hyprpaper", "listactive"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    parse_listactive(&String::from_utf8_lossy(&output.stdout))
-}
-
-/// First existing path in `hyprctl hyprpaper listactive`, whose lines read
-/// `eDP-1: /path/a.jpg`.
-fn parse_listactive(text: &str) -> Option<PathBuf> {
-    text.lines().find_map(|line| {
-        let (_, path) = line.split_once(": ")?;
-        let path = PathBuf::from(path.trim());
-        path.is_file().then_some(path)
-    })
 }
 
 fn query_awww() -> Option<PathBuf> {
@@ -325,14 +287,6 @@ mod tests {
             exe.display()
         );
         assert_eq!(parse_query(&line), Some(exe));
-    }
-
-    #[test]
-    fn listactive_picks_the_first_existing_path() {
-        let exe = std::env::current_exe().unwrap();
-        let text = format!("DP-1: /nope/a.jpg\neDP-1: {}\n", exe.display());
-        assert_eq!(parse_listactive(&text), Some(exe));
-        assert_eq!(parse_listactive("no wallpapers"), None);
     }
 
     #[test]

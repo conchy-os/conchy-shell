@@ -5,11 +5,8 @@
 //! docks and does not carry modes. Settings need them, so they ask the
 //! compositor directly, on demand.
 
-use std::process::Command;
-
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Result, bail};
 use kdl::KdlDocument;
-use serde_json::Value;
 
 use super::types::{CompositorBackend, Monitor, OutputConfig, OutputMode};
 use crate::{kdl_edit, wm_config};
@@ -18,157 +15,14 @@ use crate::{kdl_edit, wm_config};
 /// Blocking: call it off the UI thread.
 pub fn query_monitors(backend: CompositorBackend) -> Result<Vec<Monitor>> {
     match backend {
-        CompositorBackend::Hyprland => {
-            let out = Command::new("hyprctl")
-                .args(["-j", "monitors", "all"])
-                .output()
-                .context("failed to run hyprctl")?;
-            if !out.status.success() {
-                bail!(
-                    "hyprctl monitors: {}",
-                    String::from_utf8_lossy(&out.stderr).trim()
-                );
-            }
-            monitors_from_hyprland_json(&String::from_utf8_lossy(&out.stdout))
-        }
+        #[cfg(feature = "hyprland")]
+        CompositorBackend::Hyprland => super::hyprland::query_monitors(),
         CompositorBackend::Niri => {
             let outputs = super::niri::fetch_outputs()?;
             Ok(monitors_from_conchy(outputs))
         }
         CompositorBackend::Mango => bail!("display settings are not available on Mango"),
     }
-}
-
-// -- Hyprland -----------------------------------------------------------------
-
-fn monitors_from_hyprland_json(text: &str) -> Result<Vec<Monitor>> {
-    let list: Vec<Value> = serde_json::from_str(text).context("unreadable `hyprctl monitors`")?;
-    let str_of =
-        |v: &Value, key: &str| v.get(key).and_then(Value::as_str).unwrap_or("").to_string();
-    Ok(list
-        .iter()
-        .map(|m| {
-            let serial = str_of(m, "serial");
-            Monitor {
-                id: m.get("id").and_then(Value::as_i64).map_or(-1, i128::from),
-                name: str_of(m, "name"),
-                make: str_of(m, "make"),
-                model: str_of(m, "model"),
-                serial: (!serial.is_empty()).then_some(serial),
-                active_workspace_id: m
-                    .pointer("/activeWorkspace/id")
-                    .and_then(Value::as_i64)
-                    .unwrap_or(0) as i32,
-                special_workspace_id: 0,
-                width: m.get("width").and_then(Value::as_u64).unwrap_or(0) as u32,
-                height: m.get("height").and_then(Value::as_u64).unwrap_or(0) as u32,
-                refresh_rate: m.get("refreshRate").and_then(Value::as_f64).unwrap_or(0.0),
-                x: m.get("x").and_then(Value::as_i64).unwrap_or(0) as i32,
-                y: m.get("y").and_then(Value::as_i64).unwrap_or(0) as i32,
-                scale: m.get("scale").and_then(Value::as_f64).unwrap_or(1.0) as f32,
-                transform: m.get("transform").and_then(Value::as_u64).unwrap_or(0) as u16,
-                available_modes: m
-                    .get("availableModes")
-                    .and_then(Value::as_array)
-                    .map(|modes| {
-                        modes
-                            .iter()
-                            .filter_map(Value::as_str)
-                            .filter_map(OutputMode::parse)
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-                vrr_supported: m
-                    .pointer("/hardwareDetails/vrrCapable")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(true),
-                vrr_enabled: m.get("vrr").and_then(Value::as_bool).unwrap_or(false),
-                is_focused: m.get("focused").and_then(Value::as_bool).unwrap_or(false),
-                is_disabled: m.get("disabled").and_then(Value::as_bool).unwrap_or(false),
-            }
-        })
-        .collect())
-}
-
-/// The `monitor` rule in Hyprland's Lua API.
-fn hyprland_lua(cfg: &OutputConfig) -> String {
-    if !cfg.enabled {
-        return format!(
-            "hl.monitor({{ output = {:?}, disabled = true }})",
-            cfg.output
-        );
-    }
-    let mode = cfg.mode.as_ref().map_or_else(
-        || "preferred".to_string(),
-        |m| format!("{}x{}@{:.3}", m.width, m.height, m.refresh_rate),
-    );
-    format!(
-        "hl.monitor({{ output = {:?}, mode = {:?}, position = \"{}x{}\", scale = {}, transform = {}, vrr = {} }})",
-        cfg.output,
-        mode,
-        cfg.x,
-        cfg.y,
-        cfg.scale,
-        cfg.transform,
-        i32::from(cfg.vrr)
-    )
-}
-
-/// The same rule for a config in the legacy `monitor=` syntax.
-fn hyprland_legacy(cfg: &OutputConfig) -> String {
-    if !cfg.enabled {
-        return format!("{},disable", cfg.output);
-    }
-    let mode = cfg.mode.as_ref().map_or_else(
-        || "preferred".to_string(),
-        |m| format!("{}x{}@{:.3}", m.width, m.height, m.refresh_rate),
-    );
-    format!(
-        "{},{},{}x{},{},transform,{},vrr,{}",
-        cfg.output,
-        mode,
-        cfg.x,
-        cfg.y,
-        cfg.scale,
-        cfg.transform,
-        i32::from(cfg.vrr)
-    )
-}
-
-/// Set an output up on Hyprland: the Lua API when this Hyprland has one, the
-/// `keyword` request when it does not.
-pub(super) fn apply_hyprland(cfg: &OutputConfig) -> Result<()> {
-    let lua = Command::new("hyprctl")
-        .args(["eval", &hyprland_lua(cfg)])
-        .output()
-        .context("failed to run hyprctl")?;
-    let answer = String::from_utf8_lossy(&lua.stdout);
-    let answer = answer.trim();
-    if answer == "ok" {
-        return Ok(());
-    }
-    if !answer.contains("unknown request") {
-        return Err(anyhow!("hyprctl eval: {answer}"));
-    }
-    let legacy = Command::new("hyprctl")
-        .args(["keyword", "monitor", &hyprland_legacy(cfg)])
-        .output()
-        .context("failed to run hyprctl")?;
-    let answer = String::from_utf8_lossy(&legacy.stdout);
-    if answer.trim() == "ok" {
-        Ok(())
-    } else {
-        Err(anyhow!("hyprctl keyword monitor: {}", answer.trim()))
-    }
-}
-
-/// The output's setup now, to change one field of and apply again.
-pub(super) fn current_hyprland(name: &str) -> Result<OutputConfig> {
-    query_monitors(CompositorBackend::Hyprland)?
-        .iter()
-        .find(|m| m.name == name)
-        .map(OutputConfig::from_monitor)
-        .ok_or_else(|| anyhow!("no output named {name}"))
 }
 
 // -- Conchy WM ----------------------------------------------------------------
@@ -308,11 +162,13 @@ pub(super) fn apply_conchy(cfg: &OutputConfig) -> Result<()> {
 fn persist_conchy(doc: &mut KdlDocument, cfg: &OutputConfig) -> Result<()> {
     let node = kdl_edit::keyed_node(doc, "output", &cfg.output);
     let block = kdl_edit::block_of(node);
-    kdl_edit::set_flag(block, &["off"], !cfg.enabled)?;
+    // The output's own block sits one level down from the top.
+    const DEPTH: usize = 1;
+    kdl_edit::set_flag_at(block, DEPTH, &["off"], !cfg.enabled)?;
     if !cfg.enabled {
         return Ok(());
     }
-    kdl_edit::set_args(block, &["scale"], vec![kdl_edit::float(cfg.scale)])?;
+    kdl_edit::set_args_at(block, DEPTH, &["scale"], vec![kdl_edit::float(cfg.scale)])?;
     let transform = match cfg.transform {
         1 => "90",
         2 => "180",
@@ -323,9 +179,15 @@ fn persist_conchy(doc: &mut KdlDocument, cfg: &OutputConfig) -> Result<()> {
         7 => "flipped-270",
         _ => "normal",
     };
-    kdl_edit::set_args(block, &["transform"], vec![kdl_edit::string(transform)])?;
-    kdl_edit::set_props(
+    kdl_edit::set_args_at(
         block,
+        DEPTH,
+        &["transform"],
+        vec![kdl_edit::string(transform)],
+    )?;
+    kdl_edit::set_props_at(
+        block,
+        DEPTH,
         &["position"],
         vec![
             ("x", kdl_edit::int(i64::from(cfg.x))),
@@ -333,8 +195,9 @@ fn persist_conchy(doc: &mut KdlDocument, cfg: &OutputConfig) -> Result<()> {
         ],
     )?;
     match &cfg.mode {
-        Some(m) => kdl_edit::set_args(
+        Some(m) => kdl_edit::set_args_at(
             block,
+            DEPTH,
             &["mode"],
             vec![kdl_edit::string(&format!(
                 "{}x{}@{:.3}",
@@ -345,74 +208,12 @@ fn persist_conchy(doc: &mut KdlDocument, cfg: &OutputConfig) -> Result<()> {
             kdl_edit::remove(block, &["mode"]);
         }
     }
-    kdl_edit::set_flag(block, &["variable-refresh-rate"], cfg.vrr)
+    kdl_edit::set_flag_at(block, DEPTH, &["variable-refresh-rate"], cfg.vrr)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const HYPRCTL: &str = r#"[{
-        "id": 0, "name": "eDP-1", "make": "Apple Computer Inc", "model": "Color LCD", "serial": "",
-        "width": 2880, "height": 1800, "refreshRate": 59.99000, "x": 0, "y": 0,
-        "activeWorkspace": {"id": 2, "name": "2"}, "scale": 2, "transform": 0,
-        "focused": true, "vrr": false, "disabled": false,
-        "availableModes": ["2880x1800@59.99Hz", "1440x900@60.00Hz"],
-        "hardwareDetails": {"vrrCapable": false}
-    }, {
-        "id": 1, "name": "eDP-2", "make": "", "model": "", "serial": "",
-        "width": 0, "height": 0, "refreshRate": 0.0, "x": 0, "y": 0, "scale": 1,
-        "transform": 0, "focused": false, "vrr": false, "disabled": true, "availableModes": []
-    }]"#;
-
-    #[test]
-    fn hyprctl_monitors_are_read_with_their_modes() {
-        let monitors = monitors_from_hyprland_json(HYPRCTL).unwrap();
-        assert_eq!(monitors.len(), 2);
-        let m = &monitors[0];
-        assert_eq!(m.name, "eDP-1");
-        assert_eq!(m.serial, None);
-        assert_eq!(m.available_modes.len(), 2);
-        assert_eq!(m.resolutions(), vec![(2880, 1800), (1440, 900)]);
-        assert!(!m.vrr_supported);
-        assert!(m.is_focused && !m.is_disabled);
-        assert!(monitors[1].is_disabled);
-    }
-
-    #[test]
-    fn hyprland_rules_are_spelled_in_both_syntaxes() {
-        let cfg = OutputConfig {
-            output: "eDP-1".into(),
-            enabled: true,
-            mode: Some(OutputMode {
-                width: 2880,
-                height: 1800,
-                refresh_rate: 59.99,
-            }),
-            scale: 2.0,
-            transform: 1,
-            x: 0,
-            y: 0,
-            vrr: false,
-        };
-        assert_eq!(
-            hyprland_lua(&cfg),
-            r#"hl.monitor({ output = "eDP-1", mode = "2880x1800@59.990", position = "0x0", scale = 2, transform = 1, vrr = 0 })"#
-        );
-        assert_eq!(
-            hyprland_legacy(&cfg),
-            "eDP-1,2880x1800@59.990,0x0,2,transform,1,vrr,0"
-        );
-        let off = OutputConfig {
-            enabled: false,
-            ..cfg
-        };
-        assert_eq!(
-            hyprland_lua(&off),
-            r#"hl.monitor({ output = "eDP-1", disabled = true })"#
-        );
-        assert_eq!(hyprland_legacy(&off), "eDP-1,disable");
-    }
 
     #[test]
     fn an_output_is_written_to_wm_kdl_and_read_back() {

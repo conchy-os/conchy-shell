@@ -19,7 +19,7 @@ Built in 100% Rust using Zed's GPU-accelerated **GPUI** framework for Wayland (`
   - Full support for window minimizing (`Action::MinimizeWindow`): minimized windows are surfaced in the dock with subtle translucent styling, unminimizing and focusing in a single click.
 - **Shortcuts in the UI:** `;cfg` → Shortcuts rebinds, adds and removes the compositor's keys (stored in `~/.config/conchy/shortcuts.kdl`, read by `conchy-wm`). Tapping **Super** opens the launcher, also over fullscreen apps if you want; see [docs/CONFIG_SPEC.md](docs/CONFIG_SPEC.md#4-keyboard-shortcuts-shortcutskdl).
 - **System settings in the UI:** `;cfg` → *System* holds the pages that change the machine, not only the shell:
-  - **Mouse & Touchpad** (speed, acceleration, natural scrolling, tap to click…) and **Keyboard** (layouts and variants, the switching key, Caps Lock, repeat delay and rate). On Conchy WM they are written to the `input` block of `~/.config/conchy/wm.kdl`, which the compositor reloads; on Hyprland they are applied through `hyprctl eval` and kept in `~/.config/conchy/input.kdl`, applied again when the shell starts.
+  - **Mouse & Touchpad** (speed, acceleration, natural scrolling, tap to click…) and **Keyboard** (layouts and variants, the switching key, Caps Lock, repeat delay and rate). On Conchy WM they are written to the `input` block of `~/.config/conchy/wm.kdl`, which the compositor reloads; on Hyprland (a `--features hyprland` build) they are applied through `hyprctl eval` and kept in `~/.config/conchy/input.kdl`, applied again when the shell starts.
   - **Displays & Monitors**: resolution, refresh rate, scale, rotation, arrangement, VRR and on/off, with a 15 s "keep these settings?" countdown. **Profiles** (`~/.config/conchy/displays.kdl`) save a whole setup and put it back by itself when the same monitors are connected, in whichever port.
   - **Startup applications**: the XDG autostart entries (`~/.config/autostart`, `/etc/xdg/autostart`) with a switch each (`Hidden=true` in a user copy), plus your own programs.
   - **Appearance**: fonts, text scaling, DPI, cursor and icon themes, written to gsettings, GTK 3/4 `settings.ini`, `xsettingsd`, Xresources and the compositor.
@@ -58,7 +58,14 @@ cargo build -p conchy-shell
 
 # Optimized release build
 cargo build -p conchy-shell --release
+
+# With the Hyprland backend, for development on a Hyprland desktop
+cargo build -p conchy-shell --features hyprland
 ```
+
+Conchy OS ships Conchy WM, so the default build talks to it (and to niri and
+Mango) only. The Hyprland backend (`hyprctl`, `hyprpaper`) is behind the
+`hyprland` cargo feature.
 
 ### Run Daemon
 

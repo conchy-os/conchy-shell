@@ -63,9 +63,21 @@ pub fn arg_bool(doc: &KdlDocument, path: &[&str]) -> Option<bool> {
 /// on the way. What surrounds an existing node (comments, trailing remark)
 /// stays.
 pub fn set_args(doc: &mut KdlDocument, path: &[&str], args: Vec<KdlValue>) -> Result<()> {
-    let block_depth = path.len().saturating_sub(1);
+    set_args_at(doc, 0, path, args)
+}
+
+/// [`set_args`] in a block that sits `depth` levels down (a keyed node's
+/// block from [`block_of`] is at depth 1), so that new nodes are indented
+/// to match it.
+pub fn set_args_at(
+    doc: &mut KdlDocument,
+    depth: usize,
+    path: &[&str],
+    args: Vec<KdlValue>,
+) -> Result<()> {
+    let block_depth = depth + path.len().saturating_sub(1);
     let (last, parents) = path.split_last().ok_or_else(|| anyhow!("empty key path"))?;
-    let block = ensure_block(doc, parents)?;
+    let block = ensure_block(doc, depth, parents)?;
     match find(block, last) {
         Some(position) => {
             let node = &mut block.nodes_mut()[position];
@@ -90,9 +102,19 @@ pub fn set_args(doc: &mut KdlDocument, path: &[&str], args: Vec<KdlValue>) -> Re
 /// (`position x=1 y=2`), creating it and the blocks on the way. Its
 /// arguments stay.
 pub fn set_props(doc: &mut KdlDocument, path: &[&str], props: Vec<(&str, KdlValue)>) -> Result<()> {
-    let block_depth = path.len().saturating_sub(1);
+    set_props_at(doc, 0, path, props)
+}
+
+/// [`set_props`] in a block that sits `depth` levels down.
+pub fn set_props_at(
+    doc: &mut KdlDocument,
+    depth: usize,
+    path: &[&str],
+    props: Vec<(&str, KdlValue)>,
+) -> Result<()> {
+    let block_depth = depth + path.len().saturating_sub(1);
     let (last, parents) = path.split_last().ok_or_else(|| anyhow!("empty key path"))?;
-    let block = ensure_block(doc, parents)?;
+    let block = ensure_block(doc, depth, parents)?;
     let build = |node: &mut KdlNode| {
         node.entries_mut().retain(|e| e.name().is_none());
         for (name, value) in props {
@@ -112,9 +134,14 @@ pub fn set_props(doc: &mut KdlDocument, path: &[&str], props: Vec<(&str, KdlValu
 
 /// Make the flag node at `path` present or absent.
 pub fn set_flag(doc: &mut KdlDocument, path: &[&str], on: bool) -> Result<()> {
+    set_flag_at(doc, 0, path, on)
+}
+
+/// [`set_flag`] in a block that sits `depth` levels down.
+pub fn set_flag_at(doc: &mut KdlDocument, depth: usize, path: &[&str], on: bool) -> Result<()> {
     if on {
         if !has(doc, path) {
-            set_args(doc, path, Vec::new())?;
+            set_args_at(doc, depth, path, Vec::new())?;
         }
         Ok(())
     } else {
@@ -192,14 +219,20 @@ pub fn remove_keyed(doc: &mut KdlDocument, name: &str, first_arg: &str) -> bool 
     }
 }
 
-/// Like [`set_args`] / [`set_flag`] / [`remove`], inside a keyed node's block.
+/// The keyed node's block, for [`set_args_at`] / [`set_props_at`] /
+/// [`set_flag_at`] with depth 1, and [`remove`].
 pub fn block_of(node: &mut KdlNode) -> &mut KdlDocument {
     node.ensure_children()
 }
 
-fn ensure_block<'a>(doc: &'a mut KdlDocument, parents: &[&str]) -> Result<&'a mut KdlDocument> {
+fn ensure_block<'a>(
+    doc: &'a mut KdlDocument,
+    base_depth: usize,
+    parents: &[&str],
+) -> Result<&'a mut KdlDocument> {
     let mut block = doc;
-    for (depth, key) in parents.iter().enumerate() {
+    for (level, key) in parents.iter().enumerate() {
+        let depth = base_depth + level;
         let position = match find(block, key) {
             Some(position) => position,
             None => {
@@ -331,6 +364,20 @@ mod tests {
         assert_eq!(
             arg_f64(&reparsed, &["input", "mouse", "accel-speed"]),
             Some(0.25)
+        );
+    }
+
+    #[test]
+    fn a_new_keyed_block_is_indented_like_one_written_by_hand() {
+        let mut doc = parse("layout {\n    gaps 16\n}\n").unwrap();
+        let block = block_of(keyed_node(&mut doc, "output", "eDP-1"));
+        set_args_at(block, 1, &["scale"], vec![float(1.5)]).unwrap();
+        set_args_at(block, 1, &["transform"], vec![string("normal")]).unwrap();
+        set_props_at(block, 1, &["position"], vec![("x", int(0)), ("y", int(0))]).unwrap();
+        set_flag_at(block, 1, &["variable-refresh-rate"], true).unwrap();
+        assert_eq!(
+            doc.to_string(),
+            "layout {\n    gaps 16\n}\n\noutput \"eDP-1\" {\n    scale 1.5\n    transform \"normal\"\n    position x=0 y=0\n    variable-refresh-rate\n}\n"
         );
     }
 

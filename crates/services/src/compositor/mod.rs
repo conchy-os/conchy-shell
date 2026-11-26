@@ -2,10 +2,12 @@
 //!
 //! This module provides an event-driven subscriber for monitoring compositor state
 //! (workspaces, monitors, active window, keyboard layout) and executing commands.
-//! It supports multiple compositor backends (Hyprland, Niri, Mango).
+//! It supports multiple compositor backends: Conchy WM (through the niri IPC),
+//! Mango and, with the `hyprland` cargo feature, Hyprland.
 //!
 //! Uses incremental updates with direct Mutable mutation for efficiency.
 
+#[cfg(feature = "hyprland")]
 pub mod hyprland;
 pub mod mango;
 pub mod niri;
@@ -45,13 +47,17 @@ impl CompositorSubscriber {
     /// Returns an error if no supported compositor is detected.
     pub async fn new() -> Result<Self> {
         let backend = detect_backend().ok_or_else(|| {
-            anyhow::anyhow!("No supported compositor detected (Hyprland, Niri or Mango)")
+            anyhow::anyhow!(
+                "No supported compositor detected (Conchy WM, niri, Mango, \
+                 or Hyprland in a build with the `hyprland` feature)"
+            )
         })?;
 
         info!("Detected compositor backend: {}", backend.name());
 
         // Fetch initial state
         let initial_state = match backend {
+            #[cfg(feature = "hyprland")]
             CompositorBackend::Hyprland => hyprland::fetch_full_state()?,
             CompositorBackend::Niri => niri::fetch_full_state()?,
             CompositorBackend::Mango => mango::fetch_full_state()?,
@@ -63,6 +69,7 @@ impl CompositorSubscriber {
 
         // Blocking socket listeners, each on its own thread and retried on EOF.
         match backend {
+            #[cfg(feature = "hyprland")]
             CompositorBackend::Hyprland => hyprland::start_listener(data.clone(), token.clone()),
             CompositorBackend::Niri => niri::start_listener(data.clone(), token.clone()),
             CompositorBackend::Mango => mango::start_listener(data.clone(), token.clone()),
@@ -119,6 +126,7 @@ impl CompositorSubscriber {
     /// but can be useful if state gets out of sync for some reason.
     pub fn refresh(&self) -> Result<()> {
         let new_state = match self.backend {
+            #[cfg(feature = "hyprland")]
             CompositorBackend::Hyprland => hyprland::fetch_full_state()?,
             CompositorBackend::Niri => niri::fetch_full_state()?,
             CompositorBackend::Mango => mango::fetch_full_state()?,
@@ -183,6 +191,7 @@ impl ManagedService for CompositorSubscriber {
 /// Run one command against the backend (blocking IPC).
 fn execute(backend: CompositorBackend, command: CompositorCommand) -> Result<()> {
     match backend {
+        #[cfg(feature = "hyprland")]
         CompositorBackend::Hyprland => hyprland::execute_command(command),
         CompositorBackend::Niri => niri::execute_command(command),
         CompositorBackend::Mango => mango::execute_command(command),
@@ -192,12 +201,11 @@ fn execute(backend: CompositorBackend, command: CompositorCommand) -> Result<()>
 /// Detect which compositor backend is available.
 fn detect_backend() -> Option<CompositorBackend> {
     if niri::is_available() {
-        Some(CompositorBackend::Niri)
-    } else if hyprland::is_available() {
-        Some(CompositorBackend::Hyprland)
-    } else if mango::is_available() {
-        Some(CompositorBackend::Mango)
-    } else {
-        None
+        return Some(CompositorBackend::Niri);
     }
+    #[cfg(feature = "hyprland")]
+    if hyprland::is_available() {
+        return Some(CompositorBackend::Hyprland);
+    }
+    mango::is_available().then_some(CompositorBackend::Mango)
 }

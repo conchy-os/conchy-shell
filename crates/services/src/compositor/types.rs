@@ -307,8 +307,11 @@ impl CompositorState {
 /// Supported compositor backends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompositorBackend {
-    #[default]
+    /// Built only with the `hyprland` cargo feature.
+    #[cfg(feature = "hyprland")]
     Hyprland,
+    /// Conchy WM, or niri itself: both speak the niri IPC.
+    #[default]
     Niri,
     Mango,
 }
@@ -317,6 +320,7 @@ impl CompositorBackend {
     /// Get a human-readable name for this backend.
     pub fn name(&self) -> &'static str {
         match self {
+            #[cfg(feature = "hyprland")]
             CompositorBackend::Hyprland => "Hyprland",
             CompositorBackend::Niri => "Niri",
             CompositorBackend::Mango => "Mango",

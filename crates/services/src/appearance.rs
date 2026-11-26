@@ -417,6 +417,7 @@ fn apply_cursor_to_compositor(
     let mut s = current;
     s.apply(change);
     match backend {
+        #[cfg(feature = "hyprland")]
         CompositorBackend::Hyprland => {
             match run(
                 "hyprctl",

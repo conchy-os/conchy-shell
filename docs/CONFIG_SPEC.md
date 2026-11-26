@@ -146,8 +146,8 @@ Colours are extracted in-process (no external tool needed); `matugen` is only a
 fallback for image formats the shell can't decode. The same switch and variant
 picker sit in the Themes pane of `;cfg`.
 
-Wallpapers are set through `awww` when it is installed, otherwise through
-`hyprpaper` (`hyprctl hyprpaper`). The wallpaper currently up is read back from
+Wallpapers are set through `awww`. A build with the `hyprland` cargo feature
+falls back to `hyprpaper` (`hyprctl hyprpaper`) when only it is installed. The wallpaper currently up is read back from
 the same tool, falling back to the last one this shell set
 (`$XDG_STATE_HOME/conchy/wallpaper`).
 

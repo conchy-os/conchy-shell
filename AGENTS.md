@@ -69,6 +69,12 @@ This layout relies on parent workspace symlinks alongside the sibling checkouts:
 
 Never modify any sibling repository when working on `conchy-shell`.
 
+### Compositor Backends & the `hyprland` Feature
+
+- The default build supports Conchy WM (and niri, through the same IPC) and Mango. Conchy OS ships only Conchy WM.
+- The Hyprland backend (`hyprctl`, `hyprpaper`, the `hyprland` crate) is behind the `hyprland` cargo feature (`services/hyprland`, forwarded by `conchy-shell/hyprland`). Its code lives in `services/src/compositor/hyprland.rs`, `services/src/input/hyprland.rs`, and `services/src/wallpaper/hyprpaper.rs`; keep new Hyprland-only code there or behind `#[cfg(feature = "hyprland")]`.
+- Verify both builds: `cargo clippy --workspace --all-targets -- -D warnings` and `cargo clippy --workspace --all-targets --features services/hyprland -- -D warnings`.
+
 ### Comment & Documentation Language
 
 - **Comment language: English.** All comments (`//`), docstrings (`///`, `//!`), and internal documentation in `conchy-shell` must be written in **English**.

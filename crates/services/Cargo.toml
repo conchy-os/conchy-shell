@@ -11,7 +11,7 @@ futures-signals.workspace = true
 tracing.workspace = true
 itertools.workspace = true
 chrono.workspace = true
-hyprland.workspace = true
+hyprland = { workspace = true, optional = true }
 conchy-ipc.workspace = true
 vpnx-client.workspace = true
 tokio.workspace = true
@@ -27,6 +27,11 @@ serde-saphyr = "0.0"
 sysinfo = "0.39"
 udev = "0.9"
 libpulse-binding = "2.30"
+
+[features]
+# Hyprland backend (hyprctl, hyprpaper) for development on a Hyprland desktop.
+# Conchy OS ships Conchy WM, so it is off by default.
+hyprland = ["dep:hyprland"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

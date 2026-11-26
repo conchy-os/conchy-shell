@@ -10,9 +10,7 @@ use std::time::Duration;
 use gpui::App;
 use services::mpris::PlaybackStatus;
 use services::upower::PowerProfile;
-use services::{
-    ActiveConnectionInfo, BluetoothState, ConnectivityState, ServiceStatus, WallpaperEngine,
-};
+use services::{ActiveConnectionInfo, BluetoothState, ConnectivityState, ServiceStatus};
 use ui::Color;
 
 use crate::launcher::content::Metadata;
@@ -339,10 +337,7 @@ fn privacy(cx: &App) -> Vec<Metadata> {
 
 fn wallpaper(cx: &App) -> Vec<Metadata> {
     let data = AppState::wallpaper(cx).get();
-    let engine = match data.engine {
-        WallpaperEngine::Awww => "awww",
-        WallpaperEngine::Hyprpaper => "hyprpaper",
-    };
+    let engine = data.engine.name();
     let current = data
         .current
         .as_ref()

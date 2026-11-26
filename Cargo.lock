@@ -1130,7 +1130,6 @@ dependencies = [
  "futures-util",
  "gpui",
  "gpui_platform",
- "hyprland",
  "image",
  "kdl",
  "nucleo-matcher",
