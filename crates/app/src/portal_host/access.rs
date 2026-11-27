@@ -133,7 +133,7 @@ fn cancel(id: &str, cx: &mut App) {
 }
 
 /// Window options of a full-output overlay with exclusive keyboard focus.
-pub(super) fn overlay_options(namespace: &str, app_id: &str, cx: &App) -> WindowOptions {
+pub(crate) fn overlay_options(namespace: &str, app_id: &str, cx: &App) -> WindowOptions {
     // Without the shell state (dev mode `CONCHY_SHELL_PORTAL_ONLY`) fall back to gpui's display.
     let size = if cx.has_global::<AppState>() {
         display_extent(None, cx)

@@ -23,6 +23,7 @@ Built in 100% Rust using Zed's GPU-accelerated **GPUI** framework for Wayland (`
   - **Displays & Monitors**: resolution, refresh rate, scale, rotation, arrangement, VRR and on/off, with a 15 s "keep these settings?" countdown. **Profiles** (`~/.config/conchy/displays.kdl`) save a whole setup and put it back by itself when the same monitors are connected, in whichever port.
   - **Startup applications**: the XDG autostart entries (`~/.config/autostart`, `/etc/xdg/autostart`) with a switch each (`Hidden=true` in a user copy), plus your own programs.
   - **Appearance**: fonts, text scaling, DPI, cursor and icon themes, written to gsettings, GTK 3/4 `settings.ini`, `xsettingsd`, Xresources and the compositor.
+- **Polkit authentication agent:** the shell registers itself with polkitd as the session's agent (`unix-session` from `XDG_SESSION_ID` or logind), so `pkexec` and privileged actions ask for the password in a shell overlay (who to authenticate as, retry after a wrong password, Escape cancels). The password is checked by `polkit-agent-helper-1`, through `/run/polkit/agent-helper.socket` where systemd provides it and the setuid helper elsewhere (Void). No external GTK/Qt agent is needed in the session.
 - **Dynamic Theming & D-Bus Reactivity:** Listens to `org.conchy.Config` for dynamic size, position, and styling hot-reloading without restarting the shell.
 - **System Integration for Void Linux:**
   - Native PipeWire and PulseAudio bindings for audio and device management.

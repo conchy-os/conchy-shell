@@ -9,6 +9,8 @@ mod access;
 mod cast_picker;
 mod dbus;
 
+pub(crate) use access::overlay_options;
+
 use futures::StreamExt;
 use gpui::App;
 

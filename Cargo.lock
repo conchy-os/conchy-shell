@@ -5765,6 +5765,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "conchy-ipc",
+ "futures",
  "futures-signals",
  "futures-util",
  "hyprland",

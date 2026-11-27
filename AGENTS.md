@@ -112,6 +112,9 @@ Never modify any sibling repository when working on `conchy-shell`.
   ```
 - **Portal-only dev mode**:
   - `CONCHY_SHELL_PORTAL_ONLY=1` starts only `portal_host` (`org.conchy.Portal.ShellHost`) without setting up compositor IPC or hardware services. Still never run it against a live session where `$XDG_RUNTIME_DIR/conchy-shell.sock` or the portal host bus name is active.
+- **Polkit agent testing:**
+  - The shell registers as the polkit agent of its login session (system bus). If another agent already holds the session, it logs `An authentication agent already exists for the given subject` and runs without one.
+  - To test without taking over the session, set `CONCHY_POLKIT_PROCESS=<pid>`: the agent registers for that one process (like `pkttyagent --process`), and `pkexec` run as a child of it asks in the shell's dialog.
 
 ### Isolated Verification Suite
 

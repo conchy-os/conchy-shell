@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 futures-util.workspace = true
+futures.workspace = true
 zbus.workspace = true
 futures-signals.workspace = true
 tracing.workspace = true
@@ -14,7 +15,9 @@ chrono.workspace = true
 hyprland = { workspace = true, optional = true }
 conchy-ipc.workspace = true
 vpnx-client.workspace = true
-tokio.workspace = true
+# io-util: the async reads and writes clipboard and polkit use; without it this
+# crate only built inside the workspace, where another crate enabled it.
+tokio = { workspace = true, features = ["io-util"] }
 inotify.workspace = true
 kdl.workspace = true
 image = { workspace = true, features = ["png", "jpeg", "webp", "gif", "bmp"] }

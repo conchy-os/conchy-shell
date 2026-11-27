@@ -26,6 +26,7 @@ mod keybinds;
 pub mod launcher;
 pub mod notification;
 pub mod osd;
+mod polkit_agent;
 mod portal_host;
 pub mod session_settings;
 pub mod shortcuts;
@@ -109,6 +110,7 @@ async fn main() {
         osd::init(cx);
         launcher::init(cx);
         portal_host::init(cx);
+        polkit_agent::init(cx);
         session_settings::init(cx);
 
         launcher::modules::wallpaper::sync_theme_with_wallpaper(cx);
